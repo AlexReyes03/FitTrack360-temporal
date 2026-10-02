@@ -1,6 +1,6 @@
 # =========================
 # FitTrack360 monorepo
-# Flutter (fit_track_360) + NestJS (backend)
+# Flutter (fit_track_360) + NestJS (fit_track_api)
 # =========================
 
 # OS
@@ -37,7 +37,7 @@ key.properties
 **/*.jks
 
 # =========================
-# NestJS / Node (backend/)
+# NestJS / Node (fit_track_api)
 # =========================
 **/node_modules/
 **/dist/
@@ -46,6 +46,7 @@ key.properties
 **/.nyc_output/
 **/.turbo/
 **/.nest/
+**/.pnpm-store/
 *.tsbuildinfo
 
 # =========================

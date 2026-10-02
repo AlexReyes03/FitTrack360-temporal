@@ -1,0 +1,61 @@
+# =========================
+# FitTrack360 monorepo
+# Flutter (fit_track_360) + NestJS (backend)
+# =========================
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors / IDEs (raíz)
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.swp
+*~
+
+# Logs / temporales
+*.log
+*.tmp
+*.temp
+~$*
+
+# =========================
+# Secrets (nunca subir)
+# =========================
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.mobileprovision
+key.properties
+**/*.keystore
+**/*.jks
+
+# =========================
+# NestJS / Node (backend/)
+# =========================
+**/node_modules/
+**/dist/
+**/build/
+**/coverage/
+**/.nyc_output/
+**/.turbo/
+**/.nest/
+*.tsbuildinfo
+
+# =========================
+# Flutter (también cubierto por fit_track_360/.gitignore)
+# =========================
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/.fvm/
+**/flutter_export_environment.sh

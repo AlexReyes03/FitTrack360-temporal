@@ -60,3 +60,6 @@ key.properties
 **/.pub/
 **/.fvm/
 **/flutter_export_environment.sh
+
+.cursor/
+docs/

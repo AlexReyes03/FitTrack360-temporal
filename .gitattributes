@@ -1,0 +1,2 @@
+# Asegurar saltos de línea LF para los hooks de Husky en Windows, macOS y Linux
+.husky/* text eol=lf

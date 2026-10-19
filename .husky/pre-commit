@@ -1,0 +1,217 @@
+#!/usr/bin/env sh
+
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  cat >&2 <<EOF
+
+==============================================================================
+[HUSKY - COMMIT RECHAZADO] Rama protegida: $CURRENT_BRANCH
+==============================================================================
+  Motivo del rechazo:
+    No está permitido realizar commits directamente sobre la rama '$CURRENT_BRANCH'.
+
+  Cómo solucionarlo:
+    1. Crea y cambia a una rama de trabajo para tus cambios:
+       git switch -c feat/nombre-de-tu-rama
+    2. Realiza el commit desde esa rama y abre un Pull Request hacia '$CURRENT_BRANCH'.
+
+  Está prohibido usar 'git commit --no-verify' para saltarte esta protección.
+==============================================================================
+
+EOF
+  exit 1
+fi
+
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+CHECK_FRONTEND=0
+CHECK_BACKEND=0
+
+if echo "$STAGED_FILES" | grep -q '^fit_track_360/'; then
+  CHECK_FRONTEND=1
+fi
+
+if echo "$STAGED_FILES" | grep -q '^fit_track_api/'; then
+  CHECK_BACKEND=1
+fi
+
+HAS_ERRORS=0
+FAILED_CHECKS=""
+
+# ==============================================================================
+# Validaciones Frontend (Flutter - fit_track_360)
+# ==============================================================================
+if [ "$CHECK_FRONTEND" -eq 1 ]; then
+  echo "[Husky] Cambios detectados en fit_track_360 (Flutter). Ejecutando verificaciones..."
+
+  if ! command -v dart >/dev/null 2>&1; then
+    cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR - FRONTEND] SDK de Dart/Flutter no encontrado en el PATH
+------------------------------------------------------------------------------
+  Motivo: No se pudo ejecutar 'dart' para validar formato y lints en fit_track_360.
+  Solución: Asegúrate de tener Flutter/Dart instalado y disponible en tu PATH.
+------------------------------------------------------------------------------
+EOF
+    HAS_ERRORS=1
+    FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_360] SDK de Dart no disponible en PATH"
+  else
+    echo "  -> [1/2] Verificando formato de código (dart format)..."
+    if ! dart format --output=none --set-exit-if-changed fit_track_360/lib; then
+      cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR DE FORMATO - fit_track_360] Archivos Dart sin el formato correcto
+------------------------------------------------------------------------------
+  Motivo:
+    Uno o más archivos en 'fit_track_360/lib' no cumplen con el formato estándar de Dart.
+
+  Cómo solucionarlo:
+    Ejecuta el siguiente comando para formatear automáticamente y vuelve a agregar
+    los archivos al stage (git add):
+      pnpm run format:app
+      (o bien: cd fit_track_360 && dart format lib)
+------------------------------------------------------------------------------
+EOF
+      HAS_ERRORS=1
+      FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_360] Formato incorrecto (ejecuta: pnpm run format:app)"
+    fi
+
+    echo "  -> [2/2] Verificando lints, warnings y errores (dart analyze)..."
+    if ! dart analyze --fatal-infos --fatal-warnings fit_track_360; then
+      cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR DE CALIDAD / LINTS - fit_track_360] Problemas detectados por dart analyze
+------------------------------------------------------------------------------
+  Motivo:
+    Se encontraron errores, warnings o reglas de lint incumplidas en 'fit_track_360'.
+    No se permite subir código con errores ni warnings.
+
+  Cómo solucionarlo:
+    Revisa los archivos señalados arriba o ejecuta:
+      pnpm run lint:app
+      (o bien: cd fit_track_360 && dart analyze --fatal-infos --fatal-warnings)
+    Puedes aplicar correcciones automáticas cuando estén disponibles con:
+      cd fit_track_360 && dart fix --apply
+------------------------------------------------------------------------------
+EOF
+      HAS_ERRORS=1
+      FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_360] Errores o warnings de análisis/lint (ejecuta: pnpm run lint:app)"
+    fi
+  fi
+fi
+
+# ==============================================================================
+# Validaciones Backend (NestJS - fit_track_api)
+# ==============================================================================
+if [ "$CHECK_BACKEND" -eq 1 ]; then
+  echo "[Husky] Cambios detectados en fit_track_api (NestJS). Ejecutando verificaciones..."
+
+  if [ ! -d "fit_track_api/node_modules" ]; then
+    cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR - fit_track_api] Dependencias no instaladas
+------------------------------------------------------------------------------
+  Motivo:
+    No existe el directorio 'fit_track_api/node_modules', por lo que no se pueden
+    ejecutar Prettier, Oxlint ni TypeScript.
+
+  Cómo solucionarlo:
+    Instala las dependencias del monorepo desde la raíz:
+      pnpm install
+------------------------------------------------------------------------------
+EOF
+    HAS_ERRORS=1
+    FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_api] Dependencias faltantes (ejecuta: pnpm install en la raíz)"
+  else
+    echo "  -> [1/3] Verificando formato de código (Prettier)..."
+    if ! pnpm --dir fit_track_api run --silent format:check; then
+      cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR DE FORMATO - fit_track_api] Archivos TypeScript sin el formato correcto
+------------------------------------------------------------------------------
+  Motivo:
+    Uno o más archivos en 'fit_track_api' no cumplen con las reglas de Prettier.
+
+  Cómo solucionarlo:
+    Ejecuta el siguiente comando para formatear automáticamente y vuelve a agregar
+    los archivos al stage (git add):
+      pnpm run format:api
+      (o bien: pnpm --dir fit_track_api run format)
+------------------------------------------------------------------------------
+EOF
+      HAS_ERRORS=1
+      FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_api] Formato Prettier incorrecto (ejecuta: pnpm run format:api)"
+    fi
+
+    echo "  -> [2/3] Verificando lints y warnings (Oxlint --deny-warnings)..."
+    if ! pnpm --dir fit_track_api run --silent lint:strict; then
+      cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR DE LINTS / WARNINGS - fit_track_api] Problemas detectados por Oxlint
+------------------------------------------------------------------------------
+  Motivo:
+    Oxlint detectó errores o warnings en 'fit_track_api'.
+    Tanto errores como warnings bloquean el commit.
+
+  Cómo solucionarlo:
+    Corrige los problemas indicados arriba. Puedes verificar manualmente con:
+      pnpm run lint:api
+      (o bien: pnpm --dir fit_track_api run lint:strict)
+------------------------------------------------------------------------------
+EOF
+      HAS_ERRORS=1
+      FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_api] Errores o warnings en Oxlint (ejecuta: pnpm run lint:api)"
+    fi
+
+    echo "  -> [3/3] Verificando tipos y compilación (TypeScript tsc --noEmit)..."
+    if ! pnpm --dir fit_track_api run --silent typecheck; then
+      cat >&2 <<EOF
+
+------------------------------------------------------------------------------
+[ERROR DE TIPADO - fit_track_api] Errores de compilación en TypeScript
+------------------------------------------------------------------------------
+  Motivo:
+    El compilador de TypeScript ('tsc --noEmit') encontró errores de tipos en 'fit_track_api'.
+
+  Cómo solucionarlo:
+    Corrige los errores de tipos mostrados arriba. Puedes verificar manualmente con:
+      pnpm run typecheck:api
+      (o bien: pnpm --dir fit_track_api run typecheck)
+------------------------------------------------------------------------------
+EOF
+      HAS_ERRORS=1
+      FAILED_CHECKS="$FAILED_CHECKS\n  - [fit_track_api] Errores de tipos TypeScript (ejecuta: pnpm run typecheck:api)"
+    fi
+  fi
+fi
+
+if [ "$HAS_ERRORS" -ne 0 ]; then
+  cat >&2 <<EOF
+
+==============================================================================
+[HUSKY - COMMIT RECHAZADO] No se superaron las verificaciones de calidad
+==============================================================================
+  Resumen de fallos detectados:$(printf "%b" "$FAILED_CHECKS")
+
+  Corrige los problemas listados arriba, agrega los cambios con 'git add'
+  y vuelve a intentar el commit.
+
+  Está prohibido usar 'git commit --no-verify' para omitir estas verificaciones.
+==============================================================================
+
+EOF
+  exit 1
+fi
+
+echo "[Husky] Todas las verificaciones de pre-commit pasaron correctamente."

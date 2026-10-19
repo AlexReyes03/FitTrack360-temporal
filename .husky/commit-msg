@@ -1,0 +1,70 @@
+#!/usr/bin/env sh
+
+COMMIT_MSG_FILE="$1"
+COMMIT_HEADER=$(grep -v '^#' "$COMMIT_MSG_FILE" | sed '/^[[:space:]]*$/d' | head -n 1 | tr -d '\r')
+
+if echo "$COMMIT_HEADER" | grep -Eq '^Merge (branch|pull request|remote-tracking branch) '; then
+  exit 0
+fi
+
+VALID_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+FULL_PATTERN="^($VALID_TYPES)\([a-zA-Z0-9_/-]+\)!?: .{3,}"
+
+if ! echo "$COMMIT_HEADER" | grep -Eq "$FULL_PATTERN"; then
+  REASON="El mensaje no cumple con la estructura obligatoria 'type(scope): mensaje'."
+
+  if [ -z "$COMMIT_HEADER" ]; then
+    REASON="El mensaje del commit está vacío."
+  elif echo "$COMMIT_HEADER" | grep -Eq "^($VALID_TYPES)!?:"; then
+    USED_TYPE=$(echo "$COMMIT_HEADER" | sed -E 's/^([a-zA-Z]+).*/\1/')
+    REASON="Falta el (scope) obligatorio después del tipo '$USED_TYPE'. Debes especificar el alcance entre paréntesis, por ejemplo: '${USED_TYPE}(mobile): ...' o '${USED_TYPE}(api): ...'."
+  elif echo "$COMMIT_HEADER" | grep -Eq "^[a-zA-Z_-]+\([a-zA-Z0-9_/-]+\)" && ! echo "$COMMIT_HEADER" | grep -Eq "^($VALID_TYPES)\("; then
+    USED_TYPE=$(echo "$COMMIT_HEADER" | sed -E 's/^([a-zA-Z_-]+)\(.*/\1/')
+    REASON="El tipo '$USED_TYPE' no es válido. Usa uno de los tipos permitidos en la lista inferior."
+  elif echo "$COMMIT_HEADER" | grep -Eq "^($VALID_TYPES)\(\)"; then
+    REASON="El (scope) está vacío '()'. Especifica el módulo o área afectada (ej. style, mobile, api, auth)."
+  elif echo "$COMMIT_HEADER" | grep -Eq "^($VALID_TYPES)\([^)]+\)!?:[^ ]" || echo "$COMMIT_HEADER" | grep -Eq "^($VALID_TYPES)\([^)]+\)[^!:]"; then
+    REASON="Formato de separador inválido. Después de 'type(scope)' deben ir dos puntos seguidos de un espacio (': ')."
+  elif echo "$COMMIT_HEADER" | grep -Eq "^($VALID_TYPES)\([a-zA-Z0-9_/-]+\)!?: .{0,2}$"; then
+    REASON="La descripción del commit es demasiado corta (debe tener al menos 3 caracteres descriptivos)."
+  fi
+
+  cat >&2 <<EOF
+
+==============================================================================
+[HUSKY - COMMIT RECHAZADO] Formato de mensaje de commit inválido
+==============================================================================
+  Mensaje recibido:
+    "$COMMIT_HEADER"
+
+  Motivo del rechazo:
+    $REASON
+
+  Formato obligatorio:
+    <type>(<scope>): <mensaje>
+
+  Tipos permitidos (<type>):
+    - feat     : Nueva funcionalidad
+    - fix      : Corrección de errores (bugs)
+    - docs     : Cambios únicamente en documentación
+    - style    : Formato, estilos visuales o design system (sin cambios de lógica)
+    - refactor : Refactorización de código (sin añadir features ni arreglar bugs)
+    - perf     : Mejoras de rendimiento
+    - test     : Agregar o corregir pruebas
+    - build    : Cambios en dependencias, compilación o configuración de build
+    - ci       : Configuración de integración continua / pipelines
+    - chore    : Tareas de mantenimiento, configuración de repo o herramientas
+    - revert   : Revertir un commit previo
+
+  Ejemplos válidos:
+    docs(style): definiendo el design system para el front dela app
+    feat(mobile): implementar pantalla de historial de rutinas
+    fix(api): validar campos requeridos en el endpoint de ejercicios
+    chore(repo): configurar husky para validaciones de commits
+
+  Está prohibido usar 'git commit --no-verify' para omitir esta validación.
+==============================================================================
+
+EOF
+  exit 1
+fi

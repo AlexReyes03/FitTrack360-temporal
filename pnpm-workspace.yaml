@@ -1,0 +1,5 @@
+packages:
+  - fit_track_api
+allowBuilds:
+  '@parcel/watcher': true
+  unrs-resolver: true

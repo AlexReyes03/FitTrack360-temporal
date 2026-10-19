@@ -1,0 +1,25 @@
+{
+  "name": "fit-track-360-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monorepo de FitTrack360 (Flutter + NestJS)",
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "prepare": "husky",
+    "postinstall": "pnpm run install:app",
+    "install:app": "dart pub get -C fit_track_360",
+    "lint": "pnpm run lint:api && pnpm run lint:app",
+    "lint:api": "pnpm --dir fit_track_api run lint:strict",
+    "lint:app": "dart analyze --fatal-infos --fatal-warnings fit_track_360",
+    "format": "pnpm run format:api && pnpm run format:app",
+    "format:api": "pnpm --dir fit_track_api run format",
+    "format:app": "dart format fit_track_360/lib",
+    "format:check": "pnpm run format:check:api && pnpm run format:check:app",
+    "format:check:api": "pnpm --dir fit_track_api run format:check",
+    "format:check:app": "dart format --output=none --set-exit-if-changed fit_track_360/lib",
+    "typecheck:api": "pnpm --dir fit_track_api run typecheck"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

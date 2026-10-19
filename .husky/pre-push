@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+reject_push() {
+  TARGET_BRANCH="$1"
+  cat >&2 <<EOF
+
+==============================================================================
+[HUSKY - PUSH RECHAZADO] Push directo a la rama protegida '$TARGET_BRANCH' bloqueado
+==============================================================================
+  Motivo del rechazo:
+    No está permitido subir cambios (git push) directamente hacia la rama '$TARGET_BRANCH'.
+
+  Cómo solucionarlo:
+    1. Sube tus cambios a una rama de trabajo:
+       git push -u origin <nombre-de-tu-rama>
+    2. Abre un Pull Request hacia '$TARGET_BRANCH' para revisión e integración.
+
+  Está prohibido usar 'git push --no-verify' para saltarte esta protección.
+==============================================================================
+
+EOF
+  exit 1
+}
+
+if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
+  reject_push "$CURRENT_BRANCH"
+fi
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ] || [ "$remote_ref" = "refs/heads/master" ]; then
+    TARGET_NAME=$(echo "$remote_ref" | sed 's|refs/heads/||')
+    reject_push "$TARGET_NAME"
+  fi
+done
+
+exit 0

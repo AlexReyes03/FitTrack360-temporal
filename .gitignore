@@ -40,6 +40,8 @@ key.properties
 # NestJS / Node (fit_track_api)
 # =========================
 **/node_modules/
+package-lock.json
+**/package-lock.json
 **/dist/
 **/build/
 **/coverage/

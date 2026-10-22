@@ -64,4 +64,6 @@ package-lock.json
 **/flutter_export_environment.sh
 
 .cursor/
-/docs/
+/docs/context/
+/docs/task-planning/
+/docs/tasks/

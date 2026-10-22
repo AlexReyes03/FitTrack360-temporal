@@ -7,6 +7,7 @@
   "scripts": {
     "prepare": "husky",
     "postinstall": "pnpm run install:app",
+    "dev": "node scripts/dev-menu.mjs",
     "install:app": "dart pub get -C fit_track_360",
     "lint": "pnpm run lint:api && pnpm run lint:app",
     "lint:api": "pnpm --dir fit_track_api run lint:strict",

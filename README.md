@@ -52,6 +52,13 @@ Si alguien solo instala dentro de `fit_track_api`, el script `prepare` del API i
 
 Este proyecto usa **pnpm**, no npm. No generes ni subas `package-lock.json`.
 
+## Comandos para desarrollo (Iniciar proyecto)
+
+Desde la raíz del repositorio:
+
+- `pnpm install` - Instalar dependencias del monorepo.
+- `pnpm dev` - Abrir el menú para levantar Servicios.
+
 ## Flujo de trabajo con Git
 
 1. Trabaja en una rama distinta de `main` / `master` (`feat/...`, `fix/...`, `chore/...`, etc.).

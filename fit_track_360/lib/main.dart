@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/session_storage.dart';
+import 'core/widgets/offline_banner.dart';
 import 'design_system/tokens/app_colors.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/auth/presentation/register_page.dart';
@@ -58,52 +59,63 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bgDeep,
-      body: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'FitTrack360',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _hasToken == null
-                  ? ''
-                  : (_hasToken! ? 'Sesion guardada' : 'Sin sesion'),
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginPage()),
-                );
-                await _refreshSessionState();
-              },
-              child: const Text('Iniciar sesion'),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const RegisterPage()),
-                );
-                await _refreshSessionState();
-              },
-              child: const Text('Crear cuenta'),
-            ),
+            OfflineBanner(onRetry: _refreshSessionState),
+            Expanded(child: _buildContent(context)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text(
+            'FitTrack360',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 32,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _hasToken == null
+                ? ''
+                : (_hasToken! ? 'Sesion guardada' : 'Sin sesion'),
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton(
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+              );
+              await _refreshSessionState();
+            },
+            child: const Text('Iniciar sesion'),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RegisterPage()),
+              );
+              await _refreshSessionState();
+            },
+            child: const Text('Crear cuenta'),
+          ),
+        ],
       ),
     );
   }

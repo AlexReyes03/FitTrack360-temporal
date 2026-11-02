@@ -41,4 +41,17 @@ model PasswordResetCode {
   usedAt    DateTime?
 }
 
-// TODO: Modelos de dominio en W8-04 (Exercise)
+model Exercise {
+  id                 String   @id
+  name               String
+  bodyPart           String
+  equipment          String
+  target             String
+  muscleGroup        String
+  secondaryMuscles   String[]
+  instructionsEs     String
+  instructionStepsEs String[]
+  imageFile          String
+  gifFile            String
+  attribution        String
+}

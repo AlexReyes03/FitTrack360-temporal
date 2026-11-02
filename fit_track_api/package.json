@@ -18,6 +18,8 @@
     "lint": "oxlint src/ test/",
     "lint:strict": "oxlint --deny-warnings src/ test/",
     "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

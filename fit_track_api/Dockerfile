@@ -19,6 +19,6 @@ RUN pnpm exec prisma generate \
   && pnpm run build
 
 ENV NODE_ENV=production
-EXPOSE 3001
+EXPOSE 3000
 
 CMD ["node", "dist/main"]

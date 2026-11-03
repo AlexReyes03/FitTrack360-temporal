@@ -172,7 +172,7 @@ export class AuthService {
       }),
     ]);
 
-    return { message: 'Contrasena actualizada' };
+    return { message: 'contraseña actualizada' };
   }
 
   private async verifyRefreshToken(token: string): Promise<{ sub: string }> {

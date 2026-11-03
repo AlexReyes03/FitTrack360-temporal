@@ -23,18 +23,22 @@ const CIRCLE_OFF = `${COLOR_OFF}○${RESET}`;
 const CIRCLE_WARN = `${COLOR_WARN}●${RESET}`;
 const CIRCLE_OK = `${COLOR_OK}●${RESET}`;
 
-const FOOTER = 'Flechas ↑↓ Movimiento. Space Seleccionar/Apagar. Esc Salir.';
+const FOOTER =
+  'Flechas ↑↓ (Movimiento). Space (Seleccionar/Apagar). R (Recargar). W (Wi-Fi). P (Prisma Studio). Esc (Salir).';
 const TITLE = 'FitTrack360 - Services';
 const FLUTTER_TITLE = 'FitTrack Flutter';
 const PG_CONTAINER = 'fittrack-postgres';
 const API_CONTAINER = 'fittrack-api';
+const API_IMAGE = 'fittrack-api:dev';
+const API_DATABASE_URL = 'postgresql://fittrack:fittrack@host.docker.internal:5432/fittrack';
 const DEFAULT_API_PORT = 3000;
+const PRISMA_STUDIO_PORT = 5555;
 const POLL_MS = 1000;
 const ROW_POLL_TIMEOUT_MS = 60 * 1000;
 const AVD_POLL_TIMEOUT_MS = 90 * 1000;
 
 const FLUTTER_PS =
-  'powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match \'fit_track_360\' -and $_.CommandLine -match \'run\' -and $_.Name -match \'dart|flutter\' } | Select-Object -ExpandProperty ProcessId"';
+  'powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -match \'dart|dartvm\' -and $_.CommandLine -match \'flutter_tools.snapshot.*run\' } | Select-Object -ExpandProperty ProcessId"';
 
 const PENDING = { level: 'off', text: '...' };
 
@@ -42,12 +46,17 @@ let mode = 'main';
 let selectedIndex = 0;
 let deviceLines = [];
 let deviceSelected = 0;
-let devicesState = { sdk: null, avds: [], running: new Map() };
+let devicesState = { sdk: null, avds: [], running: new Map(), physical: [] };
 let deviceStatus = {};
 let deviceBusyName = null;
 let devicePoll = null;
+let flutterTargets = [];
+let flutterTargetSelected = 0;
+let wirelessPairing = null;
+let wirelessCode = '';
 let message = null;
 const polls = new Map();
+let dockerStatus = { available: true, installed: true };
 
 function circleFor(level) {
   if (level === 'ok') {
@@ -101,7 +110,33 @@ function openWindow(title, innerCommand, cwd) {
     child.unref();
     return;
   }
+  if (process.platform === 'darwin') {
+    const shellCommand = `cd '${cwd}' && ${innerCommand}`
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"');
+    const child = spawn('osascript', ['-e', `tell application "Terminal" to do script "${shellCommand}"`], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    return;
+  }
   const child = spawn(innerCommand, { cwd, detached: true, stdio: 'ignore', shell: true });
+  child.unref();
+}
+
+function openUrl(url) {
+  if (IS_WINDOWS) {
+    const child = spawn('cmd.exe', ['/d', '/s', '/c', `start "" "${url}"`], {
+      detached: true,
+      stdio: 'ignore',
+      windowsVerbatimArguments: true,
+    });
+    child.unref();
+    return;
+  }
+  const command = process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const child = spawn(command, [url], { detached: true, stdio: 'ignore' });
   child.unref();
 }
 
@@ -162,13 +197,22 @@ function readApiPort() {
   return Number.isInteger(port) && port > 0 && port < 65536 ? port : DEFAULT_API_PORT;
 }
 
+function apiDatabaseUrl() {
+  if (!fs.existsSync(API_ENV)) {
+    return API_DATABASE_URL;
+  }
+  const match = fs.readFileSync(API_ENV, 'utf8').match(/^DATABASE_URL=(.+)$/m);
+  if (!match) {
+    return API_DATABASE_URL;
+  }
+  return match[1]
+    .trim()
+    .replace(/@(localhost|127\.0\.0\.1)(:|\/)/, '@host.docker.internal$2');
+}
+
 function matchesFlutter(line) {
   const lower = line.toLowerCase();
-  return (
-    lower.includes('fit_track_360') &&
-    lower.includes('run') &&
-    /(^|[\\/ ])(dart|flutter)/.test(lower)
-  );
+  return lower.includes('flutter_tools.snapshot') && /\brun\b/.test(lower);
 }
 
 async function flutterPids() {
@@ -220,8 +264,10 @@ async function stopFlutter() {
 async function dockerPsRows() {
   const result = await runArgs('docker', ['ps', '-a', '--format', '{{.Names}}|{{.State}}|{{.Ports}}']);
   if (result.code !== 0) {
+    dockerStatus = { available: false, installed: result.error?.code !== 'ENOENT' };
     return null;
   }
+  dockerStatus = { available: true, installed: true };
   return result.stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -235,7 +281,13 @@ async function dockerPsRows() {
 async function readPostgres() {
   const rows = await dockerPsRows();
   if (!rows) {
-    return { level: 'off', text: 'No iniciado', exists: false, running: false, hasPort: false };
+    return {
+      level: 'warn',
+      text: dockerStatus.installed ? 'Docker no está corriendo' : 'Docker no está instalado',
+      exists: false,
+      running: false,
+      hasPort: false,
+    };
   }
   const publishing = rows.find((row) => row.state === 'running' && row.ports.includes('5432'));
   if (publishing) {
@@ -274,20 +326,30 @@ async function readPostgres() {
 
 async function readPrisma() {
   if (!fs.existsSync(API_ENV)) {
-    return { level: 'off', text: 'No iniciado', envMissing: true, pending: false };
+    return {
+      level: 'off',
+      text: 'No iniciado (Depende de Postgres)',
+      envMissing: true,
+      pending: false,
+    };
   }
   const result = await runLine('pnpm --dir fit_track_api exec prisma migrate status', {
     timeout: 25000,
   });
   const output = `${result.stdout}\n${result.stderr}`;
   if (/P1001|Can't reach database|ECONNREFUSED/i.test(output)) {
-    return { level: 'off', text: 'No iniciado', envMissing: false, pending: false };
+    return {
+      level: 'off',
+      text: 'No iniciado (Depende de Postgres)',
+      envMissing: false,
+      pending: false,
+    };
   }
   if (/not yet been applied/i.test(output)) {
     return { level: 'warn', text: 'Requiere actualizar', envMissing: false, pending: true };
   }
   if (/Database schema is up to date/i.test(output)) {
-    return { level: 'ok', text: 'Iniciado (Depende de Postgres)', envMissing: false, pending: false };
+    return { level: 'ok', text: 'Iniciado', envMissing: false, pending: false };
   }
   if (result.code !== 0) {
     return {
@@ -298,15 +360,30 @@ async function readPrisma() {
       errorLine: firstLine(output),
     };
   }
-  return { level: 'ok', text: 'Iniciado (Depende de Postgres)', envMissing: false, pending: false };
+  return { level: 'ok', text: 'Iniciado', envMissing: false, pending: false };
 }
 
 async function readApi() {
   const port = readApiPort();
   const rows = await dockerPsRows();
-  const named = rows?.find((row) => row.name === API_CONTAINER);
+  if (!rows) {
+    return {
+      level: 'warn',
+      text: dockerStatus.installed ? 'Docker no está corriendo' : 'Docker no está instalado',
+      port,
+      exists: false,
+      running: false,
+    };
+  }
+  const named = rows.find((row) => row.name === API_CONTAINER);
   if (!named) {
-    return { level: 'off', text: 'No iniciado', port, exists: false, running: false };
+    return {
+      level: 'off',
+      text: 'No iniciado (Depende de Postgres)',
+      port,
+      exists: false,
+      running: false,
+    };
   }
   const publishing = named.state === 'running' && named.ports.includes(`:${port}->`);
   if (named.state !== 'running') {
@@ -340,6 +417,14 @@ function resolveSdk() {
   if (IS_WINDOWS && process.env.LOCALAPPDATA) {
     candidates.push(path.join(process.env.LOCALAPPDATA, 'Android', 'Sdk'));
   }
+  if (process.env.HOME) {
+    if (process.platform === 'darwin') {
+      candidates.push(path.join(process.env.HOME, 'Library', 'Android', 'sdk'));
+    }
+    if (process.platform === 'linux') {
+      candidates.push(path.join(process.env.HOME, 'Android', 'Sdk'));
+    }
+  }
   for (const candidate of candidates) {
     const emulator = path.join(candidate, 'emulator', IS_WINDOWS ? 'emulator.exe' : 'emulator');
     if (fs.existsSync(emulator)) {
@@ -350,18 +435,24 @@ function resolveSdk() {
   return null;
 }
 
-async function runningAvds(sdk, avds) {
-  const running = new Map();
+async function adbSerials(sdk) {
   if (!sdk?.adb) {
-    return running;
+    return [];
   }
   const devices = await runArgs(sdk.adb, ['devices']);
-  const serials = devices.stdout
+  return devices.stdout
     .split(/\r?\n/)
-    .map((line) => line.match(/^(emulator-\d+)\s+device\s*$/))
-    .filter(Boolean)
-    .map((match) => match[1]);
-  for (const serial of serials) {
+    .map((line) => line.trim().split(/\s+/))
+    .filter((parts) => parts.length >= 2 && parts[1] === 'device')
+    .map((parts) => parts[0]);
+}
+
+async function runningAvds(sdk, avds) {
+  const running = new Map();
+  for (const serial of await adbSerials(sdk)) {
+    if (!serial.startsWith('emulator-')) {
+      continue;
+    }
     const name = await runArgs(sdk.adb, ['-s', serial, 'emu', 'avd', 'name']);
     const avd = firstLine(name.stdout);
     if (avds.includes(avd)) {
@@ -371,10 +462,67 @@ async function runningAvds(sdk, avds) {
   return running;
 }
 
+async function physicalDevices(sdk) {
+  const devices = [];
+  for (const serial of await adbSerials(sdk)) {
+    if (serial.startsWith('emulator-')) {
+      continue;
+    }
+    const model = await runArgs(sdk.adb, ['-s', serial, 'shell', 'getprop', 'ro.product.model']);
+    devices.push({ serial, name: firstLine(model.stdout) || serial });
+  }
+  return devices;
+}
+
+async function mdnsSupported(sdk) {
+  if (!sdk?.adb) {
+    return false;
+  }
+  const result = await runArgs(sdk.adb, ['mdns', 'check'], { timeout: 15000 });
+  const output = `${result.stdout}\n${result.stderr}`.toLowerCase();
+  return result.code === 0 && !output.includes('not running') && !output.includes('unknown');
+}
+
+async function discoverWireless(sdk) {
+  if (!sdk?.adb) {
+    return { supported: false, connect: [], pairing: [] };
+  }
+  if (!(await mdnsSupported(sdk))) {
+    return { supported: false, connect: [], pairing: [] };
+  }
+  const result = await runArgs(sdk.adb, ['mdns', 'services'], { timeout: 15000 });
+  const connect = [];
+  const pairing = [];
+  for (const line of `${result.stdout}\n${result.stderr}`.split(/\r?\n/)) {
+    const match = line.match(/_adb-tls-(connect|pairing)\._tcp\.?\s+(\S+)\s*$/);
+    if (!match) {
+      continue;
+    }
+    if (match[1] === 'connect') {
+      connect.push(match[2]);
+    } else {
+      pairing.push(match[2]);
+    }
+  }
+  return { supported: true, connect, pairing };
+}
+
+async function connectWireless(sdk, endpoints) {
+  const connected = [];
+  for (const endpoint of endpoints) {
+    const result = await runArgs(sdk.adb, ['connect', endpoint], { timeout: 20000 });
+    const output = `${result.stdout}\n${result.stderr}`.toLowerCase();
+    if (output.includes('connected to') && !output.includes('failed')) {
+      connected.push(endpoint);
+    }
+  }
+  return connected;
+}
+
 async function loadDevices() {
   const sdk = resolveSdk();
   if (!sdk) {
-    return { sdk: null, avds: [], running: new Map() };
+    return { sdk: null, avds: [], running: new Map(), physical: [] };
   }
   const listed = await runArgs(sdk.emulator, ['-list-avds'], { timeout: 12000 });
   const avds = `${listed.stdout}\n${listed.stderr}`
@@ -382,30 +530,31 @@ async function loadDevices() {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   const running = await runningAvds(sdk, avds);
-  return { sdk, avds, running };
+  const physical = await physicalDevices(sdk);
+  return { sdk, avds, running, physical };
 }
 
 async function readDevicesSummary() {
   const state = await loadDevices();
   devicesState = state;
   if (!state.sdk) {
-    return { level: 'warn', text: 'Sin emulator' };
+    return { level: 'warn', text: 'Sin SDK de Android' };
+  }
+  if (state.running.size > 0 || state.physical.length > 0) {
+    return { level: 'ok', text: 'Iniciado' };
   }
   if (state.avds.length === 0) {
     return { level: 'off', text: 'No iniciado' };
-  }
-  if (state.running.size > 0) {
-    return { level: 'ok', text: 'Iniciado' };
   }
   return { level: 'warn', text: 'Detenido' };
 }
 
 const ROWS = [
+  { id: 'devices', label: 'Dispositivos', read: readDevicesSummary },
   { id: 'flutter', label: 'Flutter', read: readFlutter },
   { id: 'postgres', label: 'Postgres (Docker)', read: readPostgres },
   { id: 'prisma', label: 'Prisma', read: readPrisma },
   { id: 'api', label: 'API Nest (Docker)', read: readApi },
-  { id: 'devices', label: 'Dispositivos', read: readDevicesSummary },
 ];
 
 const stateMap = {
@@ -441,10 +590,15 @@ function buildDeviceLines() {
   if (!devicesState.sdk) {
     return [{ raw: `${COLOR_WARN}No se encontró emulator. Revisa ANDROID_HOME.${RESET}` }];
   }
+  const lines = (devicesState.physical ?? []).map((device) => ({
+    level: 'ok',
+    name: device.name,
+    text: `Conectado (${device.serial})`,
+  }));
   if (devicesState.avds.length === 0) {
-    return [{ raw: 'No hay AVDs. Crea uno en Android Studio.' }];
+    return lines.length > 0 ? lines : [{ raw: 'No hay AVDs. Crea uno en Android Studio.' }];
   }
-  return devicesState.avds.map((name) => ({ selectable: true, name, ...deviceTextFor(name) }));
+  return [...lines, ...devicesState.avds.map((name) => ({ selectable: true, name, ...deviceTextFor(name) }))];
 }
 
 function selectableIndices() {
@@ -473,6 +627,16 @@ function draw() {
       const state = stateMap[row.id] ?? { level: 'off', text: 'No iniciado' };
       const prefix = index === selectedIndex ? '> ' : '  ';
       lines.push(`${prefix}${circleFor(state.level)} ${row.label} - ${state.text}`);
+    });
+  } else if (mode === 'pairing') {
+    lines.push('Vinculación inalámbrica');
+    lines.push(`Endpoint: ${wirelessPairing ?? ''}`);
+    lines.push(`Código: ${wirelessCode || '______'}`);
+  } else if (mode === 'flutter-target') {
+    lines.push('Iniciar Flutter en');
+    flutterTargets.forEach((target, index) => {
+      const prefix = index === flutterTargetSelected ? '> ' : '  ';
+      lines.push(`${prefix}${target.label}`);
     });
   } else {
     lines.push('Dispositivos');
@@ -593,6 +757,62 @@ function moveDeviceSelection(delta) {
   deviceSelected = indices[next];
 }
 
+async function buildFlutterTargets() {
+  devicesState = await loadDevices();
+  const targets = [];
+  for (const device of devicesState.physical ?? []) {
+    targets.push({ label: `${device.name} (${device.serial})`, deviceId: device.serial });
+  }
+  for (const [name, serial] of devicesState.running) {
+    targets.push({ label: `${name} (${serial})`, deviceId: serial });
+  }
+  targets.push({ label: 'Chrome (web)', deviceId: 'chrome' });
+  return targets;
+}
+
+async function prepareFlutterApiUrl(target) {
+  const port = readApiPort();
+  if (target.deviceId === 'chrome') {
+    return `http://localhost:${port}`;
+  }
+  const sdk = devicesState.sdk ?? resolveSdk();
+  if (!sdk?.adb) {
+    return null;
+  }
+  const result = await runArgs(sdk.adb, [
+    '-s',
+    target.deviceId,
+    'reverse',
+    `tcp:${port}`,
+    `tcp:${port}`,
+  ]);
+  return result.code === 0 ? `http://127.0.0.1:${port}` : null;
+}
+
+async function launchFlutterTarget() {
+  const target = flutterTargets[flutterTargetSelected];
+  if (!target) {
+    mode = 'main';
+    draw();
+    return;
+  }
+  const apiUrl = await prepareFlutterApiUrl(target);
+  if (!apiUrl) {
+    setMessage('No se pudo preparar adb reverse para el API. Revisa la conexión del dispositivo.');
+    draw();
+    return;
+  }
+  mode = 'main';
+  selectedIndex = ROWS.findIndex((row) => row.id === 'flutter');
+  beginRow('flutter', 'Iniciando...');
+  openWindow(
+    FLUTTER_TITLE,
+    `flutter run -d ${target.deviceId} --dart-define=API_BASE_URL=${apiUrl}`,
+    FLUTTER_DIR,
+  );
+  startPoll('flutter', { text: 'Iniciando...', isDone: (fresh) => fresh.level === 'ok' });
+}
+
 async function actFlutter() {
   if (polls.has('flutter')) {
     return;
@@ -602,14 +822,23 @@ async function actFlutter() {
     await stopFlutter();
     return;
   }
-  beginRow('flutter', 'Iniciando...');
   const state = await readFlutter();
+  stateMap.flutter = state;
   if (state.level === 'ok') {
+    beginRow('flutter', 'Deteniendo...');
     await stopFlutter();
     return;
   }
-  openWindow(FLUTTER_TITLE, 'flutter run', FLUTTER_DIR);
-  startPoll('flutter', { text: 'Iniciando...', isDone: (fresh) => fresh.level === 'ok' });
+  setMessage('Buscando dispositivos...');
+  draw();
+  flutterTargets = await buildFlutterTargets();
+  flutterTargetSelected = 0;
+  if (flutterTargets.length === 1) {
+    await launchFlutterTarget();
+    return;
+  }
+  mode = 'flutter-target';
+  draw();
 }
 
 async function actPostgres() {
@@ -623,6 +852,15 @@ async function actPostgres() {
   }
   const state = await readPostgres();
   stateMap.postgres = state;
+  if (!dockerStatus.available) {
+    setMessage(
+      dockerStatus.installed
+        ? 'Docker no está corriendo. Inicia Docker Desktop.'
+        : 'Docker no está instalado.',
+    );
+    await refreshRow('postgres');
+    return;
+  }
   if (state.running) {
     const result = await runArgs('docker', ['stop', state.name ?? PG_CONTAINER], { timeout: 120000 });
     if (result.code !== 0) {
@@ -714,12 +952,58 @@ async function actPrisma() {
   }
 }
 
+async function actPrismaStudio() {
+  const url = `http://localhost:${PRISMA_STUDIO_PORT}`;
+  if (!fs.existsSync(API_ENV)) {
+    setMessage('Falta fit_track_api/.env');
+    draw();
+    return;
+  }
+  if (await checkPort(PRISMA_STUDIO_PORT)) {
+    openUrl(url);
+    setMessage(`Prisma Studio ya responde en ${url}`);
+    draw();
+    return;
+  }
+  openWindow(
+    'Prisma Studio',
+    `pnpm --dir fit_track_api exec prisma studio --port ${PRISMA_STUDIO_PORT} --browser none`,
+    ROOT,
+  );
+  setMessage(`Iniciando Prisma Studio en ${url}. Cierra su ventana para detenerlo.`);
+  draw();
+  void (async () => {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (await checkPort(PRISMA_STUDIO_PORT)) {
+        openUrl(url);
+        setMessage(`Prisma Studio: ${url}`);
+        draw();
+        return;
+      }
+    }
+    setMessage('Prisma Studio no respondió en 30 s. Revisa la ventana que se abrió.');
+    draw();
+  })();
+}
+
 async function actApi() {
   if (polls.has('api')) {
     return;
   }
-  const port = readApiPort();
-  const state = stateMap.api ?? {};
+  const postgres = await readPostgres();
+  stateMap.postgres = postgres;
+  if (!dockerStatus.available) {
+    setMessage(
+      dockerStatus.installed
+        ? 'Docker no está corriendo. Inicia Docker Desktop.'
+        : 'Docker no está instalado.',
+    );
+    await refreshRow('api');
+    return;
+  }
+  const state = await readApi();
+  stateMap.api = state;
   if (state.running) {
     beginRow('api', 'Deteniendo...');
     const result = await runArgs('docker', ['stop', API_CONTAINER], { timeout: 120000 });
@@ -731,45 +1015,51 @@ async function actApi() {
     startPoll('api', { text: 'Deteniendo...', isDone: (fresh) => fresh.running === false });
     return;
   }
-  if (state.exists) {
-    const postgres = await readPostgres();
-    stateMap.postgres = postgres;
-    if (!postgres.running) {
-      setMessage('Primero inicia Postgres.');
-      await refreshRow('api');
-      return;
-    }
-    beginRow('api', 'Iniciando...');
-    const result = await runArgs('docker', ['start', API_CONTAINER], { timeout: 120000 });
-    if (result.code !== 0) {
-      setMessage(firstLine(result.stderr) || firstLine(result.stdout) || 'No se pudo arrancar la API.');
-      await refreshRow('api');
-      return;
-    }
-    const started = Date.now();
-    startPoll('api', {
-      text: 'Iniciando...',
-      isDone: (fresh) => fresh.level === 'ok',
-      isFailed: (fresh) => fresh.exists && !fresh.running && Date.now() - started > 2500,
-      failMessage: () => 'La API arranco y se detuvo. Revisa que Postgres este arriba.',
-    });
-    return;
-  }
-  const postgres = await readPostgres();
-  stateMap.postgres = postgres;
   if (!postgres.running) {
     setMessage('Primero inicia Postgres.');
     await refreshRow('api');
     return;
   }
+  if (!fs.existsSync(API_ENV)) {
+    setMessage('Falta fit_track_api/.env');
+    await refreshRow('api');
+    return;
+  }
+  beginRow('api', 'Construyendo imagen...');
+  const build = await runArgs('docker', ['build', '-t', API_IMAGE, API_DIR], { timeout: 600000 });
+  if (build.code !== 0) {
+    setMessage(firstLine(build.stderr) || firstLine(build.stdout) || 'No se pudo construir la imagen de la API.');
+    await refreshRow('api');
+    return;
+  }
+  if (state.exists) {
+    await runArgs('docker', ['rm', '-f', API_CONTAINER], { timeout: 60000 });
+  }
   beginRow('api', 'Iniciando...');
+  const port = readApiPort();
   const result = await runArgs(
     'docker',
-    ['compose', 'up', '-d', '--build', 'api'],
-    { cwd: API_DIR, timeout: 600000 },
+    [
+      'run',
+      '-d',
+      '--name',
+      API_CONTAINER,
+      '--env-file',
+      API_ENV,
+      '-e',
+      `DATABASE_URL=${apiDatabaseUrl()}`,
+      '-e',
+      `PORT=${port}`,
+      '-p',
+      `${port}:${port}`,
+      '--add-host',
+      'host.docker.internal:host-gateway',
+      API_IMAGE,
+    ],
+    { timeout: 120000 },
   );
   if (result.code !== 0) {
-    setMessage(firstLine(result.stderr) || firstLine(result.stdout) || 'No se pudo construir la API.');
+    setMessage(firstLine(result.stderr) || firstLine(result.stdout) || 'No se pudo arrancar la API.');
     await refreshRow('api');
     return;
   }
@@ -778,7 +1068,7 @@ async function actApi() {
     text: 'Iniciando...',
     isDone: (fresh) => fresh.level === 'ok',
     isFailed: (fresh) => fresh.exists && !fresh.running && Date.now() - started > 2500,
-    failMessage: () => 'La API arranco y se detuvo. Revisa que Postgres este arriba.',
+    failMessage: () => 'La API arrancó y se detuvo. Revisa que Postgres esté arriba.',
   });
 }
 
@@ -786,6 +1076,86 @@ async function actDevices() {
   devicesState = await loadDevices();
   mode = 'devices';
   deviceSelected = 0;
+  draw();
+}
+
+async function actWireless() {
+  const sdk = devicesState.sdk ?? resolveSdk();
+  if (!sdk?.adb) {
+    setMessage('No se encontró adb. Revisa ANDROID_HOME.');
+    draw();
+    return;
+  }
+  setMessage('Buscando dispositivos inalámbricos...');
+  draw();
+  const found = await discoverWireless(sdk);
+  if (!found.supported) {
+    setMessage('Este adb no soporta mdns. Usa adb connect <ip>:<puerto> desde la terminal.');
+    draw();
+    return;
+  }
+  if (found.connect.length === 0 && found.pairing.length === 0) {
+    setMessage('No se detectaron dispositivos. Activa Depuración inalámbrica y comparte la misma red.');
+    draw();
+    return;
+  }
+  const connected = await connectWireless(sdk, found.connect);
+  if (connected.length === 0 && found.pairing.length > 0) {
+    wirelessPairing = found.pairing[0];
+    wirelessCode = '';
+    mode = 'pairing';
+    draw();
+    return;
+  }
+  await refreshRow('devices');
+  setMessage(
+    connected.length > 0
+      ? `Conectados: ${connected.join(', ')}`
+      : 'Los dispositivos detectados no aceptaron la conexión. Vincula con el código del teléfono.',
+  );
+  draw();
+}
+
+async function submitPairing() {
+  const sdk = devicesState.sdk ?? resolveSdk();
+  if (!sdk?.adb || !wirelessPairing) {
+    mode = 'main';
+    draw();
+    return;
+  }
+  if (!/^\d{6}$/.test(wirelessCode)) {
+    setMessage('El código debe tener 6 dígitos.');
+    draw();
+    return;
+  }
+  setMessage('Vinculando...');
+  draw();
+  const endpoint = wirelessPairing;
+  const result = await runArgs(sdk.adb, ['pair', endpoint, wirelessCode], { timeout: 30000 });
+  const output = `${result.stdout}\n${result.stderr}`.trim();
+  wirelessCode = '';
+  wirelessPairing = null;
+  mode = 'main';
+  if (!/successfully paired/i.test(output)) {
+    setMessage(firstLine(output) || 'No se pudo vincular el dispositivo.');
+    draw();
+    return;
+  }
+  setMessage('Vinculado. Conectando...');
+  draw();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const found = await discoverWireless(sdk);
+    const connected = await connectWireless(sdk, found.connect);
+    if (connected.length > 0) {
+      await refreshRow('devices');
+      setMessage(`Conectado: ${connected.join(', ')}`);
+      draw();
+      return;
+    }
+  }
+  await refreshRow('devices');
+  setMessage('Vinculado, pero no se pudo conectar. Revisa la red y vuelve a intentar con W.');
   draw();
 }
 
@@ -828,6 +1198,7 @@ function startDevicePoll(name, evaluate, logPath) {
           return;
         }
         devicesState.running = await runningAvds(devicesState.sdk, devicesState.avds);
+        devicesState.physical = await physicalDevices(devicesState.sdk);
         if (deviceBusyName !== name) {
           return;
         }
@@ -1019,6 +1390,70 @@ function onKeypress(_str, key) {
   if (deviceBusyName) {
     return;
   }
+  if (mode === 'pairing') {
+    if (key.name === 'escape') {
+      wirelessPairing = null;
+      wirelessCode = '';
+      mode = 'main';
+      draw();
+      return;
+    }
+    if (key.name === 'return' || key.name === 'enter') {
+      void submitPairing();
+      return;
+    }
+    if (key.name === 'backspace') {
+      wirelessCode = wirelessCode.slice(0, -1);
+      draw();
+      return;
+    }
+    if (/^\d$/.test(key.sequence ?? '')) {
+      wirelessCode = `${wirelessCode}${key.sequence}`.slice(0, 6);
+      draw();
+    }
+    return;
+  }
+  if (mode === 'flutter-target') {
+    if (key.name === 'escape' || key.name === 'q') {
+      mode = 'main';
+      selectedIndex = ROWS.findIndex((row) => row.id === 'flutter');
+      draw();
+      return;
+    }
+    if (key.name === 'up' || key.name === 'down') {
+      const delta = key.name === 'up' ? -1 : 1;
+      flutterTargetSelected = Math.min(
+        Math.max(flutterTargetSelected + delta, 0),
+        Math.max(flutterTargets.length - 1, 0),
+      );
+      draw();
+      return;
+    }
+    if (key.name === 'space') {
+      void launchFlutterTarget();
+    }
+    return;
+  }
+  if (key.name === 'r') {
+    setMessage('Recargando estados...');
+    draw();
+    void (async () => {
+      if (mode === 'devices') {
+        devicesState = await loadDevices();
+        draw();
+      }
+      await refreshAll();
+    })();
+    return;
+  }
+  if (key.name === 'w') {
+    void actWireless();
+    return;
+  }
+  if (key.name === 'p') {
+    void actPrismaStudio();
+    return;
+  }
   if (key.name === 'escape' || key.name === 'q') {
     if (mode === 'devices') {
       mode = 'main';
@@ -1047,6 +1482,13 @@ function onKeypress(_str, key) {
 if (!process.stdin.isTTY) {
   process.stdout.write('El menú de desarrollo requiere una terminal interactiva.\n');
   process.exit(1);
+}
+
+try {
+  process.stdout.write('Instalando dependencias (pnpm install)...\n');
+  execSync('pnpm install', { cwd: ROOT, stdio: 'inherit' });
+} catch {
+  process.stdout.write('pnpm install falló; el menú abrirá con el estado actual.\n');
 }
 
 readline.emitKeypressEvents(process.stdin);

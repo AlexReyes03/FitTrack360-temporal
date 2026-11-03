@@ -112,3 +112,19 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## Auth, correo local y archivos
+
+Endpoints nuevos bajo el prefijo `api/v1`:
+
+- `POST /auth/refresh` y `POST /auth/logout`.
+- `GET /users/me` con Bearer access token.
+- `POST /auth/password/forgot` y `POST /auth/password/reset`.
+- `POST /storage/files`, `GET /storage/files/:id` y `DELETE /storage/files/:id` con Bearer access token.
+
+El correo de recuperacion usa SMTP. Mailpit aun no esta en `docker-compose.yml`
+(W8-07); mientras no exista, configura `SMTP_HOST` y `SMTP_PORT` hacia un Mailpit
+local. Si SMTP no responde, `password/forgot` responde 200 sin enviar correo.
+
+Los archivos se guardan en `UPLOAD_DIR` (por defecto `./uploads`, ignorado por git).
+Cada usuario solo puede leer o borrar sus propios archivos; un id ajeno responde 404.

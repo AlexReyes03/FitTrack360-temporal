@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../design_system/tokens/app_colors.dart';
 import '../../../core/session_storage.dart';
+import '../../../design_system/tokens/app_colors.dart';
+import '../../../design_system/widgets/app_background.dart';
+import '../../../design_system/widgets/ds_text_field.dart';
+import '../../../design_system/widgets/glass_surface.dart';
+import '../../../design_system/widgets/primary_button.dart';
 import '../data/auth_api.dart';
 
 class LoginPage extends StatefulWidget {
@@ -48,7 +53,7 @@ class _LoginPageState extends State<LoginPage> {
         refreshToken: tokens.refreshToken,
       );
       if (!mounted) return;
-      Navigator.pop(context);
+      context.go('/app');
     } on AuthApiException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
@@ -63,73 +68,104 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.bgDeep,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: const Text('Iniciar sesion'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              enabled: !_submitting,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Correo',
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-                hintText: 'tu@correo.com',
-                hintStyle: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              enabled: !_submitting,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                labelText: 'Contraseña',
-                labelStyle: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _submitting ? null : _submit,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accentWhite,
-                foregroundColor: AppColors.textOnAccent,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text('Entrar'),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.redAccent),
-              ),
-            ],
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Disponible en una semana siguiente'),
+      backgroundColor: Colors.transparent,
+      body: AppBackground(
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: GlassSurface(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Iniciar sesion',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Bienvenido de vuelta',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      DsTextField(
+                        controller: _emailController,
+                        label: 'Correo',
+                        hint: 'tu@correo.com',
+                        keyboardType: TextInputType.emailAddress,
+                        enabled: !_submitting,
+                      ),
+                      const SizedBox(height: 16),
+                      DsTextField(
+                        controller: _passwordController,
+                        label: 'Contraseña',
+                        obscureText: true,
+                        enabled: !_submitting,
+                      ),
+                      const SizedBox(height: 24),
+                      PrimaryButton(
+                        label: 'Entrar',
+                        onPressed: _submitting ? null : _submit,
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        _DangerBanner(message: _error!),
+                      ],
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: () => context.push('/forgot-password'),
+                        child: const Text(
+                          'Olvidaste tu contrasena?',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => context.push('/register'),
+                        child: const Text(
+                          'No tienes cuenta? Crear cuenta',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
                   ),
-                );
-              },
-              child: const Text(
-                'Olvidaste tu contrasena?',
-                style: TextStyle(color: AppColors.textSecondary),
+                ),
               ),
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _DangerBanner extends StatelessWidget {
+  final String message;
+
+  const _DangerBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
+      decoration: BoxDecoration(
+        color: AppColors.dangerFill,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.dangerBorder),
+      ),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.dangerText, fontSize: 14),
       ),
     );
   }

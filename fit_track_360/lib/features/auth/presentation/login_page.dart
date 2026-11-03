@@ -125,7 +125,7 @@ class _LoginPageState extends State<LoginPage> {
                       TextButton(
                         onPressed: () => context.push('/forgot-password'),
                         child: const Text(
-                          'Olvidaste tu contrasena?',
+                          'Olvidaste tu contraseña?',
                           style: TextStyle(color: AppColors.textSecondary),
                         ),
                       ),

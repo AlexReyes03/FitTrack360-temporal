@@ -8,7 +8,7 @@ import '../../../design_system/widgets/glass_surface.dart';
 import '../../../design_system/widgets/primary_button.dart';
 import '../data/auth_api.dart';
 
-/// Restablecer contrasena: valida el codigo de 6 digitos contra el API y
+/// Restablecer contraseña: valida el codigo de 6 digitos contra el API y
 /// actualiza la password. Al terminar regresa a login.
 class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage({super.key});
@@ -85,7 +85,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Restablecer contrasena',
+                        'Restablecer contraseña',
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 28,
@@ -95,7 +95,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Escribe el codigo de 6 digitos y tu nueva contrasena.',
+                        'Escribe el codigo de 6 digitos y tu nueva contraseña.',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -112,14 +112,14 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       const SizedBox(height: 16),
                       DsTextField(
                         controller: _passwordController,
-                        label: 'Nueva contrasena',
+                        label: 'Nueva contraseña',
                         obscureText: true,
                         enabled: !_submitting,
                       ),
                       const SizedBox(height: 16),
                       DsTextField(
                         controller: _confirmPasswordController,
-                        label: 'Confirmar contrasena',
+                        label: 'Confirmar contraseña',
                         obscureText: true,
                         enabled: !_submitting,
                       ),
@@ -127,7 +127,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       PrimaryButton(
                         label: _submitting
                             ? 'Guardando...'
-                            : 'Guardar contrasena',
+                            : 'Guardar contraseña',
                         onPressed: _submitting ? null : _submit,
                       ),
                       if (_error != null) ...[

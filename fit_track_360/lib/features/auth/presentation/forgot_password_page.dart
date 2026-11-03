@@ -8,7 +8,7 @@ import '../../../design_system/widgets/glass_surface.dart';
 import '../../../design_system/widgets/primary_button.dart';
 import '../data/auth_api.dart';
 
-/// Recuperar contrasena: envia el correo al API. El API responde 200 aunque
+/// Recuperar contraseña: envia el correo al API. El API responde 200 aunque
 /// el correo no exista, para no filtrar cuentas.
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
@@ -73,7 +73,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Recuperar contrasena',
+                        'Recuperar contraseña',
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 28,

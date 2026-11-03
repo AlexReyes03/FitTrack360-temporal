@@ -1,74 +1,75 @@
 # FitTrack360
 
-Monorepo del proyecto FitTrack360: app Flutter (`fit_track_360`) y API NestJS (`fit_track_api`).
+Plataforma móvil para el seguimiento de entrenamiento físico, rutinas y catálogo de ejercicios. El monorepo integra la aplicación móvil y el backend; este README cubre el arranque local, los hooks de Git y el flujo de trabajo del equipo:
 
-**Audiencia:** integrantes del equipo de desarrollo.  
-**Alcance de este README:** arranque local, instalación con pnpm y uso de Husky (hooks de Git). No documenta el dominio de negocio ni el design system (ver `fit_track_360/docs/`).
+- `fit_track_360/`: aplicación móvil en Flutter. El sistema de diseño está documentado en `fit_track_360/docs/design-system.md`.
+- `fit_track_api/`: API REST en NestJS con Prisma y PostgreSQL. Los assets de ejercicios se encuentran en `fit_track_api/public/exercises/` y el catálogo base en `fit_track_api/seed/`.
 
 ## Requisitos
 
 - Git
 - Node.js
-- [pnpm](https://pnpm.io/installation) (gestor de paquetes del monorepo; versión alineada con `packageManager` en el `package.json` raíz)
-- Flutter / Dart (para trabajar en `fit_track_360`)
+- [pnpm](https://pnpm.io/installation) (la versión está fijada en el campo `packageManager` de `package.json`)
+- Flutter y Dart en el `PATH`
+- Docker (para levantar PostgreSQL y la API desde el menú de desarrollo)
 
-Si no tienes pnpm:
+Si utilizas Corepack, habilítalo para que use automáticamente la versión de pnpm fijada en `package.json`:
 
 ```bash
 corepack enable
-corepack prepare pnpm@12.3.4 --activate
 ```
 
-O instálalo con el método que prefieras de la documentación oficial de pnpm.
+## Arranque
 
-## Arranque del monorepo
-
-Desde la **raíz** del repositorio (`FitTrack360/`):
+Desde la raíz del repositorio:
 
 ```bash
 pnpm install
 ```
 
-Con un solo comando en la raíz ocurre lo siguiente:
+Este comando instala las dependencias de Node.js del workspace, descarga los paquetes de Flutter (`dart pub get` en `fit_track_360`) y activa los hooks de Git en `.husky/`.
 
-1. Instala dependencias Node del workspace (raíz + `fit_track_api`).
-2. Ejecuta `postinstall` → `dart pub get -C fit_track_360` (dependencias Flutter).
-3. Ejecuta `prepare` → activa los hooks de Husky en `.husky/`.
+Antes de levantar los servicios, copia `fit_track_api/.env.example` a `fit_track_api/.env`. El `DATABASE_URL` de ejemplo ya coincide con el contenedor de PostgreSQL que crea el menú. Sin ese archivo, el menú no aplica las migraciones de Prisma ni arranca la API.
 
-Flutter/Dart debe estar en el `PATH`. Si falta, el `postinstall` falla y el install no queda completo.
-
-Si solo necesitas reintentar el frontend:
+Si necesitas reinstalar únicamente las dependencias de Flutter:
 
 ```bash
 pnpm run install:app
 ```
 
-### Cómo verificar que Husky quedó activo
-
-1. Existe la carpeta `.husky/` con `pre-commit`, `commit-msg` y `pre-push`.
-2. Tras `pnpm install` en la raíz, un commit de prueba en una rama de trabajo dispara los mensajes de Husky (no uses `main` para esa prueba).
-
-Si alguien solo instala dentro de `fit_track_api`, el script `prepare` del API intenta inicializar Husky desde la raíz. Lo recomendado sigue siendo `pnpm install` en la raíz del monorepo.
-
-Este proyecto usa **pnpm**, no npm. No generes ni subas `package-lock.json`.
-
-## Comandos para desarrollo (Iniciar proyecto)
+## Desarrollo
 
 Desde la raíz del repositorio:
 
-- `pnpm install` - Instalar dependencias del monorepo.
-- `pnpm dev` - Abrir el menú para levantar Servicios.
+```bash
+pnpm dev
+```
+
+El comando ejecuta `pnpm install` y después abre un menú interactivo para iniciar o detener, en este orden:
+
+- Dispositivos; lista primero los dispositivos físicos conectados por `adb` (USB o Wi-Fi) y después los AVD creados. Requiere el SDK de Android con `ANDROID_HOME` o `ANDROID_SDK_ROOT`
+- Flutter; al iniciar pide elegir entre dispositivos físicos, emuladores encendidos y Chrome (web)
+- PostgreSQL en Docker (puerto `5432`)
+- Migraciones de Prisma (`migrate deploy`)
+- API NestJS en Docker; la imagen se reconstruye en cada arranque
+
+Teclas: flechas para moverte, Space para iniciar o detener, `R` para recargar estados y Esc para salir.
+
+Con `W` el menú busca dispositivos por Wi-Fi usando `adb mdns`. Si el teléfono ya está vinculado, se conecta solo; si no, pide el código de 6 dígitos que muestra Depuración inalámbrica en el teléfono.
+
+Al iniciar Flutter, el menú define `API_BASE_URL` con `adb reverse` para dispositivos Android o con `localhost` para Chrome. Si ejecutas `flutter run` a mano, pasa `--dart-define=API_BASE_URL=http://<host>:<puerto>`; el valor por defecto del código (`10.0.2.2:3000`) solo sirve para el emulador con la API en el puerto 3000.
+
+Con `P` se abre Prisma Studio en `http://localhost:5555`, en su propia ventana, para editar tablas y registros desde el navegador. Requiere `fit_track_api/.env`.
+
+El menú administra solo dispositivos Android mediante `adb`. Los dispositivos iOS requieren macOS y Xcode, así que no aparecen en el panel.
 
 ## Flujo de trabajo con Git
 
-1. Trabaja en una rama distinta de `main` / `master` (`feat/...`, `fix/...`, `chore/...`, etc.).
-2. Haz commit desde esa rama.
+1. Crea una rama a partir de `main` (`feat/...`, `fix/...`, `chore/...`).
+2. Realiza tus commits en esa rama.
 3. Abre un Pull Request hacia `main`.
-4. Integra el PR (recomendado: Squash and merge) y borra la rama remota si aplica.
 
-Los hooks **bloquean commits y pushes directos** a `main` y `master`. El camino correcto es rama + PR.
-
-### Formato obligatorio del mensaje de commit
+### Formato del mensaje de commit
 
 ```text
 <type>(<scope>): <mensaje>
@@ -86,31 +87,32 @@ chore(repo): actualizar scripts de lint del monorepo
 
 ## Qué validan los hooks
 
+No utilices `--no-verify` en `git commit` ni en `git push`; si un hook falla, corrige el error reportado antes de reintentar.
+
 | Hook | Cuándo | Qué hace |
 | --- | --- | --- |
-| `pre-commit` | Al hacer `git commit` | Rechaza commit en `main`/`master`. Si hay cambios en `fit_track_360/`, corre `dart format` (check) y `dart analyze` (errores y warnings fatales). Si hay cambios en `fit_track_api/`, corre Prettier check, Oxlint con `--deny-warnings` y `tsc --noEmit`. |
-| `commit-msg` | Al hacer `git commit` | Exige `type(scope): mensaje` con los tipos listados arriba. |
-| `pre-push` | Al hacer `git push` | Rechaza push directo a `main`/`master`. |
+| `pre-commit` | Al hacer `git commit` | Bloquea commits directos en `main`/`master`. Si hay cambios en `fit_track_360/`, ejecuta `dart format` (check) y `dart analyze --fatal-infos --fatal-warnings`. Si hay cambios en `fit_track_api/`, ejecuta Prettier (check), Oxlint (`--deny-warnings`) y `tsc --noEmit`. |
+| `commit-msg` | Al hacer `git commit` | Valida el formato `<type>(<scope>): <mensaje>` con al menos 3 caracteres descriptivos. |
+| `pre-push` | Al hacer `git push` | Bloquea pushes directos a `main`/`master`. |
 
-### Comandos útiles (ejecutar a mano)
+### Comandos de verificación y formato
 
-Desde la raíz del monorepo:
+Desde la raíz del monorepo puedes ejecutar manualmente las mismas validaciones de los hooks:
 
 ```bash
+# Todo el monorepo
 pnpm run format:check
 pnpm run format
 pnpm run lint
+
+# Solo Flutter (fit_track_360)
+pnpm run format:check:app
+pnpm run format:app
+pnpm run lint:app
+
+# Solo API (fit_track_api)
+pnpm run format:check:api
+pnpm run format:api
+pnpm run lint:api
 pnpm run typecheck:api
 ```
-
-## Prohibido omitir los hooks
-
-Está **prohibido** usar `git commit --no-verify`, `git push --no-verify` u otras formas de saltarse los hooks de Husky.
-
-Esas flags desactivan las validaciones de formato, lint, tipos, rama protegida y mensaje de commit. En este proyecto no son una vía válida de trabajo: si el hook falla, corrige el problema indicado en el mensaje de error y vuelve a intentar.
-
-## Límites
-
-- Este README no sustituye la documentación de Flutter ni de NestJS.
-- El design system del frontend está en `fit_track_360/docs/design-system.md`.
-- Los assets de ejercicios viven bajo `fit_track_api/public/exercises/` y el catálogo slim en `fit_track_api/seed/`.

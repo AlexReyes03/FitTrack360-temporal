@@ -32,7 +32,7 @@
 
 **Notas de integración**
 
-- La pantalla actual usa `Iniciar sesion` en la barra superior, `Correo`, `Entrar` y `Olvidaste tu contrasena?`; estos textos deben reemplazarse por las claves de la tabla.
+- La pantalla actual usa `Iniciar sesion` en la barra superior, `Correo`, `Entrar` y `Olvidaste tu contraseña?`; estos textos deben reemplazarse por las claves de la tabla.
 - `login.error.invalidCredentials` debe mostrarse ante una respuesta 401, sin indicar cuál campo falló. Hoy la pantalla muestra el mensaje del API (`Credenciales incorrectas`).
 - `login.error.generic` cubre fallos de red o del servicio. Hoy se muestra `No se pudo conectar`.
 - El enlace de recuperación existe, pero hoy muestra `Disponible en una semana siguiente`. La pantalla de recuperación todavía no está integrada.
@@ -106,7 +106,7 @@
 
 | Pantalla | Archivo | Situación actual |
 | --- | --- | --- |
-| Inicio de sesión | `fit_track_360/lib/features/auth/presentation/login_page.dart` | Título `Iniciar sesion`, campos `Correo` y `Contraseña`, botón `Entrar`, enlace `Olvidaste tu contrasena?` con aviso de disponibilidad futura y errores sin tildes. |
+| Inicio de sesión | `fit_track_360/lib/features/auth/presentation/login_page.dart` | Título `Iniciar sesion`, campos `Correo` y `Contraseña`, botón `Entrar`, enlace `Olvidaste tu contraseña?` con aviso de disponibilidad futura y errores sin tildes. |
 | Registro | `fit_track_360/lib/features/auth/presentation/register_page.dart` | Campos Usuario, Correo, Contraseña, Confirmar contraseña y Nombre; casilla `Acepto el aviso de privacidad`; botón `Crear cuenta`; sin enlace a Inicio de sesión; errores sin tildes. |
 | Recuperación | No existe | El enlace de Inicio de sesión solo muestra `Disponible en una semana siguiente`. |
 

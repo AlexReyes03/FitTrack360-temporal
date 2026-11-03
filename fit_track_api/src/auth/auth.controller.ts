@@ -63,8 +63,8 @@ export class AuthController {
 
   @Post('password/reset')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Restablece la contrasena con un codigo vigente' })
-  @ApiOkResponse({ description: 'Contrasena actualizada' })
+  @ApiOperation({ summary: 'Restablece la contraseña con un codigo vigente' })
+  @ApiOkResponse({ description: 'contraseña actualizada' })
   resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
     return this.authService.resetPassword(dto);
   }

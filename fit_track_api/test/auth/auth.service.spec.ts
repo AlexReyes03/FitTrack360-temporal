@@ -4,11 +4,11 @@ import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { verify } from '@node-rs/argon2';
 import { createHash } from 'node:crypto';
-import { MailService } from '../mail/mail.service';
-import { PrismaService } from '../prisma/prisma.service';
-import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
+import { MailService } from '../../src/mail/mail.service';
+import { PrismaService } from '../../src/prisma/prisma.service';
+import { AuthService } from '../../src/auth/auth.service';
+import { LoginDto } from '../../src/auth/dto/login.dto';
+import { RegisterDto } from '../../src/auth/dto/register.dto';
 
 const PASSWORD = 'Prueba12345';
 const WRONG_PASSWORD = 'NoEsLaClave99';

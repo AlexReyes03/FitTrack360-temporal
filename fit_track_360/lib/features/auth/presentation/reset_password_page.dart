@@ -24,16 +24,41 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final FocusNode _confirmPasswordFocusNode = FocusNode();
 
   bool _submitting = false;
+  bool _confirmPasswordTouched = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _confirmPasswordFocusNode.addListener(_handleConfirmPasswordFocus);
+  }
+
+  void _handleConfirmPasswordFocus() {
+    if (!_confirmPasswordFocusNode.hasFocus &&
+        _confirmPasswordController.text.trim().isNotEmpty) {
+      setState(() => _confirmPasswordTouched = true);
+    }
+  }
 
   @override
   void dispose() {
     _codeController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
+  }
+
+  String? get _confirmPasswordError {
+    if (!_confirmPasswordTouched) return null;
+    final confirmPassword = _confirmPasswordController.text.trim();
+    if (confirmPassword.isEmpty) return null;
+    return confirmPassword == _passwordController.text.trim()
+        ? null
+        : 'Las contraseñas no coinciden';
   }
 
   Future<void> _submit() async {
@@ -43,6 +68,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
     setState(() {
       _error = null;
+      _confirmPasswordTouched = true;
       if (!_codePattern.hasMatch(code)) {
         _error = 'El codigo debe tener 6 digitos';
       } else if (password.length < 8) {
@@ -105,7 +131,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       DsTextField(
                         controller: _codeController,
                         label: 'Codigo',
-                        hint: '123456',
+                        hint: '6 digitos',
                         keyboardType: TextInputType.number,
                         enabled: !_submitting,
                       ),
@@ -113,14 +139,18 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                       DsTextField(
                         controller: _passwordController,
                         label: 'Nueva contraseña',
+                        hint: 'Minimo 8 caracteres',
                         obscureText: true,
                         enabled: !_submitting,
                       ),
                       const SizedBox(height: 16),
                       DsTextField(
                         controller: _confirmPasswordController,
+                        focusNode: _confirmPasswordFocusNode,
                         label: 'Confirmar contraseña',
+                        hint: 'Repite tu contraseña',
                         obscureText: true,
+                        errorText: _confirmPasswordError,
                         enabled: !_submitting,
                       ),
                       const SizedBox(height: 24),

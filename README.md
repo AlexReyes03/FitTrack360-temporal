@@ -116,3 +116,16 @@ pnpm run format:api
 pnpm run lint:api
 pnpm run typecheck:api
 ```
+
+## Responsables por capacidad
+
+| Capacidad | Descripción corta | Responsable |
+| --- | --- | --- |
+| P1 | Cámara/galería para foto de progreso o comida; compresión y subida a la nube con acceso restringido al dueño. | Pendiente de asignar |
+| P2 | Ubicación en primer plano al cerrar un entrenamiento; alternativa de zona manual si el GPS está apagado. | Pendiente de asignar |
+| P3 | Recordatorio local de entrenamiento o comida, con interruptor en Ajustes. | Pendiente de asignar |
+| O1 | Desbloqueo con biometría o confirmación de acciones sensibles, con contraseña como alternativa. | Pendiente de asignar |
+| O5 | Conteo de pasos del día en el resumen del Home. | Pendiente de asignar |
+| O7+O10 | Contacto del sistema y hoja de compartir para enviar progreso o resumen. | Pendiente de asignar |
+
+Se confirma en reunion de equipo.

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/session_storage.dart';
+import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
-import '../../../design_system/widgets/app_background.dart';
 
 /// Splash con branding del DS. Tras un minimo visual decide por presencia de
 /// access token: /app si hay sesion, /login si no.
@@ -30,43 +30,40 @@ class _SplashPageState extends State<SplashPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const _BrandPill(),
-              const SizedBox(height: 28),
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  stops: [0.0, 0.45, 1.0],
-                  colors: [
-                    AppColors.accentWhite,
-                    AppColors.zinc100,
-                    AppColors.gray400,
-                  ],
-                ).createShader(bounds),
-                child: const Text(
-                  'FitTrack360',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                  ),
+    return AppScaffoldTemplate(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const _BrandPill(),
+            const SizedBox(height: 28),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: [0.0, 0.45, 1.0],
+                colors: [
+                  AppColors.accentWhite,
+                  AppColors.zinc100,
+                  AppColors.gray400,
+                ],
+              ).createShader(bounds),
+              child: const Text(
+                'FitTrack360',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 38,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Tu progreso, en un solo lugar',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Tu progreso, en un solo lugar',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+            ),
+          ],
         ),
       ),
     );

@@ -1,0 +1,9 @@
+class AppSpacing {
+  AppSpacing._();
+
+  static const double xs = 8;
+  static const double sm = 12;
+  static const double md = 24;
+  static const double lg = 32;
+  static const double contentMaxWidth = 760;
+}

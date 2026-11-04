@@ -38,3 +38,14 @@ model PasswordResetCode {
   expiresAt DateTime
   usedAt    DateTime?
 }
+
+model Exercise {
+  id          String @id
+  name        String
+  imageFile   String
+  gifFile     String
+  attribution String
+  bodyPart    String
+  equipment   String
+  target      String
+}

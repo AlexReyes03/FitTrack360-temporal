@@ -7,6 +7,7 @@ import '../../../design_system/widgets/ds_text_field.dart';
 import '../../../design_system/widgets/glass_surface.dart';
 import '../../../design_system/widgets/primary_button.dart';
 import '../data/auth_api.dart';
+import '../domain/auth_validators.dart';
 
 /// Recuperar contraseña: envia el correo al API. El API responde 200 aunque
 /// el correo no exista, para no filtrar cuentas.
@@ -19,20 +20,43 @@ class ForgotPasswordPage extends StatefulWidget {
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final TextEditingController _emailController = TextEditingController();
+  final FocusNode _emailFocusNode = FocusNode();
 
   bool _submitting = false;
   bool _sent = false;
+  bool _emailTouched = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailFocusNode.addListener(_handleEmailFocus);
+  }
+
+  void _handleEmailFocus() {
+    if (!_emailFocusNode.hasFocus && _emailController.text.trim().isNotEmpty) {
+      setState(() => _emailTouched = true);
+    }
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
+    _emailFocusNode.dispose();
     super.dispose();
+  }
+
+  String? get _emailError {
+    if (!_emailTouched) return null;
+    final email = _emailController.text.trim();
+    if (email.isEmpty || AuthValidators.isValidEmail(email)) return null;
+    return 'Usa el formato ejemplo@correo.com';
   }
 
   Future<void> _submit() async {
     final email = _emailController.text.trim();
-    if (email.isEmpty || !email.contains('@')) {
+    setState(() => _emailTouched = true);
+    if (email.isEmpty || !AuthValidators.isValidEmail(email)) {
       setState(() => _error = 'Escribe un correo valido');
       return;
     }
@@ -92,9 +116,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       const SizedBox(height: 24),
                       DsTextField(
                         controller: _emailController,
+                        focusNode: _emailFocusNode,
                         label: 'Correo',
-                        hint: 'tu@correo.com',
+                        hint: 'ejemplo@correo.com',
                         keyboardType: TextInputType.emailAddress,
+                        errorText: _emailError,
                         enabled: !_submitting,
                       ),
                       const SizedBox(height: 24),

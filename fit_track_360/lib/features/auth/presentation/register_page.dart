@@ -8,6 +8,7 @@ import '../../../design_system/widgets/ds_text_field.dart';
 import '../../../design_system/widgets/glass_surface.dart';
 import '../../../design_system/widgets/primary_button.dart';
 import '../data/auth_api.dart';
+import '../domain/auth_validators.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -26,10 +27,34 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _confirmPasswordController =
       TextEditingController();
   final TextEditingController _displayNameController = TextEditingController();
+  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _confirmPasswordFocusNode = FocusNode();
 
   bool _privacyConsent = false;
   bool _submitting = false;
+  bool _emailTouched = false;
+  bool _confirmPasswordTouched = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailFocusNode.addListener(_handleEmailFocus);
+    _confirmPasswordFocusNode.addListener(_handleConfirmPasswordFocus);
+  }
+
+  void _handleEmailFocus() {
+    if (!_emailFocusNode.hasFocus && _emailController.text.trim().isNotEmpty) {
+      setState(() => _emailTouched = true);
+    }
+  }
+
+  void _handleConfirmPasswordFocus() {
+    if (!_confirmPasswordFocusNode.hasFocus &&
+        _confirmPasswordController.text.trim().isNotEmpty) {
+      setState(() => _confirmPasswordTouched = true);
+    }
+  }
 
   @override
   void dispose() {
@@ -38,7 +63,25 @@ class _RegisterPageState extends State<RegisterPage> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _displayNameController.dispose();
+    _emailFocusNode.dispose();
+    _confirmPasswordFocusNode.dispose();
     super.dispose();
+  }
+
+  String? get _emailError {
+    if (!_emailTouched) return null;
+    final email = _emailController.text.trim();
+    if (email.isEmpty || AuthValidators.isValidEmail(email)) return null;
+    return 'Usa el formato ejemplo@correo.com';
+  }
+
+  String? get _confirmPasswordError {
+    if (!_confirmPasswordTouched) return null;
+    final confirmPassword = _confirmPasswordController.text.trim();
+    if (confirmPassword.isEmpty) return null;
+    return confirmPassword == _passwordController.text.trim()
+        ? null
+        : 'Las contraseñas no coinciden';
   }
 
   bool get _fieldsFilled =>
@@ -59,6 +102,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() {
       _error = null;
+      _emailTouched = true;
+      _confirmPasswordTouched = true;
       if (username.isEmpty ||
           email.isEmpty ||
           password.isEmpty ||
@@ -71,7 +116,7 @@ class _RegisterPageState extends State<RegisterPage> {
         _error = 'La contraseña debe tener al menos 8 caracteres';
       } else if (password != confirmPassword) {
         _error = 'Las contraseñas no coinciden';
-      } else if (!email.contains('@')) {
+      } else if (!AuthValidators.isValidEmail(email)) {
         _error = 'Correo invalido';
       }
     });
@@ -112,7 +157,7 @@ class _RegisterPageState extends State<RegisterPage> {
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 760),
                 child: GlassSurface(
@@ -128,7 +173,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           letterSpacing: -0.3,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       const Text(
                         'Empieza a registrar tu progreso',
                         style: TextStyle(
@@ -136,47 +181,54 @@ class _RegisterPageState extends State<RegisterPage> {
                           fontSize: 14,
                         ),
                       ),
-                      const SizedBox(height: 24),
-                      DsTextField(
-                        controller: _usernameController,
-                        label: 'Usuario',
-                        hint: 'usuario_360',
-                        enabled: !_submitting,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 16),
-                      DsTextField(
-                        controller: _emailController,
-                        label: 'Correo',
-                        hint: 'tu@correo.com',
-                        keyboardType: TextInputType.emailAddress,
-                        enabled: !_submitting,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 16),
-                      DsTextField(
-                        controller: _passwordController,
-                        label: 'Contraseña',
-                        obscureText: true,
-                        enabled: !_submitting,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 16),
-                      DsTextField(
-                        controller: _confirmPasswordController,
-                        label: 'Confirmar contraseña',
-                        obscureText: true,
-                        enabled: !_submitting,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 18),
                       DsTextField(
                         controller: _displayNameController,
                         label: 'Nombre',
+                        hint: 'Tu nombre completo',
                         enabled: !_submitting,
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 12),
+                      DsTextField(
+                        controller: _usernameController,
+                        label: 'Usuario',
+                        hint: 'Solo letras, numeros y guion bajo',
+                        enabled: !_submitting,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      DsTextField(
+                        controller: _emailController,
+                        focusNode: _emailFocusNode,
+                        label: 'Correo',
+                        hint: 'ejemplo@correo.com',
+                        keyboardType: TextInputType.emailAddress,
+                        errorText: _emailError,
+                        enabled: !_submitting,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      DsTextField(
+                        controller: _passwordController,
+                        label: 'Contraseña',
+                        hint: 'Minimo 8 caracteres',
+                        obscureText: true,
+                        enabled: !_submitting,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      DsTextField(
+                        controller: _confirmPasswordController,
+                        focusNode: _confirmPasswordFocusNode,
+                        label: 'Confirmar contraseña',
+                        hint: 'Repite tu contraseña',
+                        obscureText: true,
+                        errorText: _confirmPasswordError,
+                        enabled: !_submitting,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                      const SizedBox(height: 10),
                       _PrivacyCheckbox(
                         value: _privacyConsent,
                         onChanged: _submitting
@@ -184,16 +236,16 @@ class _RegisterPageState extends State<RegisterPage> {
                             : (value) =>
                                   setState(() => _privacyConsent = value),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
                       PrimaryButton(
                         label: 'Crear cuenta',
                         onPressed: _canSubmit ? _submit : null,
                       ),
                       if (_error != null) ...[
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         _DangerBanner(message: _error!),
                       ],
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       TextButton(
                         onPressed: () => context.push('/login'),
                         child: const Text(

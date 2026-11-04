@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/network/connectivity_service.dart';
 import '../../../core/session_storage.dart';
+import '../../../core/widgets/offline_banner.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/glass_surface.dart';
@@ -11,33 +15,57 @@ import '../../auth/data/auth_api.dart';
 
 /// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion
 /// revocando el refresh en el API, limpiando storage local y volviendo a login.
+/// Muestra [OfflineBanner] sin red y recarga el perfil al recuperarla.
 class HomeShellPage extends StatefulWidget {
-  const HomeShellPage({super.key});
+  const HomeShellPage({
+    super.key,
+    this.apiClient,
+    this.sessionStorage,
+    this.connectivityService,
+  });
+
+  /// Dependencias sustituibles en pruebas; por defecto usa las reales.
+  final ApiClient? apiClient;
+  final SessionStorage? sessionStorage;
+  final ConnectivityService? connectivityService;
 
   @override
   State<HomeShellPage> createState() => _HomeShellPageState();
 }
 
 class _HomeShellPageState extends State<HomeShellPage> {
-  final ApiClient _api = ApiClient();
-  final SessionStorage _storage = SessionStorage();
+  late final ApiClient _api = widget.apiClient ?? ApiClient();
+  late final SessionStorage _storage =
+      widget.sessionStorage ?? SessionStorage();
+  late final ConnectivityService _connectivity =
+      widget.connectivityService ?? ConnectivityService();
+  StreamSubscription<bool>? _connectivitySubscription;
 
   String? _displayName;
   bool _loggingOut = false;
+  bool _loadingProfile = false;
 
   @override
   void initState() {
     super.initState();
+    _connectivitySubscription = _connectivity.onStatusChange.listen((online) {
+      if (online && _displayName == null) _loadProfile();
+    }, onError: (_) {});
     _loadProfile();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _api.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfile() async {
+    // Dos cargas simultaneas con el access vencido harian dos refresh; el
+    // segundo usaria un token ya revocado y cerraria la sesion.
+    if (_loadingProfile || _loggingOut) return;
+    _loadingProfile = true;
     try {
       final profile = await _api.me();
       if (!mounted) return;
@@ -47,6 +75,8 @@ class _HomeShellPageState extends State<HomeShellPage> {
       context.go('/login');
     } catch (_) {
       // Sin red o perfil no disponible: se mantiene el saludo generico.
+    } finally {
+      _loadingProfile = false;
     }
   }
 
@@ -78,6 +108,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  OfflineBanner(service: _connectivity, onRetry: _loadProfile),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
                     child: _Header(onProfileTap: () {}),

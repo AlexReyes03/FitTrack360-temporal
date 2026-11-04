@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/session_storage.dart';
+import '../../../design_system/templates/form_page_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
-import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../../design_system/widgets/glass_surface.dart';
 import '../../../design_system/widgets/primary_button.dart';
@@ -91,84 +91,71 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: GlassSurface(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Iniciar sesion',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Bienvenido de vuelta',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      DsTextField(
-                        controller: _emailController,
-                        focusNode: _emailFocusNode,
-                        label: 'Correo',
-                        hint: 'ejemplo@correo.com',
-                        keyboardType: TextInputType.emailAddress,
-                        errorText: _emailError,
-                        enabled: !_submitting,
-                      ),
-                      const SizedBox(height: 16),
-                      DsTextField(
-                        controller: _passwordController,
-                        label: 'Contraseña',
-                        hint: 'Minimo 8 caracteres',
-                        obscureText: true,
-                        enabled: !_submitting,
-                      ),
-                      const SizedBox(height: 24),
-                      PrimaryButton(
-                        label: 'Entrar',
-                        onPressed: _submitting ? null : _submit,
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 16),
-                        _DangerBanner(message: _error!),
-                      ],
-                      const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: () => context.push('/forgot-password'),
-                        child: const Text(
-                          'Olvidaste tu contraseña?',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => context.push('/register'),
-                        child: const Text(
-                          'No tienes cuenta? Crear cuenta',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+    return FormPageTemplate(
+      fields: GlassSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Iniciar sesion',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            const Text(
+              'Bienvenido de vuelta',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 24),
+            DsTextField(
+              controller: _emailController,
+              focusNode: _emailFocusNode,
+              label: 'Correo',
+              hint: 'ejemplo@correo.com',
+              keyboardType: TextInputType.emailAddress,
+              errorText: _emailError,
+              enabled: !_submitting,
+            ),
+            const SizedBox(height: 16),
+            DsTextField(
+              controller: _passwordController,
+              label: 'Contraseña',
+              hint: 'Minimo 8 caracteres',
+              obscureText: true,
+              enabled: !_submitting,
+            ),
+            const SizedBox(height: 24),
+            PrimaryButton(
+              label: 'Entrar',
+              onPressed: _submitting ? null : _submit,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 16),
+              _DangerBanner(message: _error!),
+            ],
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => context.push('/forgot-password'),
+              child: const Text(
+                'Olvidaste tu contraseña?',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+            TextButton(
+              onPressed: () => context.push('/register'),
+              child: const Text(
+                'No tienes cuenta? Crear cuenta',
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ),
+          ],
         ),
       ),
     );

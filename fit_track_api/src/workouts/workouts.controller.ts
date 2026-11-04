@@ -45,7 +45,7 @@ export class WorkoutsController {
   findOne(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
-  ): Promise<WorkoutResponseDto | null> {
+  ): Promise<WorkoutResponseDto> {
     const userId = this.getUserId(req);
     return this.workoutsService.findOne(userId, id);
   }
@@ -62,12 +62,12 @@ export class WorkoutsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(
+  async remove(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
   ): Promise<void> {
     const userId = this.getUserId(req);
-    return this.workoutsService.remove(userId, id);
+    await this.workoutsService.remove(userId, id);
   }
 
   private getUserId(req: AuthenticatedRequest): string {

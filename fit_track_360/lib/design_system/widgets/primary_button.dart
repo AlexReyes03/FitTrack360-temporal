@@ -54,30 +54,17 @@ class _PrimaryButtonState extends State<PrimaryButton> {
               ),
             ],
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
+          // Sin rim superior de 1 dp: en el CTA solido se veia como una linea
+          // blanca recta encima del pill (el Stack no recorta al BorderRadius).
+          child: Center(
+            child: Text(
+              widget.label,
+              style: const TextStyle(
+                color: AppColors.textOnAccent,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
               ),
-              Center(
-                child: Text(
-                  widget.label,
-                  style: const TextStyle(
-                    color: AppColors.textOnAccent,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

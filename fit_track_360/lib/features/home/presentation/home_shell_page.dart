@@ -135,7 +135,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   Padding(
                     padding: const EdgeInsets.all(24),
                     child: PrimaryButton(
-                      label: _loggingOut ? 'Cerrando...' : 'Cerrar sesion',
+                      label: _loggingOut ? 'Cerrando...' : 'Cerrar sesión',
                       onPressed: _loggingOut ? null : _logout,
                     ),
                   ),

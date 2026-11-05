@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
@@ -86,10 +87,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       _formError = null;
     });
     try {
-      await _api.create(
-        startedAt: _startedAt,
-        notes: _notesController.text,
-      );
+      await _api.create(startedAt: _startedAt, notes: _notesController.text);
       if (!mounted) return;
       _notesController.clear();
       setState(() => _startedAt = DateTime.now());

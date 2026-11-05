@@ -67,10 +67,7 @@ class _SplashPageState extends State<SplashPage> {
             const SizedBox(height: 32),
             SizedBox(
               width: 280,
-              child: PrimaryButton(
-                label: 'Ir a Login',
-                onPressed: _goToLogin,
-              ),
+              child: PrimaryButton(label: 'Ir a Login', onPressed: _goToLogin),
             ),
           ],
         ),

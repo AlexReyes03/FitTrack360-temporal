@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_api.dart';
 import 'workout_session.dart';

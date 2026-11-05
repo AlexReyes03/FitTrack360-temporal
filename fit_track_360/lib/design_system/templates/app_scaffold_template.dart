@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../widgets/app_background.dart';
 
 class AppScaffoldTemplate extends StatelessWidget {

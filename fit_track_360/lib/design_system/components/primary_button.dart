@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../tokens/app_colors.dart';
 import '../tokens/app_radii.dart';
 import '../tokens/app_typography.dart';
@@ -19,21 +20,13 @@ class _PrimaryButtonState extends State<PrimaryButton> {
   static const _idleGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [
-      AppColors.accentWhite,
-      AppColors.zinc200,
-      AppColors.accentSilver,
-    ],
+    colors: [AppColors.accentWhite, AppColors.zinc200, AppColors.accentSilver],
   );
 
   static const _pressedGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [
-      AppColors.accentWhite,
-      Color(0xFFF4F4F5),
-      AppColors.zinc200,
-    ],
+    colors: [AppColors.accentWhite, Color(0xFFF4F4F5), AppColors.zinc200],
   );
 
   @override

@@ -10,10 +10,10 @@ import 'package:image_picker_platform_interface/image_picker_platform_interface.
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
-import '../../../design_system/widgets/primary_button.dart';
 
 class ProgressPhotoPage extends StatefulWidget {
   const ProgressPhotoPage({super.key});

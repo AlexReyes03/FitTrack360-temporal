@@ -1,6 +1,6 @@
 # Estado del proyecto — FitTrack360
 
-> **Última actualización:** 2026-11-03 · **Actualizó:** AlexReyes03 (W8-15 Nube / hosting; base previa Daniela Carrate)
+> **Última actualización:** 2026-11-04 · **Actualizó:** Daniela Carrate (W9-09 y W9-10)
 > Actualiza la fecha y tu nombre cada vez que edites. Describe solo lo que está en `main` o en un PR abierto; no adelantes avance.
 
 ## Qué hay
@@ -12,7 +12,7 @@ Integrado en `main`:
 - App Flutter (`fit_track_360`): pantallas de login y registro, `SessionStorage` con `flutter_secure_storage`, tokens de color del design system.
 - Árbol de carpetas `core/` y `features/*` (W8-21).
 - `AsyncState<T>` sealed con sus pruebas (W8-22). Todavía no lo usa ninguna pantalla.
-- Banner offline con Reintentar (W8-23). Solo está conectado en el Home placeholder.
+- Banner offline con Reintentar (W8-23). Conectado al shell autenticado en el PR #76 (W9-09).
 - Borrador de `docs/permisos.md` y plantillas de `docs/ia/bitacora.md` y este archivo (W8-24 y W8-25).
 
 En PR abierto: ver la lista de PRs del repositorio (incluye esta actualización de Nube / hosting cuando se abra).
@@ -97,10 +97,9 @@ Regla aplicada: `pendiente` = sin implementación o sin evidencia suficiente; `e
 | --- | --- | --- | --- |
 | Destino en la nube sin decidir (ver sección Nube / hosting) | Bloquea uploads de P1 con acceso del dueño y el despliegue | Equipo / Alex (W8-15) | 27 oct 2026 |
 | Modelo `Exercise` y `prisma/seed.ts` no están en `main`: #42–#45 se fusionaron en ramas intermedias, no en `main`, y #3–#6 ya están cerradas. Lo más reciente está en `feat/w8-04-exercise-seed` | Falta el seed de ejercicios; `main` tampoco tiene los otros cambios de esos PRs | Jafet / Alex | 2 nov 2026 |
-| `docker-compose.yml` ya no tiene el servicio `api` (se quitó en #41; se espera en W8-07) y `pnpm dev` todavía ejecuta `docker compose up api`, que falla con `no such service: api` | No se puede levantar el API en Docker desde el menú ni con compose | Miguel (W8-07) | 2 nov 2026 |
+| `docker-compose.yml` no tiene el servicio `api` (se espera en W8-07). El panel `pnpm dev` ya no lo usa: levanta el API con `docker run` | `docker compose up api` falla con `no such service: api`; desde el panel no aplica | Miguel (W8-07) | 2 nov 2026 |
+| El panel `pnpm dev` toma como su Postgres cualquier contenedor con 5432 interno (por ejemplo `5441->5432`) y Space le aplica `docker stop` | Puede apagar la base de otro proyecto del integrante e informa «Iniciado» sin que haya nada en el puerto 5432 | Alex | 4 nov 2026 |
 | Credenciales de Postgres distintas: compose usa `fittrack_db` y otra contraseña por defecto; `.env.example` y `pnpm dev` usan base y contraseña `fittrack` | Con una base nueva creada por compose, el `DATABASE_URL` de ejemplo no debería conectar (por configuración; sin probar) | Por asignar | 2 nov 2026 |
-| Puerto del API inconsistente: `src/main.ts` usa 3000 por defecto, el `Dockerfile` expone 3001 y la app apunta a `http://10.0.2.2:3000` | La app no conecta si el API corre en 3001 sin ajustar `API_BASE_URL` | Por asignar | 31 oct 2026 |
-| Los tests de Jest del API no corren: error TS5011, falta `rootDir` en el `tsconfig` | Sin pruebas automáticas del API | Por asignar | 31 oct 2026 |
 
 ## Próximos pasos
 
@@ -108,7 +107,8 @@ Regla aplicada: `pendiente` = sin implementación o sin evidencia suficiente; `e
 | --- | --- | --- |
 | Llevar a `main` lo de #42–#45 con un PR desde `feat/w8-04-exercise-seed` | Jafet / Alex | #3–#6 |
 | Recuperar el servicio `api` en compose y agregar Mailpit | Miguel | #8 |
-| Unificar credenciales de Postgres y el puerto del API | Por asignar | Sin issue |
+| Unificar credenciales de Postgres entre compose y `.env.example` | Por asignar | Sin issue |
+| Corregir la detección de Postgres del panel `pnpm dev` | Alex | Sin issue |
 | Tokens, componentes base, theme y `env/example.json` | M4ltin | #17–#21 |
 | Votar destino de nube con los criterios de la sección Nube / hosting | Equipo | #16 (doc lista; decisión pendiente) |
 

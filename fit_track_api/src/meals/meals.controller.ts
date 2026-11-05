@@ -13,6 +13,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
+import {
   JwtAuthGuard,
   type AuthenticatedRequest,
 } from '../auth/jwt-auth.guard';
@@ -21,12 +32,27 @@ import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealResponseDto } from './dto/meal-response.dto';
 import { MealsService } from './meals.service';
 
+@ApiTags('meals')
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('meals')
 export class MealsController {
   constructor(private readonly mealsService: MealsService) {}
 
   @Post()
+  @ApiOperation({
+    summary: 'Crea un nuevo registro de comida para el usuario autenticado',
+  })
+  @ApiCreatedResponse({
+    description: 'Comida registrada exitosamente',
+    type: MealResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Datos inválidos o mealType incorrecto (400)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
   create(
     @Req() req: AuthenticatedRequest,
     @Body() createMealDto: CreateMealDto,
@@ -36,12 +62,36 @@ export class MealsController {
   }
 
   @Get()
+  @ApiOperation({
+    summary: 'Obtiene todos los registros de comida del usuario autenticado',
+  })
+  @ApiOkResponse({
+    description: 'Lista de comidas pertenecientes al usuario autenticado',
+    type: [MealResponseDto],
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
   findAll(@Req() req: AuthenticatedRequest): Promise<MealResponseDto[]> {
     const userId = this.getUserId(req);
     return this.mealsService.findAll(userId);
   }
 
   @Get(':id')
+  @ApiOperation({
+    summary: 'Obtiene el detalle de un registro de comida por ID',
+  })
+  @ApiOkResponse({
+    description: 'Registro de comida encontrado',
+    type: MealResponseDto,
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
   findOne(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -51,6 +101,24 @@ export class MealsController {
   }
 
   @Patch(':id')
+  @ApiOperation({
+    summary:
+      'Actualiza un registro de comida perteneciente al usuario autenticado',
+  })
+  @ApiOkResponse({
+    description: 'Comida actualizada exitosamente',
+    type: MealResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Datos inválidos o mealType incorrecto (400)',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
   update(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -62,6 +130,18 @@ export class MealsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Elimina un registro de comida perteneciente al usuario autenticado',
+  })
+  @ApiNoContentResponse({ description: 'Comida eliminada exitosamente' })
+  @ApiNotFoundResponse({
+    description:
+      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
   async remove(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,

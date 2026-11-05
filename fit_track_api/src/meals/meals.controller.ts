@@ -45,7 +45,7 @@ export class MealsController {
   findOne(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
-  ): Promise<MealResponseDto | null> {
+  ): Promise<MealResponseDto> {
     const userId = this.getUserId(req);
     return this.mealsService.findOne(userId, id);
   }
@@ -62,12 +62,12 @@ export class MealsController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  remove(
+  async remove(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
   ): Promise<void> {
     const userId = this.getUserId(req);
-    return this.mealsService.remove(userId, id);
+    await this.mealsService.remove(userId, id);
   }
 
   private getUserId(req: AuthenticatedRequest): string {

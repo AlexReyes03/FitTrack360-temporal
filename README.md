@@ -59,7 +59,11 @@ Con `W` el menú busca dispositivos por Wi-Fi usando `adb mdns`. Si el teléfono
 
 Al iniciar Flutter, el menú define `API_BASE_URL` con `adb reverse` para dispositivos Android o con `localhost` para Chrome. Si ejecutas `flutter run` a mano, pasa `--dart-define=API_BASE_URL=http://<host>:<puerto>`; el valor por defecto del código (`10.0.2.2:3000`) solo sirve para el emulador con la API en el puerto 3000.
 
-Con `P` se abre Prisma Studio en `http://localhost:5555`, en su propia ventana, para editar tablas y registros desde el navegador. Requiere `fit_track_api/.env`.
+En dispositivos Android, el menú sube el tiempo de apagado de pantalla a 30 minutos mientras Flutter está activo y lo restaura al detenerlo o al salir. Sin eso, cuando el teléfono entra en reposo se pierde la conexión del servicio de Dart y `flutter run` termina con `Lost connection to device.`, aunque la app siga instalada.
+
+Con `P` se abre Prisma Studio en `http://localhost:5555` para editar tablas y registros desde el navegador. Requiere `fit_track_api/.env`.
+
+En Windows, Flutter y Prisma Studio se abren en Windows Terminal si está instalado: el primer proceso crea la ventana y los siguientes agregan una pestaña en esa misma ventana. Si no está instalado, se usa la consola clásica con una ventana por proceso.
 
 El menú administra solo dispositivos Android mediante `adb`. Los dispositivos iOS requieren macOS y Xcode, así que no aparecen en el panel.
 

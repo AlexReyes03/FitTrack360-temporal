@@ -36,6 +36,7 @@ const PRISMA_STUDIO_PORT = 5555;
 const POLL_MS = 1000;
 const ROW_POLL_TIMEOUT_MS = 60 * 1000;
 const AVD_POLL_TIMEOUT_MS = 90 * 1000;
+const KEEP_AWAKE_SCREEN_OFF_MS = 30 * 60 * 1000;
 
 const FLUTTER_PS =
   'powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -match \'dart|dartvm\' -and $_.CommandLine -match \'flutter_tools.snapshot.*run\' } | Select-Object -ExpandProperty ProcessId"';
@@ -52,6 +53,7 @@ let deviceBusyName = null;
 let devicePoll = null;
 let flutterTargets = [];
 let flutterTargetSelected = 0;
+let flutterKeepAwake = null;
 let wirelessPairing = null;
 let wirelessCode = '';
 let message = null;
@@ -100,14 +102,56 @@ function firstLine(text) {
   return (line ?? '').trim();
 }
 
+let windowsTerminalPath;
+
+function resolveWindowsTerminal() {
+  if (windowsTerminalPath !== undefined) {
+    return windowsTerminalPath;
+  }
+  windowsTerminalPath = null;
+  try {
+    const result = execSync('where wt.exe', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const candidate = result
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+    if (candidate) {
+      windowsTerminalPath = candidate;
+    }
+  } catch {
+    windowsTerminalPath = null;
+  }
+  return windowsTerminalPath;
+}
+
+function spawnLegacyWindow(title, innerCommand, cwd) {
+  const child = spawn(
+    'cmd.exe',
+    ['/d', '/s', '/c', `start "${title}" cmd /k ${innerCommand}`],
+    { cwd, detached: true, stdio: 'ignore', windowsVerbatimArguments: true },
+  );
+  child.unref();
+}
+
 function openWindow(title, innerCommand, cwd) {
   if (IS_WINDOWS) {
-    const child = spawn(
-      'cmd.exe',
-      ['/d', '/s', '/c', `start "${title}" cmd /k ${innerCommand}`],
-      { cwd, detached: true, stdio: 'ignore', windowsVerbatimArguments: true },
-    );
-    child.unref();
+    const terminal = resolveWindowsTerminal();
+    if (terminal) {
+      const child = spawn(
+        terminal,
+        ['-w', '0', 'new-tab', '--title', title, '-d', cwd, 'cmd', '/k', innerCommand],
+        { cwd, detached: true, stdio: 'ignore' },
+      );
+      child.on('error', () => {
+        spawnLegacyWindow(title, innerCommand, cwd);
+      });
+      child.unref();
+      return;
+    }
+    spawnLegacyWindow(title, innerCommand, cwd);
     return;
   }
   if (process.platform === 'darwin') {
@@ -244,21 +288,78 @@ async function killPids(pids) {
   }
 }
 
+async function keepScreenAwake(deviceId) {
+  const sdk = devicesState.sdk ?? resolveSdk();
+  if (!sdk?.adb || deviceId === 'chrome') {
+    return null;
+  }
+  const current = await runArgs(sdk.adb, [
+    '-s',
+    deviceId,
+    'shell',
+    'settings',
+    'get',
+    'system',
+    'screen_off_timeout',
+  ]);
+  const previous = current.code === 0 ? current.stdout.trim() : '';
+  const applied = await runArgs(sdk.adb, [
+    '-s',
+    deviceId,
+    'shell',
+    'settings',
+    'put',
+    'system',
+    'screen_off_timeout',
+    String(KEEP_AWAKE_SCREEN_OFF_MS),
+  ]);
+  if (applied.code !== 0) {
+    return null;
+  }
+  await runArgs(sdk.adb, ['-s', deviceId, 'shell', 'input', 'keyevent', 'KEYCODE_WAKEUP']);
+  return { adb: sdk.adb, deviceId, previous, confirmed: false };
+}
+
+async function restoreScreenTimeout(session) {
+  if (!session) {
+    return;
+  }
+  const args = /^\d+$/.test(session.previous)
+    ? ['-s', session.deviceId, 'shell', 'settings', 'put', 'system', 'screen_off_timeout', session.previous]
+    : ['-s', session.deviceId, 'shell', 'settings', 'delete', 'system', 'screen_off_timeout'];
+  await runArgs(session.adb, args);
+}
+
+async function restoreKeepAwake() {
+  const session = flutterKeepAwake;
+  flutterKeepAwake = null;
+  await restoreScreenTimeout(session);
+}
+
 async function readFlutter() {
   const pids = await flutterPids();
-  return pids.length > 0
-    ? { level: 'ok', text: 'Iniciado', pids }
-    : { level: 'off', text: 'No iniciado', pids: [] };
+  if (pids.length > 0) {
+    if (flutterKeepAwake) {
+      flutterKeepAwake.confirmed = true;
+    }
+    return { level: 'ok', text: 'Iniciado', pids };
+  }
+  if (flutterKeepAwake?.confirmed) {
+    await restoreKeepAwake();
+  }
+  return { level: 'off', text: 'No iniciado', pids: [] };
 }
 
 async function stopFlutter() {
   const pids = await flutterPids();
   if (pids.length === 0) {
     await refreshRow('flutter');
+    await restoreKeepAwake();
     return;
   }
   startPoll('flutter', { text: 'Deteniendo...', isDone: (fresh) => fresh.level === 'off' });
   await killPids(pids);
+  await restoreKeepAwake();
 }
 
 async function dockerPsRows() {
@@ -802,6 +903,7 @@ async function launchFlutterTarget() {
     draw();
     return;
   }
+  flutterKeepAwake = await keepScreenAwake(target.deviceId);
   mode = 'main';
   selectedIndex = ROWS.findIndex((row) => row.id === 'flutter');
   beginRow('flutter', 'Iniciando...');
@@ -1376,7 +1478,18 @@ function shutdown() {
   }
   process.stdin.pause();
   process.stdout.write('\x1b[?25h');
-  process.exit(0);
+  const session = flutterKeepAwake;
+  flutterKeepAwake = null;
+  if (!session) {
+    process.exit(0);
+    return;
+  }
+  const guard = setTimeout(() => process.exit(0), 3000);
+  guard.unref();
+  void restoreScreenTimeout(session).finally(() => {
+    clearTimeout(guard);
+    process.exit(0);
+  });
 }
 
 function onKeypress(_str, key) {

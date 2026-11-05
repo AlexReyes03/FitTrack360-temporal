@@ -89,6 +89,11 @@ fix(api): validar campos requeridos en el endpoint de ejercicios
 chore(repo): actualizar scripts de lint del monorepo
 ```
 
+### Pull Requests
+
+- El **título del PR** debe usar el mismo formato que los commits: `<type>(<scope>): <mensaje>`. Así, con squash and merge, el historial de `main` queda limpio y consistente.
+- En la descripción del PR incluye siempre `Closes #<número_issue>` para que GitHub cierre el issue al mergear.
+
 ## Qué validan los hooks
 
 No utilices `--no-verify` en `git commit` ni en `git push`; si un hook falla, corrige el error reportado antes de reintentar.
@@ -120,3 +125,14 @@ pnpm run format:api
 pnpm run lint:api
 pnpm run typecheck:api
 ```
+
+## Responsables por capacidad
+
+| Capacidad | Descripción corta | Responsable |
+| --- | --- | --- |
+| P1 | Cámara/galería para foto de progreso o comida; compresión y subida a la nube con acceso restringido al dueño. | `@M4ltin12` |
+| P2 | Ubicación en primer plano al cerrar un entrenamiento; alternativa de zona manual si el GPS está apagado. | `@MiguelSP040` |
+| P3 | Recordatorio local de entrenamiento o comida, con interruptor en Ajustes. | `@danielita05` |
+| O1 | Desbloqueo con biometría o confirmación de acciones sensibles, con contraseña como alternativa. | `@AlexReyes03` |
+| O5 | Conteo de pasos del día en el resumen del Home. | `@M4ltin12` |
+| O7+O10 | Contacto del sistema y hoja de compartir para enviar progreso o resumen. | `@Loreley100` |

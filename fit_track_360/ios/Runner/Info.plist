@@ -49,6 +49,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>FitTrack360 usa la cámara para tomar una foto de tu progreso o de una comida.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FitTrack360 usa tu galería para que elijas una foto de tu progreso o de una comida.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

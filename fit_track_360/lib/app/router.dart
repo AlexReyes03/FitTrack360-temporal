@@ -7,6 +7,7 @@ import '../features/auth/presentation/register_page.dart';
 import '../features/auth/presentation/reset_password_page.dart';
 import '../features/auth/presentation/splash_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
+import '../features/progress/presentation/progress_photo_page.dart';
 
 const _authRoutes = {
   '/login',
@@ -26,7 +27,7 @@ final appRouter = GoRouter(
     final location = state.matchedLocation;
     final hasSession = accessToken != null;
 
-    if (!hasSession && location == '/app') return '/login';
+    if (!hasSession && location.startsWith('/app')) return '/login';
     if (hasSession && _authRoutes.contains(location)) return '/app';
     return null;
   },
@@ -46,5 +47,9 @@ final appRouter = GoRouter(
       builder: (context, state) => const ResetPasswordPage(),
     ),
     GoRoute(path: '/app', builder: (context, state) => const HomeShellPage()),
+    GoRoute(
+      path: '/app/foto',
+      builder: (context, state) => const ProgressPhotoPage(),
+    ),
   ],
 );

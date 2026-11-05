@@ -164,6 +164,16 @@ class _HomeShellPageState extends State<HomeShellPage> {
                     ),
                   ),
                   Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                    child: TextButton(
+                      onPressed: () => context.push('/app/foto'),
+                      child: const Text(
+                        'Agregar foto',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                  Padding(
                     padding: const EdgeInsets.all(24),
                     child: PrimaryButton(
                       label: _loggingOut ? 'Cerrando...' : 'Cerrar sesion',

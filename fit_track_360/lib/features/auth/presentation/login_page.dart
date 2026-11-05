@@ -108,10 +108,7 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 8),
             const Text(
               'Bienvenido de vuelta',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 24),
             DsTextField(

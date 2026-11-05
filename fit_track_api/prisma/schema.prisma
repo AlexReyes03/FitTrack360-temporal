@@ -20,6 +20,7 @@ model User {
   refreshTokens        RefreshToken[]
   passwordResetCodes   PasswordResetCode[]
   workoutSessions      WorkoutSession[]
+  mealLogs             MealLog[]
 }
 
 model RefreshToken {
@@ -60,4 +61,23 @@ model WorkoutSession {
   notes     String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model MealLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eatenAt   DateTime
+  mealType  MealType
+  notes     String?
+  photoId   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

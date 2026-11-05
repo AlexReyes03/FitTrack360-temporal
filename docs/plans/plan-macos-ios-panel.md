@@ -305,7 +305,7 @@ Después de cada fase, pide este reporte. Sin este reporte no avances.
 | `R` en cualquier modo | Refresca sin cerrar el panel |
 | Esc | Cierra el panel sin apagar servicios ni simuladores |
 
-4. Si algo falla, adjunta la salida del comando que falla y una captura del panel.
+1. Si algo falla, adjunta la salida del comando que falla y una captura del panel.
 
 Formato de reporte sugerido:
 

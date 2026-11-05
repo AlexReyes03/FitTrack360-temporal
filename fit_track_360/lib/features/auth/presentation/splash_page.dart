@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/session_storage.dart';
+import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
-import '../../../design_system/widgets/app_background.dart';
+import '../../../design_system/tokens/app_typography.dart';
+import '../../../design_system/widgets/primary_button.dart';
 
-/// Splash con branding del DS. Tras un minimo visual decide por presencia de
-/// access token: /app si hay sesion, /login si no.
+/// Placeholder Liquid Glass. Si hay access token va a /app; si no, permanece
+/// aqui. "Ir a Login" es un atajo temporal, sin logica de auth.
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -24,49 +26,53 @@ class _SplashPageState extends State<SplashPage> {
   Future<void> _restoreSession() async {
     await Future.delayed(const Duration(milliseconds: 700));
     final accessToken = await SessionStorage().readAccessToken();
-    if (!mounted) return;
-    context.go(accessToken == null ? '/login' : '/app');
+    if (!mounted || accessToken == null) return;
+    context.go('/app');
   }
+
+  void _goToLogin() => context.go('/login');
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const _BrandPill(),
-              const SizedBox(height: 28),
-              ShaderMask(
-                shaderCallback: (bounds) => const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  stops: [0.0, 0.45, 1.0],
-                  colors: [
-                    AppColors.accentWhite,
-                    AppColors.zinc100,
-                    AppColors.gray400,
-                  ],
-                ).createShader(bounds),
-                child: const Text(
-                  'FitTrack360',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 38,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                  ),
-                ),
+    return AppScaffoldTemplate(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const _BrandPill(),
+            const SizedBox(height: 28),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: [0.0, 0.45, 1.0],
+                colors: [
+                  AppColors.accentWhite,
+                  AppColors.zinc100,
+                  AppColors.gray400,
+                ],
+              ).createShader(bounds),
+              child: Text(
+                'FitTrack360',
+                style: AppTypography.pageTitle.copyWith(color: Colors.white),
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Tu progreso, en un solo lugar',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Tu progreso, en un solo lugar',
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 280,
+              child: PrimaryButton(
+                label: 'Ir a Login',
+                onPressed: _goToLogin,
+              ),
+            ),
+          ],
         ),
       ),
     );

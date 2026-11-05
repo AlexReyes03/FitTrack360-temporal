@@ -43,10 +43,10 @@ Las versiones se verifican en pub.dev **al integrar cada paquete** (versión vig
 
 | Capacidad | Paquete | Versión | Publisher verificado | Android / iOS |
 | --- | --- | --- | --- | --- |
-| P1 | `image_picker` | Pendiente | Pendiente | Pendiente |
+| P1 | `image_picker` | 1.2.4 | Sí (flutter.dev) | Android / iOS |
 | P2 | `geolocator` | Pendiente | Pendiente | Pendiente |
 | P3 | `flutter_local_notifications` + `timezone` | Pendiente | Pendiente | Pendiente |
-| Tres estados | `permission_handler` | Pendiente | Pendiente | Pendiente |
+| Tres estados | `permission_handler` | 13.0.2 | Sí (baseflow.com) | Android / iOS |
 | O1 | `local_auth` | Pendiente | Pendiente | Pendiente |
 | O5 | `pedometer` | Pendiente | Pendiente | Pendiente |
 | O7 | `url_launcher` + selector de contacto del sistema | Pendiente | Pendiente | Pendiente |

@@ -25,6 +25,18 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Base de datos y Seed
+
+```bash
+# Ejecutar migraciones
+$ pnpm run prisma:migrate
+
+# Ejecutar seed de ejercicios
+$ pnpm run prisma:seed
+```
+
+> **Nota (W9-12):** El script `prisma/seed.ts` carga una muestra inicial de 5 ejercicios para validación técnica de forma idempotente. La carga del catálogo completo (1324 ejercicios) está fuera del alcance de este PR y se ejecutará posteriormente.
+
 ## Project setup
 
 ```bash

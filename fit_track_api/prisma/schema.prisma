@@ -19,6 +19,7 @@ model User {
   updatedAt            DateTime            @updatedAt
   refreshTokens        RefreshToken[]
   passwordResetCodes   PasswordResetCode[]
+  workoutSessions      WorkoutSession[]
 }
 
 model RefreshToken {
@@ -37,4 +38,26 @@ model PasswordResetCode {
   codeHash  String
   expiresAt DateTime
   usedAt    DateTime?
+}
+
+model Exercise {
+  id          String @id
+  name        String
+  imageFile   String
+  gifFile     String
+  attribution String
+  bodyPart    String
+  equipment   String
+  target      String
+}
+
+model WorkoutSession {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startedAt DateTime
+  endedAt   DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }

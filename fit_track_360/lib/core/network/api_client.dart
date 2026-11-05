@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -38,6 +39,23 @@ class ApiClient {
 
   Future<http.Response> post(String path, {Object? body}) =>
       _send('POST', path, body: body);
+
+  /// Sube un archivo multipart (campo `file`) con Bearer. No fija
+  /// Content-Type JSON. Ante un 401 refresca una vez y reintenta.
+  Future<http.Response> uploadFile(String path, File file) async {
+    final accessToken = await _storage.readAccessToken();
+    var response = await _upload(path, file, accessToken);
+    if (response.statusCode != 401) return response;
+
+    final refreshed = await _tryRefresh();
+    if (!refreshed) {
+      await _storage.clear();
+      throw const SessionExpiredException();
+    }
+
+    final renewedToken = await _storage.readAccessToken();
+    return _upload(path, file, renewedToken);
+  }
 
   Future<http.Response> _send(
     String method,
@@ -89,6 +107,23 @@ class ApiClient {
       headers: headers,
       body: body == null ? null : jsonEncode(body),
     );
+  }
+
+  Future<http.Response> _upload(
+    String path,
+    File file,
+    String? accessToken,
+  ) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$apiBaseUrl$path'),
+    );
+    if (accessToken != null) {
+      request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamed = await _http.send(request);
+    return http.Response.fromStream(streamed);
   }
 
   Future<bool> _tryRefresh() async {

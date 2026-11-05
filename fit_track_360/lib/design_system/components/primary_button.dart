@@ -58,23 +58,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
               ),
             ],
           ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                  ),
-                ),
-              ),
-              Text(widget.label, style: AppTypography.cta),
-            ],
-          ),
+          child: Center(child: Text(widget.label, style: AppTypography.cta)),
         ),
       ),
     );

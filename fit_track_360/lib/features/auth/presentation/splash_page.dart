@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/session_storage.dart';
+import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
-import '../../../design_system/widgets/primary_button.dart';
 
 /// Placeholder Liquid Glass. Si hay access token va a /app; si no, permanece
 /// aqui. "Ir a Login" es un atajo temporal, sin logica de auth.

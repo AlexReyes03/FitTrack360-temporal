@@ -3,10 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
-import '../../../design_system/widgets/primary_button.dart';
 import '../../auth/data/auth_api.dart';
 import '../data/workout_session.dart';
 import '../data/workouts_api.dart';

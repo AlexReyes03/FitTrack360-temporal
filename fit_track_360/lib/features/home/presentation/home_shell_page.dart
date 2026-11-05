@@ -7,10 +7,10 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/session_storage.dart';
 import '../../../core/widgets/offline_banner.dart';
+import '../../../design_system/components/glass_surface.dart';
+import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/app_background.dart';
-import '../../../design_system/widgets/glass_surface.dart';
-import '../../../design_system/widgets/primary_button.dart';
 import '../../auth/data/auth_api.dart';
 
 /// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion

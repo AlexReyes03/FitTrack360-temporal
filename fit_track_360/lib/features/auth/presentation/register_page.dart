@@ -166,6 +166,7 @@ class _RegisterPageState extends State<RegisterPage> {
                     children: [
                       const Text(
                         'Crear cuenta',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 28,
@@ -176,6 +177,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       const SizedBox(height: 6),
                       const Text(
                         'Empieza a registrar tu progreso',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,

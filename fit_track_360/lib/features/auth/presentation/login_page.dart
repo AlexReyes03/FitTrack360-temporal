@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/session_storage.dart';
+import '../../../design_system/components/app_logo.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/form_page_template.dart';
@@ -96,8 +97,16 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            const Center(
+              child: AppLogo(
+                variant: AppLogoVariant.mark,
+                height: AppLogo.loginHeight,
+              ),
+            ),
+            const SizedBox(height: 16),
             const Text(
               'Iniciar sesion',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 28,
@@ -108,6 +117,7 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 8),
             const Text(
               'Bienvenido de vuelta',
+              textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
             ),
             const SizedBox(height: 24),

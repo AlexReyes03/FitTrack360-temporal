@@ -8,6 +8,7 @@ Este directorio centraliza la documentación de planeación de FitTrack360, incl
 - [Versionamiento](#versionamiento)
 - [Arquitectura de alto nivel](#arquitectura-de-alto-nivel)
 - [Plan maestro](#plan-maestro)
+- [Planeación de la semana W9](#planeación-de-la-semana-w9)
 
 ## Caso de estudio
 
@@ -29,3 +30,7 @@ El cliente consume la API por HTTP. La arquitectura objetivo completa (módulos 
 ## Plan maestro
 
 El plan maestro versionado está en [`../plans/plan-maestro-fittrack360.md`](../plans/plan-maestro-fittrack360.md). Define dominio, modelo de datos, arquitectura objetivo, fases, epics y trazabilidad; es la referencia para derivar tareas del tablero Scrumban.
+
+## Planeación de la semana W9
+
+El lote W9 (#47–#64) se detalla en [`semana-w9.md`](semana-w9.md): objetivo, tareas y responsables, dependencias, riesgos y seguimiento del cierre de F1 y del arranque de F2/P1.

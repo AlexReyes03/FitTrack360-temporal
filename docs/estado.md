@@ -91,6 +91,89 @@ Regla aplicada: `pendiente` = sin implementación o sin evidencia suficiente; `e
 
 **Nota de consistencia:** la sección «Qué falta» de este documento todavía enumera logout, restauración de sesión y recuperación de contraseña como pendientes, y «Qué hay» solo menciona los endpoints de registro e inicio de sesión. La inspección de este corte encontró implementación de esos flujos en `main`; no se reescriben esas secciones en esta tarea. La validación funcional de extremo a extremo sigue pendiente.
 
+### Actualización W9 — Verificación H2
+
+> **Corte:** 2026-11-06. **Origen:** inspección estática de `main` (`bb32faf`) y ejecución local de las pruebas automatizadas en la rama `docs/w9-11-checklist-h2`. **Responsable de la actualización:** Por asignar (no confirmado).
+>
+> **Alcance:** H2 es la demostración académica de F1 y P1 ante el docente de UTEZ. No es una certificación de producción ni una prueba de carga; el objetivo es mostrar los flujos funcionando en un dispositivo y contra el API.
+
+Esta actualización conserva intacto el registro W8 anterior (corte 2026-11-03) y no reescribe las demás secciones de `docs/estado.md`. La evidencia W8 sobre P1 quedó superada por W9-16 (PR #89, commit `0354c0d`); se mantiene como historial.
+
+Regla aplicada en W9: una casilla solo se marca cuando existe evidencia funcional reproducible (prueba automatizada en verde o ejecución verificada en dispositivo). Código presente, issue cerrada o PR fusionado **no** bastan para marcar `hecho`.
+
+| Bloque | Requisitos | Hechos | En progreso | Pendientes |
+| --- | ---: | ---: | ---: | ---: |
+| F1 — Autenticación y sesión | 6 | 0 | 6 | 0 |
+| P1 — Fotografía y almacenamiento | 3 | 0 | 3 | 0 |
+| **Total** | **9** | **0** | **9** | **0** |
+
+**Cambio respecto de W8:** F1 pasa de 5 a 6 requisitos porque Refresh se verifica como ítem independiente y no como parte de Restore. P1 pasa de 2 pendientes a 3 en progreso porque ya existen selector de cámara/galería, compresión en cliente y subida autenticada. Ningún requisito alcanza `hecho`: sigue faltando la validación de extremo a extremo.
+
+#### F1 — Autenticación y sesión (verificación W9)
+
+- [ ] **Registro remoto** — Estado: `en progreso`.
+  - Evidencia: `register_page.dart` envía `POST /api/v1/auth/register` mediante `register()` en `auth_api.dart`; `AuthController.register` delega en `AuthService.register`, que valida duplicados, hashea con Argon2, guarda `privacyConsentAt`/`privacyNoticeVersion` y emite tokens (`auth.service.ts`). `pnpm --dir fit_track_api run test` ejecutó 9 pruebas en verde, incluidas 4 de registro (correo duplicado, usuario duplicado, contraseña hasheada y consentimiento).
+  - Reporte manual: una integrante reportó un registro exitoso en un Motorola durante una prueba manual. Es un indicio de funcionamiento en dispositivo, pero no quedó documentado en este corte con fecha, pasos, cuenta ni captura; por eso no se contabiliza como prueba E2E ni cambia el estado.
+  - Falta demostrar: documentar formalmente esa prueba manual (fecha, dispositivo, cuenta y resultado) y ejecutar el flujo completo desde la app contra API y PostgreSQL, incluido el rechazo de un correo ya existente. No hay prueba E2E documentada.
+
+- [ ] **Login** — Estado: `en progreso`.
+  - Evidencia: `login_page.dart` llama `login()` y guarda los tokens con `flutter_secure_storage` (`session_storage.dart`). `AuthService.login` verifica Argon2 y emite JWT; las pruebas cubren credenciales válidas, contraseña incorrecta, correo inexistente sin enumeración y almacenamiento del hash del refresh.
+  - Falta demostrar: inicio de sesión desde la app contra el API real, rechazo visible con contraseña incorrecta y acceso al shell autenticado con `GET /users/me`.
+
+- [ ] **Refresh de tokens** — Estado: `en progreso`.
+  - Evidencia: `POST /api/v1/auth/refresh` (`auth.controller.ts`) valida la firma del refresh con `JWT_REFRESH_SECRET`, busca el token por hash, comprueba que no esté revocado ni vencido, verifica que pertenezca al mismo `userId`, revoca el token usado y emite un par nuevo (`auth.service.ts`). En Flutter, `ApiClient._send` y `uploadFile` intentan un único refresh ante 401 y reintentan una vez; `refreshTokens()` en `auth_api.dart` consume el endpoint y `SessionStorage` reemplaza ambos tokens.
+  - Falta demostrar: prueba automatizada de `refresh` (token válido, revocado, vencido y de otro usuario) y verificación en ejecución de que un refresh revocado ya no renueva. No hay prueba E2E ni de integración.
+
+- [ ] **Logout** — Estado: `en progreso`.
+  - Evidencia: `home_shell_page.dart` revoca el refresh con `logout()` y limpia `SessionStorage` en `finally`; `AuthService.logout` marca el token como revocado. **La prueba `cerrar sesion sin red limpia la sesion y va a login` falla** en este corte: busca el texto `Cerrar sesion` y la UI usa `Cerrar sesión` (con acento). Resultado de `flutter test`: 17 pruebas en verde y 1 en rojo.
+  - Falta demostrar: corregir la sincronía texto UI/prueba, ejecutar logout con y sin red, y comprobar que el refresh revocado ya no permite renovar.
+
+- [ ] **Restauración de sesión al reabrir** — Estado: `en progreso`.
+  - Evidencia: `splash_page.dart` lee el access token y navega a `/app`; `router.dart` redirige según la presencia del token; `ApiClient` intenta un refresh único ante 401 y limpia la sesión si falla (`api_client.dart`). No existe prueba de `SplashPage` ni de restauración.
+  - Falta demostrar: cerrar y reabrir la app con sesión válida, con access vencido pero refresh vigente y con refresh revocado. La restauración actual solo comprueba la presencia del token, no su vigencia.
+
+- [ ] **Forgot/reset de contraseña** — Estado: `en progreso`.
+  - Evidencia: `forgot_password_page.dart` y `reset_password_page.dart` consumen `POST /api/v1/auth/password/forgot` y `/password/reset`; el API genera un código de 6 dígitos, lo guarda hasheado con TTL de 15 minutos, responde igual si el correo no existe, invalida refresh tokens y marca el código como usado (`auth.service.ts`). `MailService` envía por SMTP y, sin `SMTP_HOST`, responde 200 sin enviar.
+  - Falta demostrar: recepción real del código. `docker-compose.yml` no incluye Mailpit, no hay prueba automatizada de forgot/reset y no se verificó el flujo completo correo → código → nueva contraseña → login.
+
+#### P1 — Fotografía y almacenamiento (verificación W9)
+
+- [ ] **Capturar o elegir una fotografía** — Estado: `en progreso`.
+  - Evidencia: `progress_photo_page.dart` usa `image_picker` con cámara y galería, solicita `Permission.camera` y ofrece continuar sin foto; la ruta `/app/foto` está registrada en `router.dart` y se abre desde `home_shell_page.dart`. `pubspec.yaml` incluye `image_picker` y `permission_handler`.
+  - Falta demostrar: ejecución en el moto g52 con los tres estados de permiso (concedido, denegado y denegado permanente), cámara real y selector de fotos de Android 13. No hay prueba de widget ni de dispositivo.
+
+- [ ] **Comprimir la fotografía antes de subirla** — Estado: `en progreso`.
+  - Evidencia: `_pickAndUpload` llama `pickImage` con `maxWidth: 1280` e `imageQuality: 70` antes de enviar el archivo; `ApiClient.uploadFile` envía el resultado por multipart.
+  - Falta demostrar: medir el peso antes y después con una foto real y confirmar que el servidor no recibe EXIF/GPS. El backend no re-codifica (no usa `sharp`); la compresión depende solo del cliente.
+
+- [ ] **Subir la imagen con acceso restringido a su propietario** — Estado: `en progreso`.
+  - Evidencia: `ProgressPhotoPage` sube a `POST /api/v1/storage/files` con Bearer; `StorageController` protege `POST`, `GET` y `DELETE` con `JwtAuthGuard`; `StorageService` escribe en `UPLOAD_DIR/<userId>/` y responde 404 si el `userId` no coincide. Hay integración real entre la pantalla y el endpoint.
+  - Falta demostrar: subida y descarga desde el dispositivo, prueba entre dos cuentas (404 y no 403) y asociación de la foto a un registro de progreso o comida. **El almacenamiento es disco local**, no nube, y no hay ACL de proveedor: esto cubre el mínimo de P1, no el requisito completo.
+
+#### Diferencia entre P1 mínimo y P1 completo
+
+El avance W9 demuestra el **mínimo de P1**: elegir o capturar una foto, reducirla en el cliente y subirla autenticada a un almacenamiento separado por `userId`. El requisito completo de P1 exige además **almacenamiento en la nube con acceso restringido del proveedor** (HTTPS público, objeto privado, URL firmada o ACL, borrado al eliminar el registro o la cuenta y eliminación de EXIF en servidor). Nada de eso está implementado ni verificado; el destino de nube sigue sin decidirse.
+
+#### Bloqueos que impiden cerrar H2
+
+- No hay prueba E2E de F1 contra API y PostgreSQL reales; las pruebas del API usan dobles en memoria y las de Flutter usan `MockClient`.
+- `flutter test` no está en verde: falla `cerrar sesion sin red limpia la sesion y va a login` por desfase entre el texto de la UI (`Cerrar sesión`) y el de la prueba (`Cerrar sesion`).
+- Mailpit no está en `docker-compose.yml`; sin SMTP no se puede demostrar la recepción del código de recuperación.
+- No existe prueba de `SplashPage` ni de restauración de sesión con token vencido.
+- P1 no tiene prueba automatizada ni evidencia en dispositivo físico de los tres estados de permiso.
+- El destino de nube y la ACL del proveedor siguen pendientes; el almacenamiento actual es local.
+- La demostración depende de levantar API y base de datos; el panel `pnpm dev` requiere Docker y `docker-compose.yml` mantiene credenciales distintas a `.env`.
+
+#### Evidencia ejecutada en este corte
+
+| Comando | Resultado |
+| --- | --- |
+| `pnpm --dir fit_track_api run test` | 2 suites, 9 pruebas en verde (registro y login). Requirió `prisma generate` porque el cliente no estaba generado tras la instalación. |
+| `flutter test` | 18 pruebas: 17 en verde, 1 en rojo (`cerrar sesion sin red limpia la sesion y va a login`). |
+| Revisión de código | `auth/`, `storage/`, `mail/`, `progress/`, `router.dart`, `api_client.dart`, `session_storage.dart`, `home_shell_page.dart`, `splash_page.dart`. |
+
+**Criterio de cierre de H2:** marcar una casilla solo cuando la demostración se haya ejecutado en el dispositivo y contra el API real, con el resultado registrado aquí. Hasta entonces, F1 y P1 permanecen `en progreso`.
+
 ## Blockers
 
 | Blocker | Impacto | Responsable | Desde |

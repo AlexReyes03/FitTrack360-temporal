@@ -125,6 +125,23 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
 
+## Docker
+
+Desde `fit_track_api/`, un solo compose levanta Postgres, el API y Mailpit:
+
+```bash
+docker compose up -d
+```
+
+| Servicio | Puerto en el host | Uso |
+| --- | --- | --- |
+| API | `3000` | HTTP |
+| Postgres | `5432` | Base de datos |
+| Mailpit SMTP | `1025` | Correo local, sin TLS |
+| Mailpit UI | `8025` | http://localhost:8025 |
+
+El servicio `api` habla con Postgres por el hostname `postgres` y con Mailpit por `mailpit`. Esas direcciones solo existen dentro de la red del compose.
+
 ## Auth, correo local y archivos
 
 Endpoints nuevos bajo el prefijo `api/v1`:
@@ -134,9 +151,10 @@ Endpoints nuevos bajo el prefijo `api/v1`:
 - `POST /auth/password/forgot` y `POST /auth/password/reset`.
 - `POST /storage/files`, `GET /storage/files/:id` y `DELETE /storage/files/:id` con Bearer access token.
 
-El correo de recuperacion usa SMTP. Mailpit aun no esta en `docker-compose.yml`
-(W8-07); mientras no exista, configura `SMTP_HOST` y `SMTP_PORT` hacia un Mailpit
-local. Si SMTP no responde, `password/forgot` responde 200 sin enviar correo.
+El correo de recuperacion usa SMTP hacia Mailpit (`SMTP_PORT=1025`, sin TLS).
+Dentro del compose el host es el servicio `mailpit`. Si el API corre en el host,
+usa `127.0.0.1` y la interfaz en http://localhost:8025. Si SMTP no responde,
+`password/forgot` responde 200 sin enviar correo.
 
 Los archivos se guardan en `UPLOAD_DIR` (por defecto `./uploads`, ignorado por git).
 Cada usuario solo puede leer o borrar sus propios archivos; un id ajeno responde 404.

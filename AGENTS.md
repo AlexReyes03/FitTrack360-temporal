@@ -17,3 +17,5 @@
 - Sensores activos: Husky (pre-commit, commit-msg, pre-push), oxlint, Prettier, dart format/analyze, tsc y Jest. [Sensor]
 - Sin sensor aún: regla Bugfix con test previo, bitácora IA y proxy USDA exclusivo en NestJS. [Auditoría manual en PR]
 - Nunca: suba secretos/env, salte hooks con --no-verify, use print/console.log en producción ni push a main. [Sensor: husky, I-02, C-04]
+- El **título del PR** debe usar el mismo formato que los commits: `<type>(<scope>): <mensaje>`. Así, con squash and merge, el historial de `main` queda limpio y consistente.
+- En la descripción del PR incluye siempre `Closes #<número_issue>` para que GitHub cierre el issue al mergear.

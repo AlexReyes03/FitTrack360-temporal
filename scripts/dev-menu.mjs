@@ -59,6 +59,9 @@ let wirelessCode = '';
 let message = null;
 const polls = new Map();
 let dockerStatus = { available: true, installed: true };
+let iosSimulators = [];
+let iosSelected = 0;
+let iosBusyUdid = null;
 
 function circleFor(level) {
   if (level === 'ok') {
@@ -650,8 +653,67 @@ async function readDevicesSummary() {
   return { level: 'warn', text: 'Detenido' };
 }
 
+let xcrunAvailable;
+
+async function hasXcrun() {
+  if (xcrunAvailable === undefined) {
+    xcrunAvailable = runArgs('xcrun', ['--find', 'simctl']).then((result) => result.code === 0);
+  }
+  return xcrunAvailable;
+}
+
+function iosRuntimeName(runtime) {
+  const match = runtime.match(/iOS-(\d+)-(\d+)/);
+  return match ? `iOS ${match[1]}.${match[2]}` : runtime;
+}
+
+async function readIosSimulators() {
+  const result = await runArgs('xcrun', ['simctl', 'list', 'devices', 'available', '--json'], {
+    timeout: 20000,
+  });
+  if (result.code !== 0) {
+    return [];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    return [];
+  }
+  const simulators = [];
+  for (const [runtime, list] of Object.entries(parsed.devices ?? {})) {
+    if (!runtime.includes('iOS')) {
+      continue;
+    }
+    for (const device of list) {
+      simulators.push({
+        runtime: iosRuntimeName(runtime),
+        name: device.name,
+        udid: device.udid,
+        state: device.state,
+      });
+    }
+  }
+  return simulators;
+}
+
+async function readIosSummary() {
+  if (!(await hasXcrun())) {
+    return { level: 'warn', text: 'Sin Xcode' };
+  }
+  iosSimulators = await readIosSimulators();
+  if (iosSimulators.some((simulator) => simulator.state === 'Booted')) {
+    return { level: 'ok', text: 'Iniciado' };
+  }
+  if (iosSimulators.length === 0) {
+    return { level: 'off', text: 'Sin simuladores' };
+  }
+  return { level: 'warn', text: 'Detenido' };
+}
+
 const ROWS = [
   { id: 'devices', label: 'Dispositivos', read: readDevicesSummary },
+  ...(process.platform === 'darwin' ? [{ id: 'ios', label: 'iOS', read: readIosSummary }] : []),
   { id: 'flutter', label: 'Flutter', read: readFlutter },
   { id: 'postgres', label: 'Postgres (Docker)', read: readPostgres },
   { id: 'prisma', label: 'Prisma', read: readPrisma },
@@ -664,6 +726,7 @@ const stateMap = {
   prisma: { ...PENDING },
   api: { ...PENDING },
   devices: { ...PENDING },
+  ios: { ...PENDING },
 };
 
 function rowById(id) {
@@ -739,6 +802,16 @@ function draw() {
       const prefix = index === flutterTargetSelected ? '> ' : '  ';
       lines.push(`${prefix}${target.label}`);
     });
+  } else if (mode === 'ios') {
+    lines.push('iOS');
+    if (iosSimulators.length === 0) {
+      lines.push('  No hay simuladores. Agrega uno en Xcode, en Window > Devices and Simulators.');
+    }
+    iosSimulators.forEach((simulator, index) => {
+      const prefix = index === iosSelected ? '> ' : '  ';
+      const state = iosTextFor(simulator);
+      lines.push(`${prefix}${circleFor(state.level)} ${simulator.name} (${simulator.runtime}) - ${state.text}`);
+    });
   } else {
     lines.push('Dispositivos');
     deviceLines.forEach((line, index) => {
@@ -777,11 +850,11 @@ async function refreshRow(id) {
 async function refreshAll() {
   await Promise.all(
     ROWS.map(async (row) => {
-      if (row.id === 'devices' && mode === 'devices') {
+      if (row.id === mode) {
         return;
       }
       const value = await row.read();
-      if ((row.id === 'devices' && mode === 'devices') || polls.has(row.id)) {
+      if (row.id === mode || polls.has(row.id)) {
         return;
       }
       stateMap[row.id] = value;
@@ -858,6 +931,47 @@ function moveDeviceSelection(delta) {
   deviceSelected = indices[next];
 }
 
+async function flutterDevices() {
+  const result = await runArgs('flutter', ['devices', '--machine'], {
+    timeout: 30000,
+    cwd: FLUTTER_DIR,
+  });
+  if (result.code !== 0) {
+    return [];
+  }
+  try {
+    return JSON.parse(result.stdout);
+  } catch {
+    return [];
+  }
+}
+
+async function iosFlutterTargets() {
+  if (process.platform !== 'darwin' || !(await hasXcrun())) {
+    return [];
+  }
+  const targets = (await readIosSimulators())
+    .filter((simulator) => simulator.state === 'Booted')
+    .map((simulator) => ({
+      label: `${simulator.name} (${simulator.udid})`,
+      deviceId: simulator.udid,
+      platform: 'ios',
+      simulator: true,
+    }));
+  for (const device of await flutterDevices()) {
+    const isPhone = String(device.targetPlatform ?? '').startsWith('ios') && device.emulator === false;
+    if (isPhone && !targets.some((target) => target.deviceId === device.id)) {
+      targets.push({
+        label: `${device.name} (${device.id})`,
+        deviceId: device.id,
+        platform: 'ios',
+        simulator: false,
+      });
+    }
+  }
+  return targets;
+}
+
 async function buildFlutterTargets() {
   devicesState = await loadDevices();
   const targets = [];
@@ -867,14 +981,47 @@ async function buildFlutterTargets() {
   for (const [name, serial] of devicesState.running) {
     targets.push({ label: `${name} (${serial})`, deviceId: serial });
   }
+  targets.push(...(await iosFlutterTargets()));
   targets.push({ label: 'Chrome (web)', deviceId: 'chrome' });
   return targets;
+}
+
+function localIpv4() {
+  const addresses = [];
+  for (const entries of Object.values(os.networkInterfaces())) {
+    for (const entry of entries ?? []) {
+      if (entry.family === 'IPv4' && !entry.internal) {
+        addresses.push(entry.address);
+      }
+    }
+  }
+  return (
+    addresses.find((address) => address.startsWith('192.168.')) ??
+    addresses.find((address) => address.startsWith('10.')) ??
+    addresses[0] ??
+    null
+  );
 }
 
 async function prepareFlutterApiUrl(target) {
   const port = readApiPort();
   if (target.deviceId === 'chrome') {
     return `http://localhost:${port}`;
+  }
+  if (target.platform === 'ios' && target.simulator) {
+    return `http://127.0.0.1:${port}`;
+  }
+  if (target.platform === 'ios') {
+    const host = localIpv4();
+    if (!host) {
+      setMessage('No se encontró una IP LAN');
+      return null;
+    }
+    if (!(await checkPort(port, host))) {
+      setMessage(`El API no responde en ${host}:${port}. Inicia la API y revisa el firewall de macOS.`);
+      return null;
+    }
+    return `http://${host}:${port}`;
   }
   const sdk = devicesState.sdk ?? resolveSdk();
   if (!sdk?.adb) {
@@ -899,11 +1046,13 @@ async function launchFlutterTarget() {
   }
   const apiUrl = await prepareFlutterApiUrl(target);
   if (!apiUrl) {
-    setMessage('No se pudo preparar adb reverse para el API. Revisa la conexión del dispositivo.');
+    if (target.platform !== 'ios') {
+      setMessage('No se pudo preparar adb reverse para el API. Revisa la conexión del dispositivo.');
+    }
     draw();
     return;
   }
-  flutterKeepAwake = await keepScreenAwake(target.deviceId);
+  flutterKeepAwake = target.platform === 'ios' ? null : await keepScreenAwake(target.deviceId);
   mode = 'main';
   selectedIndex = ROWS.findIndex((row) => row.id === 'flutter');
   beginRow('flutter', 'Iniciando...');
@@ -1449,9 +1598,89 @@ async function actDeviceRow() {
   draw();
 }
 
+function iosTextFor(simulator) {
+  if (iosBusyUdid === simulator.udid) {
+    return {
+      level: 'warn',
+      text: simulator.state === 'Booted' ? 'Deteniendo...' : 'Iniciando...',
+    };
+  }
+  if (simulator.state === 'Booted') {
+    return { level: 'ok', text: 'Iniciado' };
+  }
+  if (simulator.state === 'Shutdown') {
+    return { level: 'off', text: 'No iniciado' };
+  }
+  return { level: 'warn', text: simulator.state };
+}
+
+async function refreshIos() {
+  iosSimulators = await readIosSimulators();
+  iosSelected = Math.min(iosSelected, Math.max(iosSimulators.length - 1, 0));
+  draw();
+}
+
+async function waitIosState(udid, expected) {
+  const started = Date.now();
+  while (Date.now() - started < AVD_POLL_TIMEOUT_MS) {
+    const simulators = await readIosSimulators();
+    if (simulators.find((simulator) => simulator.udid === udid)?.state === expected) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+  return false;
+}
+
+async function actIos() {
+  if (!(await hasXcrun())) {
+    setMessage('Sin Xcode. Instala Xcode y sus Command Line Tools para usar simuladores.');
+    draw();
+    return;
+  }
+  iosSimulators = await readIosSimulators();
+  iosSelected = 0;
+  mode = 'ios';
+  draw();
+}
+
+async function actIosRow() {
+  const simulator = iosSimulators[iosSelected];
+  if (!simulator || iosBusyUdid) {
+    return;
+  }
+  const booted = simulator.state === 'Booted';
+  iosBusyUdid = simulator.udid;
+  draw();
+  const result = await runArgs('xcrun', ['simctl', booted ? 'shutdown' : 'boot', simulator.udid], {
+    timeout: 120000,
+  });
+  if (result.code !== 0) {
+    iosBusyUdid = null;
+    setMessage(firstLine(result.stderr) || firstLine(result.stdout) || 'Falló simctl.');
+    await refreshIos();
+    return;
+  }
+  const window = booted ? null : await runArgs('open', ['-a', 'Simulator']);
+  const reached = await waitIosState(simulator.udid, booted ? 'Shutdown' : 'Booted');
+  iosBusyUdid = null;
+  if (!reached) {
+    setMessage(`${simulator.name} no cambió de estado en 90 s.`);
+  } else if (booted) {
+    setMessage(`${simulator.name} apagado.`);
+  } else if (window && window.code !== 0) {
+    setMessage(`${simulator.name} encendido, pero no se pudo abrir la app Simulator de Xcode.`);
+  }
+  await refreshIos();
+}
+
 async function act() {
   if (mode === 'devices') {
     await actDeviceRow();
+    return;
+  }
+  if (mode === 'ios') {
+    await actIosRow();
     return;
   }
   const row = ROWS[selectedIndex];
@@ -1465,6 +1694,8 @@ async function act() {
     await actApi();
   } else if (row.id === 'devices') {
     await actDevices();
+  } else if (row.id === 'ios') {
+    await actIos();
   }
 }
 
@@ -1500,8 +1731,26 @@ function onKeypress(_str, key) {
     shutdown();
     return;
   }
-  if (deviceBusyName) {
+  if (deviceBusyName || iosBusyUdid) {
     return;
+  }
+  if (mode === 'ios') {
+    if (key.name === 'escape' || key.name === 'q') {
+      mode = 'main';
+      selectedIndex = ROWS.findIndex((row) => row.id === 'ios');
+      void refreshRow('ios');
+      return;
+    }
+    if (key.name === 'up' || key.name === 'down') {
+      const delta = key.name === 'up' ? -1 : 1;
+      iosSelected = Math.min(Math.max(iosSelected + delta, 0), Math.max(iosSimulators.length - 1, 0));
+      draw();
+      return;
+    }
+    if (key.name === 'space') {
+      void act();
+      return;
+    }
   }
   if (mode === 'pairing') {
     if (key.name === 'escape') {
@@ -1554,6 +1803,9 @@ function onKeypress(_str, key) {
       if (mode === 'devices') {
         devicesState = await loadDevices();
         draw();
+      }
+      if (mode === 'ios') {
+        await refreshIos();
       }
       await refreshAll();
     })();

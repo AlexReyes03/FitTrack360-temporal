@@ -1,6 +1,6 @@
 # Estado del proyecto — FitTrack360
 
-> **Última actualización:** 2026-11-04 · **Actualizó:** Daniela Carrate (W9-09 y W9-10)
+> **Última actualización:** 2026-11-06 · **Actualizó:** Daniela Carrate (W8-08, W8-09, W8-10 y W9-01)
 > Actualiza la fecha y tu nombre cada vez que edites. Describe solo lo que está en `main` o en un PR abierto; no adelantes avance.
 
 ## Qué hay
@@ -16,6 +16,13 @@ Integrado en `main`:
 - Borrador de `docs/permisos.md` y plantillas de `docs/ia/bitacora.md` y este archivo (W8-24 y W8-25).
 
 En PR abierto: ver la lista de PRs del repositorio (incluye esta actualización de Nube / hosting cuando se abra).
+
+En PRs abiertos y apilados (W8-08 → W8-09 → W8-10 → W9-01), verificados en ejecución el 2026-11-06 con Postgres real, el API nativo y en Docker, el navegador y el emulador Android:
+
+- W8-08 (#9): `configureApp` en `fit_track_api/src/app.setup.ts` concentra prefijo `/api/v1`, `ValidationPipe` global y Swagger en `/api/docs`; `main.ts` y las pruebas usan la misma configuración.
+- W8-09 (#10): `GET /api/v1/health` responde `{ "status": "ok", "db": "up" | "down" }` y sigue en 200 con la base caída. Toda respuesta lleva `x-request-id` (`src/gateway/`).
+- W8-10 (#11): media de ejercicios en `/static/exercises/images/*` y `/static/exercises/videos/*` con `@nestjs/serve-static`, sin listar directorios ni exponer `NOTICE.md`. El `Dockerfile` ya copia `public/` en la imagen.
+- W9-01 (#47): puerto único 3000 para nativo, Docker (`-p PORT:PORT`) y emulador (`10.0.2.2:3000`). Un `PORT` inválido detiene el arranque con un mensaje. **El blocker de puertos 3000 vs 3001 queda resuelto:** se quitó de la tabla en #77 y W9-01 lo verificó registrando desde el host y desde el emulador contra el mismo proceso Nest, nativo y en Docker.
 
 ## Qué falta
 

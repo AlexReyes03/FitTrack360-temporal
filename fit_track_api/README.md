@@ -140,3 +140,17 @@ local. Si SMTP no responde, `password/forgot` responde 200 sin enviar correo.
 
 Los archivos se guardan en `UPLOAD_DIR` (por defecto `./uploads`, ignorado por git).
 Cada usuario solo puede leer o borrar sus propios archivos; un id ajeno responde 404.
+
+## Puerto y URL base
+
+El API usa un solo puerto de desarrollo: `PORT=3000` (ver `.env.example`). `src/config/port.ts`
+lo valida al arrancar: si `PORT` no es un entero entre 1 y 65535, el proceso termina con un
+mensaje en vez de quedar escuchando en otro lado.
+
+| Cómo corre el API | URL desde la Mac/PC | URL desde la app |
+| --- | --- | --- |
+| `pnpm start:dev` | `http://localhost:3000` | Emulador Android: `http://10.0.2.2:3000` (default de Flutter) |
+| Docker desde `pnpm dev` (`-p PORT:PORT`) | `http://localhost:3000` | Teléfono físico: el panel aplica `adb reverse tcp:3000` y usa `http://localhost:3000` |
+
+Si cambias `PORT`, pásalo también a Flutter con `--dart-define=API_BASE_URL=http://<host>:<PORT>`
+o en `fit_track_360/env/local.json`. Swagger queda en `/api/docs` y los endpoints en `/api/v1`.

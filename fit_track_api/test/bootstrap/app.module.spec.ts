@@ -1,6 +1,7 @@
 import { ConfigModule } from '@nestjs/config';
 import type { DynamicModule } from '@nestjs/common';
 import { AppModule } from '../../src/app.module';
+import { HealthModule } from '../../src/health/health.module';
 
 describe('AppModule (W8-08)', () => {
   it('registra ConfigModule como módulo global', async () => {
@@ -17,5 +18,10 @@ describe('AppModule (W8-08)', () => {
 
     expect(configModule).toBeDefined();
     expect(configModule?.global).toBe(true);
+  });
+
+  it('registra HealthModule (W8-09)', () => {
+    const imports = Reflect.getMetadata('imports', AppModule) as unknown[];
+    expect(imports).toContain(HealthModule);
   });
 });

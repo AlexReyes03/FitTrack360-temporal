@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { requestIdMiddleware } from './gateway/request-id.middleware';
 
 /** Prefijo de versión que comparten todos los controllers de negocio. */
 export const API_PREFIX = 'api/v1';
@@ -12,7 +13,10 @@ export const API_DOCS_PATH = 'api/docs';
  * que se prueba sea exactamente lo que arranca en producción.
  */
 export function configureApp(app: INestApplication): void {
-  app.enableCors();
+  // Primero, para que toda respuesta (404 y Swagger incluidos) lleve x-request-id.
+  app.use(requestIdMiddleware);
+
+  app.enableCors({ exposedHeaders: ['x-request-id'] });
 
   app.setGlobalPrefix(API_PREFIX, { exclude: [API_DOCS_PATH] });
 

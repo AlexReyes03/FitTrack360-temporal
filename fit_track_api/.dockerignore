@@ -1,6 +1,9 @@
 node_modules
 dist
 coverage
+test
+uploads
+.git
 .env
 .env.*
 !.env.example

@@ -1,6 +1,10 @@
-# Archivo docker-compose compartido del equipo.
-# Miguel agregará api/mailpit en W8-07.
-# Se inicia con 'docker compose up -d'.
+# Compose unico del equipo. Levanta postgres, api y mailpit.
+# Puertos publicados:
+#   API            3000
+#   Postgres       5432
+#   Mailpit SMTP   1025
+#   Mailpit UI     http://localhost:8025
+# Se inicia con 'docker compose up -d' desde fit_track_api/.
 
 services:
   postgres:
@@ -18,6 +22,36 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: ${PORT:-3000}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-fittrack}:${POSTGRES_PASSWORD:-fittrack_dev_password}@postgres:5432/${POSTGRES_DB:-fittrack_db}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me}
+      SMTP_HOST: mailpit
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@fittrack360.local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - '1025:1025'
+      - '8025:8025'
 
 volumes:
   pgdata:

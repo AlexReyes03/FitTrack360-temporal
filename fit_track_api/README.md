@@ -158,3 +158,22 @@ usa `127.0.0.1` y la interfaz en http://localhost:8025. Si SMTP no responde,
 
 Los archivos se guardan en `UPLOAD_DIR` (por defecto `./uploads`, ignorado por git).
 Cada usuario solo puede leer o borrar sus propios archivos; un id ajeno responde 404.
+
+## Puerto y URL base
+
+El API usa un solo puerto de desarrollo: `PORT=3000` (ver `.env.example`). `src/config/port.ts`
+lo valida al arrancar: si `PORT` no es un entero entre 1 y 65535, el proceso termina con un
+mensaje en vez de quedar escuchando en otro lado.
+
+| Cómo corre el API | URL desde la Mac/PC | URL desde la app |
+| --- | --- | --- |
+| `pnpm start:dev` | `http://localhost:3000` | Emulador Android: `http://10.0.2.2:3000` (default de Flutter) |
+| Docker desde `pnpm dev` (`-p PORT:PORT`) | `http://localhost:3000` | Teléfono físico: el panel aplica `adb reverse tcp:3000` y usa `http://localhost:3000` |
+| `docker compose up -d` (`3000:3000`) | `http://localhost:3000` | Igual que arriba: emulador `10.0.2.2:3000`, teléfono con `adb reverse tcp:3000` |
+
+El compose publica `3000:3000` fijo y pasa `PORT` al contenedor, así que con el compose deja
+`PORT=3000`: otro valor haría que el API escuche en un puerto que el compose no publica. El panel
+y el compose usan el mismo puerto del host; no levantes los dos a la vez.
+
+Si cambias `PORT` (fuera del compose), pásalo también a Flutter con `--dart-define=API_BASE_URL=http://<host>:<PORT>`
+o en `fit_track_360/env/local.json`. Swagger queda en `/api/docs` y los endpoints en `/api/v1`.

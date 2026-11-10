@@ -84,6 +84,8 @@ void main() {
       find.text('La búsqueda no está disponible. ¿Quieres capturarlo a mano?'),
       findsOneWidget,
     );
+    // Regresión: con el aviso visible había dos botones «Captura manual».
+    expect(find.text('Captura manual'), findsOneWidget);
     await tester.tap(find.byKey(const Key('open-manual')));
     await tester.pumpAndSettle();
     await tester.enterText(

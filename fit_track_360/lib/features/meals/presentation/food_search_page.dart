@@ -130,16 +130,18 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
               if (!_manual) ..._searchSection(secondary),
               if (_manual) ..._manualSection(secondary),
               const SizedBox(height: AppSpacing.sm),
-              TextButton(
-                onPressed: () => setState(() {
-                  _manual = !_manual;
-                  _manualError = null;
-                }),
-                child: Text(
-                  _manual ? 'Volver a la búsqueda' : 'Captura manual',
-                  style: const TextStyle(color: AppColors.textSecondary),
+              // Con el aviso de error o sin resultados, ese aviso ya ofrece la captura manual.
+              if (_manual || !_viewModel.offersManualCapture)
+                TextButton(
+                  onPressed: () => setState(() {
+                    _manual = !_manual;
+                    _manualError = null;
+                  }),
+                  child: Text(
+                    _manual ? 'Volver a la búsqueda' : 'Captura manual',
+                    style: const TextStyle(color: AppColors.textSecondary),
+                  ),
                 ),
-              ),
             ],
           ),
         ),

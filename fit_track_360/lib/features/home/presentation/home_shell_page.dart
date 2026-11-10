@@ -165,7 +165,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    child: Row(
+                    child: Wrap(
                       children: [
                         TextButton(
                           onPressed: () => context.push('/app/foto'),
@@ -178,6 +178,13 @@ class _HomeShellPageState extends State<HomeShellPage> {
                           onPressed: () => context.push('/app/entrenamientos'),
                           child: const Text(
                             'Entrenamientos',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => context.push('/app/comidas'),
+                          child: const Text(
+                            'Comidas',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                         ),

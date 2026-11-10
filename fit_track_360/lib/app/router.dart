@@ -7,6 +7,7 @@ import '../features/auth/presentation/register_page.dart';
 import '../features/auth/presentation/reset_password_page.dart';
 import '../features/auth/presentation/splash_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
+import '../features/meals/presentation/meals_page.dart';
 import '../features/progress/presentation/progress_photo_page.dart';
 import '../features/workouts/presentation/workouts_page.dart';
 
@@ -55,6 +56,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/app/entrenamientos',
       builder: (context, state) => const WorkoutsPage(),
+    ),
+    GoRoute(
+      path: '/app/comidas',
+      builder: (context, state) => const MealsPage(),
     ),
   ],
 );

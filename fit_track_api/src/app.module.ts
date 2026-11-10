@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { FoodsModule } from './foods/foods.module';
 import { HealthModule } from './health/health.module';
 import { MealsModule } from './meals/meals.module';
@@ -31,6 +32,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
     FoodsModule,
     MealsModule,
     ExercisesModule,
+    DashboardModule,
     ExerciseMediaModule.register(),
   ],
   controllers: [AppController],

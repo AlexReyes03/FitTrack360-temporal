@@ -62,7 +62,7 @@ Al iniciar Flutter, el menú define `API_BASE_URL` con `adb reverse` para dispos
 
 En dispositivos Android, el menú sube el tiempo de apagado de pantalla a 30 minutos mientras Flutter está activo y lo restaura al detenerlo o al salir. Sin eso, cuando el teléfono entra en reposo se pierde la conexión del servicio de Dart y `flutter run` termina con `Lost connection to device.`, aunque la app siga instalada.
 
-Con `P` se abre Prisma Studio en `http://localhost:5555` para editar tablas y registros desde el navegador. Requiere `fit_track_api/.env`.
+Con `P` se abre Prisma Studio en `http://localhost:5555` (`http://localhost:5560` en macOS) para editar tablas y registros desde el navegador. Requiere `fit_track_api/.env`. En macOS se usa 5560 porque el primer emulador de Android ocupa el 5555 para `adb`.
 
 En Windows, Flutter y Prisma Studio se abren en Windows Terminal si está instalado: el primer proceso crea la ventana y los siguientes agregan una pestaña en esa misma ventana. Si no está instalado, se usa la consola clásica con una ventana por proceso.
 

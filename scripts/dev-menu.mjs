@@ -32,7 +32,9 @@ const API_CONTAINER = 'fittrack-api';
 const API_IMAGE = 'fittrack-api:dev';
 const API_DATABASE_URL = 'postgresql://fittrack:fittrack@host.docker.internal:5432/fittrack';
 const DEFAULT_API_PORT = 3000;
-const PRISMA_STUDIO_PORT = 5555;
+// En macOS el primer emulador de Android (emulator-5554) ocupa 5555 para adb y
+// localhost:5555 llega al emulador en vez de a Studio; 5560 queda fuera de 5554-5585.
+const PRISMA_STUDIO_PORT = process.platform === 'darwin' ? 5560 : 5555;
 const POLL_MS = 1000;
 const ROW_POLL_TIMEOUT_MS = 60 * 1000;
 const AVD_POLL_TIMEOUT_MS = 90 * 1000;
@@ -1203,6 +1205,10 @@ async function actPrisma() {
   }
 }
 
+async function isPrismaStudio() {
+  return (await httpStatus(PRISMA_STUDIO_PORT, '/')) === 200;
+}
+
 async function actPrismaStudio() {
   const url = `http://localhost:${PRISMA_STUDIO_PORT}`;
   if (!fs.existsSync(API_ENV)) {
@@ -1210,9 +1216,14 @@ async function actPrismaStudio() {
     draw();
     return;
   }
-  if (await checkPort(PRISMA_STUDIO_PORT)) {
+  if (await isPrismaStudio()) {
     openUrl(url);
     setMessage(`Prisma Studio ya responde en ${url}`);
+    draw();
+    return;
+  }
+  if (await checkPort(PRISMA_STUDIO_PORT)) {
+    setMessage(`El puerto ${PRISMA_STUDIO_PORT} lo usa otro proceso. Libéralo para abrir Prisma Studio.`);
     draw();
     return;
   }
@@ -1226,7 +1237,7 @@ async function actPrismaStudio() {
   void (async () => {
     for (let attempt = 0; attempt < 30; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      if (await checkPort(PRISMA_STUDIO_PORT)) {
+      if (await isPrismaStudio()) {
         openUrl(url);
         setMessage(`Prisma Studio: ${url}`);
         draw();

@@ -21,6 +21,36 @@ model User {
   passwordResetCodes   PasswordResetCode[]
   workoutSessions      WorkoutSession[]
   mealLogs             MealLog[]
+  settings             UserSettings?
+}
+
+enum WeightUnit {
+  kg
+  lb
+}
+
+enum DistanceUnit {
+  km
+  mi
+}
+
+/// Metas nutricionales y preferencias del deportista (relación 1:1 con User).
+/// Se crea de forma perezosa en el primer PATCH /users/me; mientras no exista,
+/// el API responde los valores por defecto declarados aquí.
+model UserSettings {
+  userId               String       @id
+  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyCalorieGoal     Int          @default(2000)
+  proteinGoalG         Int          @default(150)
+  carbsGoalG           Int          @default(250)
+  fatGoalG             Int          @default(65)
+  weightUnit           WeightUnit   @default(kg)
+  distanceUnit         DistanceUnit @default(km)
+  restSeconds          Int          @default(90)
+  notificationsEnabled Boolean      @default(true)
+  biometricEnabled     Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 }
 
 model RefreshToken {

@@ -14,6 +14,7 @@ Este documento define la estructura conceptual de datos, las relaciones entre en
 | **M-02** | **Copia desnormalizada de nutrientes en `MealItem`:** Al registrar un alimento de USDA o captura manual, los macronutrientes (`kcal`, `proteinG`, `carbsG`, `fatG`) se copian y congelan en la fila del registro. | Guardar únicamente una llave foránea hacia un catálogo centralizado de alimentos de USDA. | Asegura que el historial de ingesta del usuario no cambie retrospectivamente si el dataset de USDA actualiza sus valores o si el alimento es renombrado o eliminado de la fuente externa. | 2026-10-22 |
 | **M-03** | **Almacenamiento de contraseñas con Argon2id:** Las contraseñas se almacenan como hashes criptográficos con salt generado por `@node-rs/argon2`. | Utilizar bcrypt o SHA-256 tradicional sin funciones resistentes a memoria. | Argon2id es el algoritmo estándar recomendado por OWASP y el NIST para protección contra ataques masivos de fuerza bruta y hardware acelerado (ASIC/GPU). | 2026-10-22 |
 | **M-04** | **Metadatos de fotos desacoplados del binario:** La tabla `Photo` almacena únicamente metadatos técnicos (`storageKey`, `mimeType`, `sizeBytes`, `width`, `height`, `userId`), mientras que el archivo binario reside en el sistema de almacenamiento. | Almacenar imágenes completas en la base de datos como campos binarios (`BYTEA` o `BLOB`). | Evita la degradación del rendimiento de PostgreSQL, reduce el tamaño de los respaldos de base de datos y permite una entrega de archivos más eficiente a través del sistema de archivos. | 2026-10-22 |
+| **M-05** | **Metas y preferencias en un modelo 1:1 `UserSettings` (W12-05):** las metas diarias (`dailyCalorieGoal` > 0, `proteinGoalG`, `carbsGoalG`, `fatGoalG` ≥ 0, enteros) y las preferencias (`weightUnit` kg\|lb, `distanceUnit` km\|mi como enums de Postgres, `restSeconds`, `notificationsEnabled`, `biometricEnabled`) viven en `UserSettings`, con `userId` como llave primaria y `onDelete: Cascade`. La fila se crea de forma perezosa en el primer `PATCH /users/me`; mientras no exista, el API responde los valores por defecto. | Agregar las nueve columnas directamente a `User`. | `User` queda acotado a identidad y autenticación (lo que leen auth y el export), el registro no tiene que conocer las metas, y la cascada del borrado de cuenta cubre los ajustes sin lógica extra. El 1:1 por llave primaria impide que un usuario tenga dos filas de ajustes. | 2026-11-10 |
 
 ---
 
@@ -26,6 +27,7 @@ erDiagram
   User ||--o{ Routine : crea
   User ||--o{ WorkoutSession : realiza
   User ||--o{ MealLog : registra
+  User ||--o| UserSettings : configura
   User ||--o{ BodyMetric : captura
   User ||--o{ Photo : sube
 

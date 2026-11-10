@@ -29,7 +29,7 @@ pnpm install
 
 Este comando instala las dependencias de Node.js del workspace, descarga los paquetes de Flutter (`dart pub get` en `fit_track_360`) y activa los hooks de Git en `.husky/`.
 
-Antes de levantar los servicios, copia `fit_track_api/.env.example` a `fit_track_api/.env`. El `DATABASE_URL` de ejemplo ya coincide con el contenedor de PostgreSQL que crea el menú. Sin ese archivo, el menú no aplica las migraciones de Prisma ni arranca la API.
+Antes de levantar los servicios, copia `fit_track_api/.env.example` a `fit_track_api/.env`. El `DATABASE_URL` de ejemplo ya coincide con el contenedor de PostgreSQL que crea el menú. Sin ese archivo, el menú no aplica las migraciones de Prisma ni arranca la API. Basta con un `.env` que tenga los nombres de las variables: si una está vacía, el menú usa el valor de `.env.example` para Prisma, Prisma Studio y el contenedor de la API.
 
 Si necesitas reinstalar únicamente las dependencias de Flutter:
 

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const API_DIR = path.join(ROOT, 'fit_track_api');
 const API_ENV = path.join(API_DIR, '.env');
+const API_ENV_EXAMPLE = path.join(API_DIR, '.env.example');
 const FLUTTER_DIR = path.join(ROOT, 'fit_track_360');
 const IS_WINDOWS = process.platform === 'win32';
 
@@ -246,6 +247,50 @@ function readApiPort() {
   return Number.isInteger(port) && port > 0 && port < 65536 ? port : DEFAULT_API_PORT;
 }
 
+function parseEnvFile(file) {
+  const values = new Map();
+  if (!fs.existsSync(file)) {
+    return values;
+  }
+  for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (match) {
+      values.set(match[1], match[2].trim());
+    }
+  }
+  return values;
+}
+
+// Variables que en fit_track_api/.env están vacías y sí tienen valor en
+// .env.example. El panel las completa para que un .env con solo los nombres
+// sirva en desarrollo local.
+function apiEnvDefaults() {
+  const current = parseEnvFile(API_ENV);
+  const defaults = {};
+  for (const [name, value] of parseEnvFile(API_ENV_EXAMPLE)) {
+    if (value !== '' && (current.get(name) ?? '') === '') {
+      defaults[name] = value;
+    }
+  }
+  return defaults;
+}
+
+function prismaEnv() {
+  const defaults = apiEnvDefaults();
+  return defaults.DATABASE_URL ? { ...process.env, DATABASE_URL: defaults.DATABASE_URL } : process.env;
+}
+
+function withEnvPrefix(command, variables) {
+  const entries = Object.entries(variables);
+  if (entries.length === 0) {
+    return command;
+  }
+  if (IS_WINDOWS) {
+    return `${entries.map(([name, value]) => `set "${name}=${value}"`).join(' && ')} && ${command}`;
+  }
+  return `${entries.map(([name, value]) => `${name}='${value}'`).join(' ')} ${command}`;
+}
+
 function apiDatabaseUrl() {
   if (!fs.existsSync(API_ENV)) {
     return API_DATABASE_URL;
@@ -441,6 +486,7 @@ async function readPrisma() {
   }
   const result = await runLine('pnpm --dir fit_track_api exec prisma migrate status', {
     timeout: 25000,
+    env: prismaEnv(),
   });
   const output = `${result.stdout}\n${result.stderr}`;
   if (/P1001|Can't reach database|ECONNREFUSED/i.test(output)) {
@@ -1192,6 +1238,7 @@ async function actPrisma() {
   try {
     execSync('pnpm --dir fit_track_api exec prisma migrate deploy', {
       cwd: ROOT,
+      env: prismaEnv(),
       stdio: 'ignore',
     });
   } catch (error) {
@@ -1227,9 +1274,14 @@ async function actPrismaStudio() {
     draw();
     return;
   }
+  const studioDatabaseUrl = apiEnvDefaults().DATABASE_URL;
+  const studioEnv = studioDatabaseUrl ? { DATABASE_URL: studioDatabaseUrl } : {};
   openWindow(
     'Prisma Studio',
-    `pnpm --dir fit_track_api exec prisma studio --port ${PRISMA_STUDIO_PORT} --browser none`,
+    withEnvPrefix(
+      `pnpm --dir fit_track_api exec prisma studio --port ${PRISMA_STUDIO_PORT} --browser none`,
+      studioEnv,
+    ),
     ROOT,
   );
   setMessage(`Iniciando Prisma Studio en ${url}. Cierra su ventana para detenerlo.`);
@@ -1299,6 +1351,9 @@ async function actApi() {
   }
   beginRow('api', 'Iniciando...');
   const port = readApiPort();
+  const defaultArgs = Object.entries(apiEnvDefaults())
+    .filter(([name]) => name !== 'DATABASE_URL' && name !== 'PORT')
+    .flatMap(([name, value]) => ['-e', `${name}=${value}`]);
   const result = await runArgs(
     'docker',
     [
@@ -1308,6 +1363,7 @@ async function actApi() {
       API_CONTAINER,
       '--env-file',
       API_ENV,
+      ...defaultArgs,
       '-e',
       `DATABASE_URL=${apiDatabaseUrl()}`,
       '-e',

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:fit_track_360/core/network/api_client.dart';
+import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
 import 'package:fit_track_360/features/workouts/data/workouts_api.dart';
 import 'package:fit_track_360/features/workouts/data/workouts_repository_impl.dart';
@@ -37,6 +38,20 @@ void main() {
     expect(find.text('Sentadilla · 2 series'), findsOneWidget);
     expect(find.text('Press banca · 1 serie'), findsOneWidget);
     expect(find.text('Buen progreso en sentadilla'), findsOneWidget);
+  });
+
+  testWidgets('valores y títulos usan el color de texto principal', (
+    tester,
+  ) async {
+    await _pump(tester, FakeWorkoutsRepository(sessions: [fakeSession()]));
+    await tester.pumpAndSettle();
+
+    // Regresión: se usaba el estilo de botón (texto oscuro sobre acento) y no
+    // se leía sobre el fondo oscuro.
+    for (final label in ['1 h 0 min', '1600 kg', 'Ejercicios', 'Notas']) {
+      final text = tester.widget<Text>(find.text(label));
+      expect(text.style?.color, AppColors.textPrimary, reason: label);
+    }
   });
 
   testWidgets('muestra la comparación cuando hay una sesión anterior', (

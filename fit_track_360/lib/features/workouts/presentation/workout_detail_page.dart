@@ -220,7 +220,10 @@ class _Metric extends StatelessWidget {
             style: AppTypography.body.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 4),
-          Text(value, style: AppTypography.cta),
+          Text(
+            value,
+            style: AppTypography.cta.copyWith(color: AppColors.textPrimary),
+          ),
         ],
       ),
     );
@@ -239,7 +242,10 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTypography.cta),
+          Text(
+            title,
+            style: AppTypography.cta.copyWith(color: AppColors.textPrimary),
+          ),
           const SizedBox(height: AppSpacing.xs),
           ...children,
         ],

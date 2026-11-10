@@ -4,9 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/notifications/reminder_service.dart';
-import '../../../core/notifications/unsupported_reminder_service.dart';
+import '../../../core/notifications/local_reminder_service.dart';
 import '../../../core/security/biometric_service.dart';
-import '../../../core/security/unsupported_biometric_service.dart';
+import '../../../core/security/local_biometric_service.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
@@ -63,10 +63,8 @@ class _ProfilePageState extends State<ProfilePage> {
   late final ProfileViewModel _vm = ProfileViewModel(
     profileRepository:
         widget.repository ?? ProfileApiRepository(_ownedClient = ApiClient()),
-    reminderService:
-        widget.reminderService ?? const UnsupportedReminderService(),
-    biometricService:
-        widget.biometricService ?? const UnsupportedBiometricService(),
+    reminderService: widget.reminderService ?? LocalReminderService(),
+    biometricService: widget.biometricService ?? LocalBiometricService(),
     logoutService: widget.logoutService ?? LogoutService(),
   );
 

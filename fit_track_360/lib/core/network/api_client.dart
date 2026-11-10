@@ -40,6 +40,9 @@ class ApiClient {
   Future<http.Response> post(String path, {Object? body}) =>
       _send('POST', path, body: body);
 
+  Future<http.Response> patch(String path, {Object? body}) =>
+      _send('PATCH', path, body: body);
+
   /// Sube un archivo multipart (campo `file`) con Bearer. No fija
   /// Content-Type JSON. Ante un 401 refresca una vez y reintenta.
   Future<http.Response> uploadFile(String path, File file) async {
@@ -101,6 +104,13 @@ class ApiClient {
 
     if (method == 'GET') {
       return _http.get(uri, headers: headers);
+    }
+    if (method == 'PATCH') {
+      return _http.patch(
+        uri,
+        headers: headers,
+        body: body == null ? null : jsonEncode(body),
+      );
     }
     return _http.post(
       uri,

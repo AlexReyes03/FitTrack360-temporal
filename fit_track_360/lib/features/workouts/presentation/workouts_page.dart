@@ -169,25 +169,29 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   for (final session in sessions)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _format(session.startedAt),
-                            style: AppTypography.body,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            session.notes == null || session.notes!.isEmpty
-                                ? 'Sin notas'
-                                : session.notes!,
-                            style: AppTypography.body.copyWith(
-                              color: AppColors.textSecondary,
+                    InkWell(
+                      onTap: () =>
+                          context.push('/app/entrenamientos/${session.id}'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _format(session.startedAt),
+                              style: AppTypography.body,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              session.notes == null || session.notes!.isEmpty
+                                  ? 'Sin notas'
+                                  : session.notes!,
+                              style: AppTypography.body.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                 ],

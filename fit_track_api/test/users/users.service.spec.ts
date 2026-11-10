@@ -31,7 +31,9 @@ describe('UsersService: perfil, metas y preferencias (W12-05)', () => {
         weightUnit: 'kg',
         distanceUnit: 'km',
         restSeconds: DEFAULT_SETTINGS.restSeconds,
-        notificationsEnabled: true,
+        // P3: el recordatorio no está activo hasta que el usuario lo enciende
+        // y concede el permiso (docs/permisos.md).
+        notificationsEnabled: false,
         biometricEnabled: false,
       },
     });

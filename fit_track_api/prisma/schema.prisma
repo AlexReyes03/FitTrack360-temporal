@@ -47,7 +47,7 @@ model UserSettings {
   weightUnit           WeightUnit   @default(kg)
   distanceUnit         DistanceUnit @default(km)
   restSeconds          Int          @default(90)
-  notificationsEnabled Boolean      @default(true)
+  notificationsEnabled Boolean      @default(false)
   biometricEnabled     Boolean      @default(false)
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt

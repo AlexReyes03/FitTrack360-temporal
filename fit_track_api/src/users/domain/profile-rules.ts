@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS = {
   weightUnit: WeightUnit.kg,
   distanceUnit: DistanceUnit.km,
   restSeconds: 90,
-  notificationsEnabled: true,
+  notificationsEnabled: false,
   biometricEnabled: false,
 } as const;
 

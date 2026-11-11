@@ -41,14 +41,17 @@ export class MealsController {
 
   @Post()
   @ApiOperation({
-    summary: 'Crea un nuevo registro de comida para el usuario autenticado',
+    summary:
+      'Crea un nuevo registro de comida con alimentos anidados y macros congelados',
   })
   @ApiCreatedResponse({
-    description: 'Comida registrada exitosamente',
+    description:
+      'Comida registrada exitosamente con sus alimentos y totales calculados',
     type: MealResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Datos inválidos o mealType incorrecto (400)',
+    description:
+      'Datos inválidos, mealType incorrecto o macros negativos (400)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',

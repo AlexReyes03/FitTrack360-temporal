@@ -3,15 +3,73 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { MealType } from '@prisma/client';
+import { MealType, type MealLog } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateMealItemDto } from './dto/create-meal-item.dto';
 import { CreateMealDto } from './dto/create-meal.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
-import { MealResponseDto } from './dto/meal-response.dto';
+import { MealResponseDto, type MealItemEntity } from './dto/meal-response.dto';
+
+export interface FrozenMealItemSnapshot {
+  name: string;
+  fdcId: string | null;
+  servingG: number;
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
+export type MealLogWithItems = MealLog & { items?: MealItemEntity[] };
+
+interface MealLogDelegate {
+  create(args: {
+    data: {
+      userId: string;
+      eatenAt: Date;
+      mealType: MealType;
+      notes: string | null;
+      photoId: string | null;
+      items?: { create: FrozenMealItemSnapshot[] };
+    };
+    include?: { items: boolean };
+  }): Promise<MealLogWithItems>;
+  findMany(args: {
+    where: {
+      userId: string;
+      eatenAt?: { gte: Date; lte: Date };
+    };
+    include?: { items: boolean };
+    orderBy?: { eatenAt: 'asc' | 'desc' };
+  }): Promise<MealLogWithItems[]>;
+  findFirst(args: {
+    where: { id: string; userId: string };
+    include?: { items: boolean };
+  }): Promise<MealLogWithItems | null>;
+  update(args: {
+    where: { id: string };
+    data: {
+      eatenAt?: Date;
+      mealType?: MealType;
+      notes?: string | null;
+      photoId?: string | null;
+      items?: {
+        deleteMany: Record<string, never>;
+        create: FrozenMealItemSnapshot[];
+      };
+    };
+    include?: { items: boolean };
+  }): Promise<MealLogWithItems>;
+  delete(args: { where: { id: string } }): Promise<MealLog>;
+}
 
 @Injectable()
 export class MealsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private get mealLog(): MealLogDelegate {
+    return this.prisma.mealLog as unknown as MealLogDelegate;
+  }
 
   async create(userId: string, dto: CreateMealDto): Promise<MealResponseDto> {
     if (!dto.mealType || !Object.values(MealType).includes(dto.mealType)) {
@@ -20,22 +78,32 @@ export class MealsService {
       );
     }
 
-    const meal = await this.prisma.mealLog.create({
+    const frozenItems = this.freezeMealItems(dto.items ?? []);
+
+    const meal = await this.mealLog.create({
       data: {
         userId,
         eatenAt: new Date(dto.eatenAt),
         mealType: dto.mealType,
         notes: dto.notes ?? null,
         photoId: dto.photoId ?? null,
+        items:
+          frozenItems.length > 0
+            ? {
+                create: frozenItems,
+              }
+            : undefined,
       },
+      include: { items: true },
     });
 
     return MealResponseDto.fromEntity(meal);
   }
 
   async findAll(userId: string): Promise<MealResponseDto[]> {
-    const meals = await this.prisma.mealLog.findMany({
+    const meals = await this.mealLog.findMany({
       where: { userId },
+      include: { items: true },
       orderBy: { eatenAt: 'desc' },
     });
 
@@ -43,8 +111,9 @@ export class MealsService {
   }
 
   async findOne(userId: string, id: string): Promise<MealResponseDto> {
-    const meal = await this.prisma.mealLog.findFirst({
+    const meal = await this.mealLog.findFirst({
       where: { id, userId },
+      include: { items: true },
     });
 
     if (!meal) {
@@ -68,7 +137,7 @@ export class MealsService {
       );
     }
 
-    const existing = await this.prisma.mealLog.findFirst({
+    const existing = await this.mealLog.findFirst({
       where: { id, userId },
     });
 
@@ -76,7 +145,10 @@ export class MealsService {
       throw new NotFoundException('Comida no encontrada');
     }
 
-    const updated = await this.prisma.mealLog.update({
+    const frozenItems =
+      dto.items !== undefined ? this.freezeMealItems(dto.items) : undefined;
+
+    const updated = await this.mealLog.update({
       where: { id },
       data: {
         eatenAt: dto.eatenAt ? new Date(dto.eatenAt) : undefined,
@@ -89,14 +161,22 @@ export class MealsService {
               ? dto.photoId
               : null
             : undefined,
+        items:
+          frozenItems !== undefined
+            ? {
+                deleteMany: {},
+                create: frozenItems,
+              }
+            : undefined,
       },
+      include: { items: true },
     });
 
     return MealResponseDto.fromEntity(updated);
   }
 
   async remove(userId: string, id: string): Promise<void> {
-    const existing = await this.prisma.mealLog.findFirst({
+    const existing = await this.mealLog.findFirst({
       where: { id, userId },
     });
 
@@ -104,8 +184,48 @@ export class MealsService {
       throw new NotFoundException('Comida no encontrada');
     }
 
-    await this.prisma.mealLog.delete({
+    await this.mealLog.delete({
       where: { id },
+    });
+  }
+
+  /**
+   * Copia y congela explícitamente los valores nutricionales de cada alimento (Regla M-02),
+   * validando que porciones y macronutrientes sean números no negativos.
+   */
+  private freezeMealItems(
+    items: CreateMealItemDto[],
+  ): FrozenMealItemSnapshot[] {
+    return items.map((item, index) => {
+      const numericFields: Array<
+        keyof Pick<
+          CreateMealItemDto,
+          'servingG' | 'kcal' | 'proteinG' | 'carbsG' | 'fatG'
+        >
+      > = ['servingG', 'kcal', 'proteinG', 'carbsG', 'fatG'];
+
+      for (const field of numericFields) {
+        const value = item[field];
+        if (typeof value !== 'number' || Number.isNaN(value) || value < 0) {
+          throw new BadRequestException(
+            `items[${index}].${field} debe ser un número no negativo`,
+          );
+        }
+      }
+
+      if (!item.name || typeof item.name !== 'string' || !item.name.trim()) {
+        throw new BadRequestException(`items[${index}].name es obligatorio`);
+      }
+
+      return Object.freeze({
+        name: String(item.name).trim(),
+        fdcId: item.fdcId ? String(item.fdcId) : null,
+        servingG: Number(item.servingG),
+        kcal: Number(item.kcal),
+        proteinG: Number(item.proteinG),
+        carbsG: Number(item.carbsG),
+        fatG: Number(item.fatG),
+      });
     });
   }
 }

@@ -42,7 +42,7 @@ model PasswordResetCode {
 }
 
 model Exercise {
-  id                 String   @id
+  id                 String       @id
   name               String
   nameEs             String?
   category           String?
@@ -50,26 +50,44 @@ model Exercise {
   equipment          String
   target             String
   muscleGroup        String?
-  secondaryMuscles   String[] @default([])
+  secondaryMuscles   String[]     @default([])
   level              String?
   instructionsEs     String?
-  instructionStepsEs String[] @default([])
+  instructionStepsEs String[]     @default([])
   commonErrors       String?
   imageFile          String
   gifFile            String
   mediaId            String?
   attribution        String
+  workoutSets        WorkoutSet[]
 }
 
 model WorkoutSession {
-  id        String    @id @default(uuid())
+  id        String       @id @default(uuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   startedAt DateTime
   endedAt   DateTime?
+  location  String?
   notes     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  sets      WorkoutSet[]
+}
+
+model WorkoutSet {
+  id         String         @id @default(uuid())
+  sessionId  String
+  session    WorkoutSession @relation(fields: [sessionId], references: [id])
+  exerciseId String
+  exercise   Exercise       @relation(fields: [exerciseId], references: [id])
+  order      Int
+  weight     Float
+  reps       Int
+  rpe        Float?
+  rir        Int?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
 
 enum MealType {

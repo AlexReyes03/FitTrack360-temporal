@@ -42,14 +42,23 @@ model PasswordResetCode {
 }
 
 model Exercise {
-  id          String @id
-  name        String
-  imageFile   String
-  gifFile     String
-  attribution String
-  bodyPart    String
-  equipment   String
-  target      String
+  id                 String   @id
+  name               String
+  nameEs             String?
+  category           String?
+  bodyPart           String
+  equipment          String
+  target             String
+  muscleGroup        String?
+  secondaryMuscles   String[] @default([])
+  level              String?
+  instructionsEs     String?
+  instructionStepsEs String[] @default([])
+  commonErrors       String?
+  imageFile          String
+  gifFile            String
+  mediaId            String?
+  attribution        String
 }
 
 model WorkoutSession {

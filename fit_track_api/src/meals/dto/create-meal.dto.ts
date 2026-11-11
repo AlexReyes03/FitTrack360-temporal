@@ -1,12 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { MealType } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
+  IsArray,
   IsDateString,
   IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
+import { CreateMealItemDto } from './create-meal-item.dto';
 
 export class CreateMealDto {
   @ApiProperty({
@@ -45,4 +49,15 @@ export class CreateMealDto {
   @IsOptional()
   @IsString({ message: 'photoId debe ser una cadena de texto' })
   photoId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Arreglo de alimentos (MealItems) cuyos macronutrientes se congelarán al persistirse',
+    type: [CreateMealItemDto],
+  })
+  @IsOptional()
+  @IsArray({ message: 'items debe ser un arreglo de alimentos' })
+  @ValidateNested({ each: true })
+  @Type(() => CreateMealItemDto)
+  items?: CreateMealItemDto[];
 }

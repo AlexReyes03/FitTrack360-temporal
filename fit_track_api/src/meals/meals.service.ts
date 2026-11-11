@@ -7,6 +7,11 @@ import { MealType, type MealLog } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateMealItemDto } from './dto/create-meal-item.dto';
 import { CreateMealDto } from './dto/create-meal.dto';
+import {
+  DailyNutritionSummaryDto,
+  DailySummaryQueryDto,
+  MealTypeMacroBreakdownDto,
+} from './dto/daily-nutrition-summary.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealResponseDto, type MealItemEntity } from './dto/meal-response.dto';
 
@@ -187,6 +192,124 @@ export class MealsService {
     await this.mealLog.delete({
       where: { id },
     });
+  }
+
+  async getDailySummary(
+    userId: string,
+    query: DailySummaryQueryDto = {},
+  ): Promise<DailyNutritionSummaryDto> {
+    const { startDate, endDate, dateLabel } = this.resolveDateWindow(query);
+
+    const meals = await this.mealLog.findMany({
+      where: {
+        userId,
+        eatenAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      include: { items: true },
+      orderBy: { eatenAt: 'asc' },
+    });
+
+    const round2 = (value: number): number => Math.round(value * 100) / 100;
+    const emptyBreakdown = (): MealTypeMacroBreakdownDto => ({
+      kcal: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatG: 0,
+      mealsCount: 0,
+      itemsCount: 0,
+    });
+
+    const byMealType: Record<MealType, MealTypeMacroBreakdownDto> = {
+      [MealType.BREAKFAST]: emptyBreakdown(),
+      [MealType.LUNCH]: emptyBreakdown(),
+      [MealType.DINNER]: emptyBreakdown(),
+      [MealType.SNACK]: emptyBreakdown(),
+    };
+
+    const userMeals = meals.filter(
+      (meal) =>
+        meal.userId === userId &&
+        meal.eatenAt >= startDate &&
+        meal.eatenAt <= endDate,
+    );
+
+    for (const meal of userMeals) {
+      const bucket = byMealType[meal.mealType];
+      if (!bucket) continue;
+
+      const items = meal.items ?? [];
+      const mealTotals = MealResponseDto.calculateTotals(items);
+
+      bucket.mealsCount += 1;
+      bucket.itemsCount += items.length;
+      bucket.kcal = round2(bucket.kcal + mealTotals.kcal);
+      bucket.proteinG = round2(bucket.proteinG + mealTotals.proteinG);
+      bucket.carbsG = round2(bucket.carbsG + mealTotals.carbsG);
+      bucket.fatG = round2(bucket.fatG + mealTotals.fatG);
+    }
+
+    const totals = MealResponseDto.calculateTotals(Object.values(byMealType));
+
+    return {
+      date: dateLabel,
+      from: startDate.toISOString(),
+      to: endDate.toISOString(),
+      totals,
+      byMealType,
+    };
+  }
+
+  private resolveDateWindow(query: DailySummaryQueryDto): {
+    startDate: Date;
+    endDate: Date;
+    dateLabel: string;
+  } {
+    if (query.from || query.to) {
+      const baseFrom = query.from ?? query.to!;
+      const baseTo = query.to ?? query.from!;
+      const startDate = new Date(baseFrom);
+      const endDate = new Date(baseTo);
+
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
+        throw new BadRequestException('Rango de fechas inválido');
+      }
+
+      if (!baseFrom.includes('T')) {
+        startDate.setUTCHours(0, 0, 0, 0);
+      }
+      if (!baseTo.includes('T')) {
+        endDate.setUTCHours(23, 59, 59, 999);
+      }
+
+      if (startDate > endDate) {
+        throw new BadRequestException(
+          'La fecha inicial (from) no puede ser posterior a la fecha final (to)',
+        );
+      }
+
+      return {
+        startDate,
+        endDate,
+        dateLabel: startDate.toISOString().slice(0, 10),
+      };
+    }
+
+    const target = query.date ? new Date(query.date) : new Date();
+    if (Number.isNaN(target.getTime())) {
+      throw new BadRequestException('Fecha inválida para el resumen diario');
+    }
+
+    const dateLabel = target.toISOString().slice(0, 10);
+    const startDate = new Date(`${dateLabel}T00:00:00.000Z`);
+    const endDate = new Date(`${dateLabel}T23:59:59.999Z`);
+
+    return { startDate, endDate, dateLabel };
   }
 
   /**

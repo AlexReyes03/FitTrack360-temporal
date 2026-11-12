@@ -165,7 +165,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    child: Row(
+                    // Wrap evita el desborde del Row con tres accesos en
+                    // pantallas estrechas.
+                    child: Wrap(
                       children: [
                         TextButton(
                           onPressed: () => context.push('/app/foto'),
@@ -178,6 +180,13 @@ class _HomeShellPageState extends State<HomeShellPage> {
                           onPressed: () => context.push('/app/entrenamientos'),
                           child: const Text(
                             'Entrenamientos',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => context.push('/app/ejercicios'),
+                          child: const Text(
+                            'Ejercicios',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                         ),

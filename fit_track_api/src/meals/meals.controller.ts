@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -28,6 +29,10 @@ import {
   type AuthenticatedRequest,
 } from '../auth/jwt-auth.guard';
 import { CreateMealDto } from './dto/create-meal.dto';
+import {
+  DailyNutritionSummaryDto,
+  DailySummaryQueryDto,
+} from './dto/daily-nutrition-summary.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealResponseDto } from './dto/meal-response.dto';
 import { MealsService } from './meals.service';
@@ -41,14 +46,17 @@ export class MealsController {
 
   @Post()
   @ApiOperation({
-    summary: 'Crea un nuevo registro de comida para el usuario autenticado',
+    summary:
+      'Crea un nuevo registro de comida con alimentos anidados y macros congelados',
   })
   @ApiCreatedResponse({
-    description: 'Comida registrada exitosamente',
+    description:
+      'Comida registrada exitosamente con sus alimentos y totales calculados',
     type: MealResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Datos inválidos o mealType incorrecto (400)',
+    description:
+      'Datos inválidos, mealType incorrecto o macros negativos (400)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',
@@ -75,6 +83,29 @@ export class MealsController {
   findAll(@Req() req: AuthenticatedRequest): Promise<MealResponseDto[]> {
     const userId = this.getUserId(req);
     return this.mealsService.findAll(userId);
+  }
+
+  @Get('summary')
+  @ApiOperation({
+    summary:
+      'Obtiene el resumen diario o por rango de fechas de calorías y macronutrientes desglosado por tipo de comida',
+  })
+  @ApiOkResponse({
+    description: 'Resumen nutricional del usuario autenticado',
+    type: DailyNutritionSummaryDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Parámetros de fecha inválidos (400)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
+  getDailySummary(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: DailySummaryQueryDto,
+  ): Promise<DailyNutritionSummaryDto> {
+    const userId = this.getUserId(req);
+    return this.mealsService.getDailySummary(userId, query);
   }
 
   @Get(':id')

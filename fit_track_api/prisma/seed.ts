@@ -8,14 +8,17 @@ import * as path from 'path';
 interface RawExerciseJson {
   id: string;
   name: string;
-  category: string;
+  name_es?: string;
+  category?: string;
   body_part: string;
   equipment: string;
   target: string;
   muscle_group?: string;
   secondary_muscles?: string[];
+  level?: string;
   instructions_es?: string;
   instruction_steps_es?: string[];
+  common_errors?: string;
   image: string;
   gif: string;
   media_id?: string;
@@ -43,12 +46,21 @@ async function main() {
     const exerciseData = {
       id: item.id,
       name: item.name,
-      imageFile: item.image,
-      gifFile: item.gif,
-      attribution: item.attribution,
+      nameEs: item.name_es ?? null,
+      category: item.category ?? null,
       bodyPart: item.body_part,
       equipment: item.equipment,
       target: item.target,
+      muscleGroup: item.muscle_group ?? null,
+      secondaryMuscles: item.secondary_muscles ?? [],
+      level: item.level ?? null,
+      instructionsEs: item.instructions_es ?? null,
+      instructionStepsEs: item.instruction_steps_es ?? [],
+      commonErrors: item.common_errors ?? null,
+      imageFile: item.image,
+      gifFile: item.gif,
+      mediaId: item.media_id ?? null,
+      attribution: item.attribution,
     };
 
     // Operación idempotente: upsert actualiza si ya existe o inserta si no existe
@@ -56,12 +68,21 @@ async function main() {
       where: { id: exerciseData.id },
       update: {
         name: exerciseData.name,
-        imageFile: exerciseData.imageFile,
-        gifFile: exerciseData.gifFile,
-        attribution: exerciseData.attribution,
+        nameEs: exerciseData.nameEs,
+        category: exerciseData.category,
         bodyPart: exerciseData.bodyPart,
         equipment: exerciseData.equipment,
         target: exerciseData.target,
+        muscleGroup: exerciseData.muscleGroup,
+        secondaryMuscles: exerciseData.secondaryMuscles,
+        level: exerciseData.level,
+        instructionsEs: exerciseData.instructionsEs,
+        instructionStepsEs: exerciseData.instructionStepsEs,
+        commonErrors: exerciseData.commonErrors,
+        imageFile: exerciseData.imageFile,
+        gifFile: exerciseData.gifFile,
+        mediaId: exerciseData.mediaId,
+        attribution: exerciseData.attribution,
       },
       create: exerciseData,
     });
@@ -85,7 +106,7 @@ export async function verifyExercises() {
 
   for (const ex of loadedExercises) {
     console.log(
-      `- [ID: ${ex.id}] ${ex.name} | bodyPart: ${ex.bodyPart} | equipment: ${ex.equipment} | target: ${ex.target} | imageFile: ${ex.imageFile} | gifFile: ${ex.gifFile}`,
+      `- [ID: ${ex.id}] ${ex.name} | bodyPart: ${ex.bodyPart} | muscleGroup: ${ex.muscleGroup ?? 'N/A'} | equipment: ${ex.equipment} | target: ${ex.target} | pasos: ${ex.instructionStepsEs.length} | imageFile: ${ex.imageFile} | gifFile: ${ex.gifFile}`,
     );
   }
 

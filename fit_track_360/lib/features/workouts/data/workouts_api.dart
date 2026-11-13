@@ -23,6 +23,18 @@ class WorkoutsApi {
         .toList();
   }
 
+  Future<WorkoutSession> getById(String id) async {
+    final response = await _client.get(
+      '/api/v1/workouts/${Uri.encodeComponent(id)}',
+    );
+    if (response.statusCode != 200) {
+      throw AuthApiException(apiErrorMessage(response));
+    }
+    return WorkoutSession.fromJson(
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
   Future<WorkoutSession> create({
     required DateTime startedAt,
     String? notes,

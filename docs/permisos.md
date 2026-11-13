@@ -45,12 +45,14 @@ Las versiones se verifican en pub.dev **al integrar cada paquete** (versión vig
 | --- | --- | --- | --- | --- |
 | P1 | `image_picker` | 1.2.4 | Sí (flutter.dev) | Android / iOS |
 | P2 | `geolocator` | Pendiente | Pendiente | Pendiente |
-| P3 | `flutter_local_notifications` + `timezone` | Pendiente | Pendiente | Pendiente |
+| P3 | `flutter_local_notifications` + `timezone` + `flutter_timezone` | 23.0.0 + 0.11.2 + 5.1.1 | Sí (dexterx.dev, labs.dart.dev, wolverinebeach.net) | Android / iOS (evidencia en dispositivo: Pendiente) |
 | Tres estados | `permission_handler` | 13.0.2 | Sí (baseflow.com) | Android / iOS |
-| O1 | `local_auth` | Pendiente | Pendiente | Pendiente |
+| O1 | `local_auth` | 3.0.2 | Sí (flutter.dev) | Android / iOS (evidencia en dispositivo: Pendiente) |
 | O5 | `pedometer` | Pendiente | Pendiente | Pendiente |
 | O7 | `url_launcher` + selector de contacto del sistema | Pendiente | Pendiente | Pendiente |
 | O10 | `share_plus` | Pendiente | Pendiente | Pendiente |
+
+Notas de P3 y O1: `timezone` no detecta la zona del dispositivo, por eso se usa `flutter_timezone` para programar el aviso diario en hora local. El aviso es inexacto (`inexactAllowWhileIdle`) y usa un único id. En iOS, la autorización se pide con `flutter_local_notifications`; una negativa se trata como denegada permanentemente, porque iOS ya no vuelve a mostrar el diálogo. `local_auth` exige `FlutterFragmentActivity` en `MainActivity`.
 
 ## Pendientes antes de H6
 

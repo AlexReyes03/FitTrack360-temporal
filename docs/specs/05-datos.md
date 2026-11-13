@@ -27,6 +27,7 @@ erDiagram
   User ||--o{ Routine : crea
   User ||--o{ WorkoutSession : realiza
   User ||--o{ MealLog : registra
+  User ||--o| UserSettings : configura
   User ||--o{ BodyMetric : captura
   User ||--o{ Photo : sube
 

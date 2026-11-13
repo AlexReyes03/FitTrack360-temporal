@@ -158,6 +158,8 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                    // Wrap evita el desborde del Row con tres accesos en
+                    // pantallas estrechas.
                     child: Wrap(
                       children: [
                         TextButton(
@@ -175,6 +177,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
                           ),
                         ),
                         TextButton(
+                          onPressed: () => context.push('/app/ejercicios'),
+                          child: const Text(
+                            'Ejercicios',
                           onPressed: () => context.push('/app/comidas'),
                           child: const Text(
                             'Comidas',

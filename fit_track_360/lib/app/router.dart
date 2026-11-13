@@ -9,7 +9,11 @@ import '../features/auth/presentation/splash_page.dart';
 import '../features/exercises/presentation/exercise_detail_page.dart';
 import '../features/exercises/presentation/exercises_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
+import '../features/meals/presentation/meals_page.dart';
 import '../features/progress/presentation/progress_photo_page.dart';
+import '../features/workouts/domain/workout_session_draft.dart';
+import '../features/workouts/presentation/workout_detail_page.dart';
+import '../features/settings/presentation/profile_page.dart';
 import '../features/workouts/presentation/workouts_page.dart';
 
 const _authRoutes = {
@@ -56,7 +60,22 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/app/entrenamientos',
-      builder: (context, state) => const WorkoutsPage(),
+      builder: (context, state) => WorkoutsPage(
+        draft: state.extra is WorkoutSessionDraft
+            ? state.extra as WorkoutSessionDraft
+            : null,
+      ),
+    ),
+    GoRoute(
+      path: '/app/entrenamientos/:id',
+      builder: (context, state) =>
+          WorkoutDetailPage(sessionId: state.pathParameters['id']!),
+      path: '/app/perfil',
+      builder: (context, state) => const ProfilePage(),
+    ),
+    GoRoute(
+      path: '/app/comidas',
+      builder: (context, state) => const MealsPage(),
     ),
     GoRoute(
       path: '/app/ejercicios',

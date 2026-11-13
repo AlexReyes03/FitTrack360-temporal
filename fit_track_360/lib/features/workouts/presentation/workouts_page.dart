@@ -10,11 +10,15 @@ import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
 import '../data/workout_session.dart';
 import '../data/workouts_api.dart';
+import '../domain/workout_session_draft.dart';
 
 class WorkoutsPage extends StatefulWidget {
-  const WorkoutsPage({super.key, this.api});
+  const WorkoutsPage({super.key, this.api, this.draft});
 
   final WorkoutsApi? api;
+
+  /// Borrador precargado al iniciar desde una rutina; opcional.
+  final WorkoutSessionDraft? draft;
 
   @override
   State<WorkoutsPage> createState() => _WorkoutsPageState();
@@ -23,10 +27,13 @@ class WorkoutsPage extends StatefulWidget {
 class _WorkoutsPageState extends State<WorkoutsPage> {
   late final ApiClient _client = ApiClient();
   late final WorkoutsApi _api = widget.api ?? WorkoutsApi(_client);
-  final TextEditingController _notesController = TextEditingController();
+  late final TextEditingController _notesController = TextEditingController(
+    text: widget.draft?.notes,
+  );
 
   AsyncState<List<WorkoutSession>> _state = const AsyncLoading();
-  DateTime _startedAt = DateTime.now();
+  late DateTime _startedAt =
+      widget.draft?.startedAt.toLocal() ?? DateTime.now();
   bool _creating = false;
   String? _formError;
 
@@ -115,6 +122,30 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
     return '$day/$month/${local.year} $hour:$minute';
   }
 
+  List<Widget> _draftSection(WorkoutSessionDraft draft) => [
+    if (draft.routineName != null)
+      Text('Rutina: ${draft.routineName}', style: AppTypography.body),
+    const SizedBox(height: 8),
+    for (final exercise in draft.exercises)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(exercise.exerciseName, style: AppTypography.body),
+            ),
+            Text(
+              '${exercise.targetSets} series × ${exercise.targetReps} reps',
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    const SizedBox(height: 16),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return AppScaffoldTemplate(
@@ -124,6 +155,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
           children: [
             Text('Entrenamientos', style: AppTypography.pageTitle),
             const SizedBox(height: 16),
+            if (widget.draft case final draft?) ..._draftSection(draft),
             Text('Notas', style: AppTypography.body),
             const SizedBox(height: 8),
             TextField(
@@ -169,25 +201,29 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   for (final session in sessions)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _format(session.startedAt),
-                            style: AppTypography.body,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            session.notes == null || session.notes!.isEmpty
-                                ? 'Sin notas'
-                                : session.notes!,
-                            style: AppTypography.body.copyWith(
-                              color: AppColors.textSecondary,
+                    InkWell(
+                      onTap: () =>
+                          context.push('/app/entrenamientos/${session.id}'),
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _format(session.startedAt),
+                              style: AppTypography.body,
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              session.notes == null || session.notes!.isEmpty
+                                  ? 'Sin notas'
+                                  : session.notes!,
+                              style: AppTypography.body.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                 ],

@@ -72,25 +72,52 @@ model PasswordResetCode {
 }
 
 model Exercise {
-  id          String @id
-  name        String
-  imageFile   String
-  gifFile     String
-  attribution String
-  bodyPart    String
-  equipment   String
-  target      String
+  id                 String       @id
+  name               String
+  nameEs             String?
+  category           String?
+  bodyPart           String
+  equipment          String
+  target             String
+  muscleGroup        String?
+  secondaryMuscles   String[]     @default([])
+  level              String?
+  instructionsEs     String?
+  instructionStepsEs String[]     @default([])
+  commonErrors       String?
+  imageFile          String
+  gifFile            String
+  mediaId            String?
+  attribution        String
+  workoutSets        WorkoutSet[]
 }
 
 model WorkoutSession {
-  id        String    @id @default(uuid())
+  id        String       @id @default(uuid())
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   startedAt DateTime
   endedAt   DateTime?
+  location  String?
   notes     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  sets      WorkoutSet[]
+}
+
+model WorkoutSet {
+  id         String         @id @default(uuid())
+  sessionId  String
+  session    WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  order      Int
+  weight     Float
+  reps       Int
+  rpe        Float?
+  rir        Int?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 }
 
 enum MealType {
@@ -101,13 +128,29 @@ enum MealType {
 }
 
 model MealLog {
-  id        String   @id @default(uuid())
+  id        String     @id @default(uuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   eatenAt   DateTime
   mealType  MealType
   notes     String?
   photoId   String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     MealItem[]
+}
+
+model MealItem {
+  id        String   @id @default(uuid())
+  mealLogId String
+  mealLog   MealLog  @relation(fields: [mealLogId], references: [id], onDelete: Cascade)
+  fdcId     String?
+  name      String
+  servingG  Float
+  kcal      Float
+  proteinG  Float
+  carbsG    Float
+  fatG      Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

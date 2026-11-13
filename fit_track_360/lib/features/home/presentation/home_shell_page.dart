@@ -11,7 +11,7 @@ import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/app_background.dart';
-import '../../auth/data/auth_api.dart';
+import '../../auth/data/logout_service.dart';
 
 /// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion
 /// revocando el refresh en el API, limpiando storage local y volviendo a login.
@@ -82,16 +82,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
   Future<void> _logout() async {
     setState(() => _loggingOut = true);
-    final refreshToken = await _storage.readRefreshToken();
-    try {
-      if (refreshToken != null) {
-        await logout(refreshToken: refreshToken);
-      }
-    } catch (_) {
-      // Si el API falla, la sesion local se limpia igual.
-    } finally {
-      await _storage.clear();
-    }
+    await LogoutService(storage: _storage).logout();
     if (!mounted) return;
     context.go('/login');
   }
@@ -111,7 +102,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   OfflineBanner(service: _connectivity, onRetry: _loadProfile),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                    child: _Header(onProfileTap: () {}),
+                    child: _Header(
+                      onProfileTap: () => context.push('/app/perfil'),
+                    ),
                   ),
                   Expanded(
                     child: SingleChildScrollView(

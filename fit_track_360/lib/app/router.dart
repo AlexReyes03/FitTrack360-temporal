@@ -8,6 +8,8 @@ import '../features/auth/presentation/reset_password_page.dart';
 import '../features/auth/presentation/splash_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
 import '../features/progress/presentation/progress_photo_page.dart';
+import '../features/routines/presentation/routine_detail_page.dart';
+import '../features/routines/presentation/routines_page.dart';
 import '../features/workouts/presentation/workouts_page.dart';
 
 const _authRoutes = {
@@ -55,6 +57,15 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/app/entrenamientos',
       builder: (context, state) => const WorkoutsPage(),
+    ),
+    GoRoute(
+      path: '/app/rutinas',
+      builder: (context, state) => const RoutinesPage(),
+    ),
+    GoRoute(
+      path: '/app/rutinas/:id',
+      builder: (context, state) =>
+          RoutineDetailPage(routineId: state.pathParameters['id']!),
     ),
   ],
 );

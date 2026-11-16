@@ -63,7 +63,11 @@ package-lock.json
 **/.fvm/
 **/flutter_export_environment.sh
 
+# =========================
+# Documentación
+# =========================
 .cursor/
 /docs/context/
 /docs/task-planning/
 /docs/tasks/
+/docs/my-tasks/

@@ -56,7 +56,8 @@ class FakeWorkoutsRepository implements WorkoutsRepository {
 
 class FakeSessionStorage implements SessionStorage {
   @override
-  Future<String?> readAccessToken() async => 'access';
+  Future<String?> readAccessToken({bool forceRefresh = false}) async =>
+      'access';
 
   @override
   Future<String?> readRefreshToken() async => null;

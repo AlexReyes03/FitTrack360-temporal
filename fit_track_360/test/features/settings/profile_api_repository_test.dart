@@ -106,14 +106,14 @@ void main() {
   });
 
   group('LogoutService', () {
-    test('revoca el refresh y limpia la sesión', () async {
+    test('revoca el ID token y limpia la sesión', () async {
       final storage = FakeSessionStorage();
       String? revoked;
       await LogoutService(
         storage: storage,
-        revoke: ({required refreshToken}) async => revoked = refreshToken,
+        revoke: ({required idToken}) async => revoked = idToken,
       ).logout();
-      expect(revoked, 'refresh');
+      expect(revoked, 'access');
       expect(storage.accessToken, isNull);
     });
 
@@ -121,7 +121,7 @@ void main() {
       final storage = FakeSessionStorage();
       await LogoutService(
         storage: storage,
-        revoke: ({required refreshToken}) async => throw Exception('sin red'),
+        revoke: ({required idToken}) async => throw Exception('sin red'),
       ).logout();
       expect(storage.accessToken, isNull);
       expect(storage.refreshToken, isNull);

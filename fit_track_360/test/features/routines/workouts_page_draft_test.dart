@@ -10,6 +10,9 @@ class _FakeWorkoutsApi implements WorkoutsApi {
   Future<List<WorkoutSession>> list() async => const [];
 
   @override
+  Future<WorkoutSession> getById(String id) => throw UnimplementedError();
+
+  @override
   Future<WorkoutSession> create({required DateTime startedAt, String? notes}) =>
       throw UnimplementedError();
 }

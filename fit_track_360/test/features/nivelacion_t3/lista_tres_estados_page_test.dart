@@ -15,8 +15,10 @@ void main() {
 
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
+    // Avanza el delay del repo falso y aplica el setState (evita pumpAndSettle
+    // con CircularProgressIndicator, que nunca "asienta").
     await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.textContaining('No se pudieron cargar'), findsOneWidget);
     expect(find.text('Reintentar'), findsOneWidget);
@@ -26,7 +28,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+    await tester.pump();
 
     expect(find.text('Avena con fruta'), findsOneWidget);
     expect(find.byType(Card), findsWidgets);

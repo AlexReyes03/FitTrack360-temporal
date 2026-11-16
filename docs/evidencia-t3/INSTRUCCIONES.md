@@ -1,19 +1,26 @@
 # Evidencias Nivelación T3
 
-En el entorno de generación de esta entrega **no estaba disponible el SDK de Flutter**
-(`flutter.sdk=C:\src\flutter` en `android/local.properties`, pero esa ruta no existe).
-Por eso **no se generaron capturas PNG reales** desde esta sesión.
+Capturas auténticas generadas con el widget real `ListaTresEstadosPage`
+(`RepaintBoundary.toImage` vía `captura_evidencia_t3_test.dart`).
 
-## Cómo obtener las evidencias
+| Archivo | Estado |
+|---------|--------|
+| `01-cargando.png` | Cargando (`CircularProgressIndicator`) |
+| `02-error-reintentar.png` | Error legible + botón **Reintentar** |
+| `03-lista-exito.png` | Lista de `Card` (≥5 comidas) |
 
-1. Instala o restaura Flutter y apunta `flutter.sdk` a la ruta correcta.
-2. En `fit_track_360/`:
-   - `flutter pub get`
-   - `flutter run` (emulador o dispositivo)
-3. Inicia sesión y en el Home pulsa **Nivelacion T3**.
-4. Captura:
-   - `01-cargando.png` — spinner durante los ~2 s de la primera carga (o al pulsar Reintentar).
-   - `02-error-reintentar.png` — mensaje en español + botón **Reintentar** (primera llamada).
-   - `03-lista-exito.png` — lista de tarjetas con ≥5 comidas tras reintentar.
+## Cómo regenerar
 
-Guarda los tres PNG en este mismo directorio (`docs/evidencia-t3/`).
+```bat
+cd fit_track_360
+flutter test test/features/nivelacion_t3/captura_evidencia_t3_test.dart
+```
+
+## Demo en Chrome
+
+```bat
+flutter run -d chrome -t lib/main_t3_demo.dart
+```
+
+En la app completa (tras login o sin sesión): ruta `/app/nivelacion-t3`
+o botón **Nivelacion T3** en el Home.

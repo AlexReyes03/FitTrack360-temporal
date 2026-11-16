@@ -8,7 +8,7 @@ import '../domain/comida_demo.dart';
 ///
 /// Solo usa StatefulWidget y setState (sin Provider/Bloc/Riverpod).
 class ListaTresEstadosPage extends StatefulWidget {
-  const ListaTresEstadosPage({super.key, ComidasRepositorioFalso? repositorio});
+  const ListaTresEstadosPage({super.key, this.repositorio});
 
   final ComidasRepositorioFalso? repositorio;
 

@@ -35,7 +35,11 @@ final appRouter = GoRouter(
     final location = state.matchedLocation;
     final hasSession = accessToken != null;
 
-    if (!hasSession && location.startsWith('/app')) return '/login';
+    // La pantalla de nivelacion T3 se puede abrir sin sesion para demo/defensa.
+    final isNivelacionT3 = location == '/app/nivelacion-t3';
+    if (!hasSession && location.startsWith('/app') && !isNivelacionT3) {
+      return '/login';
+    }
     if (hasSession && _authRoutes.contains(location)) return '/app';
     return null;
   },

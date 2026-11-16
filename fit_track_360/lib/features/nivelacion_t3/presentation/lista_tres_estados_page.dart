@@ -37,9 +37,10 @@ class _ListaTresEstadosPageState extends State<ListaTresEstadosPage> {
       setState(() => _estado = Exito(comidas));
     } catch (_) {
       if (!mounted) return;
-      setState(
+        setState(
         () => _estado = const Error(
-          'No se pudieron cargar las comidas. Revisa tu conexion e intenta de nuevo.',
+          'No se pudieron cargar las comidas.\n'
+          'Revisa tu conexion e intenta de nuevo.',
         ),
       );
     }

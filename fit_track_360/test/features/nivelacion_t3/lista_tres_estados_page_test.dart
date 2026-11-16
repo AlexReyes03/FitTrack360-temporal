@@ -20,7 +20,7 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pump();
 
-    expect(find.textContaining('No se pudieron cargar'), findsOneWidget);
+    expect(find.textContaining('No se pudieron cargar las comidas'), findsOneWidget);
     expect(find.text('Reintentar'), findsOneWidget);
 
     await tester.tap(find.text('Reintentar'));

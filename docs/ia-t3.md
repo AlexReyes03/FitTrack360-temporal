@@ -45,7 +45,8 @@
 | `flutter analyze` (archivos T3) | 0 errors; 1 info deprecación `material.dart` (global en 3.50) |
 | `flutter test .../lista_tres_estados_page_test.dart` | PASSED |
 | `flutter test .../captura_evidencia_t3_test.dart` | PASSED → PNG en `docs/evidencia-t3/` |
-| `flutter run -d chrome -t lib/main_t3_demo.dart --web-port=7357` | OK (app en Chrome, banner DEBUG) |
+| `flutter run -d chrome -t lib/main.dart --web-port=7357` | OK; ruta `/#/app/nivelacion-t3` |
+| Evidencias PNG desde Chrome (ventana real) | OK: `docs/evidencia-t3/01..03-*.png` legibles |
 
 ## Bloques marcados con `// IA:`
 

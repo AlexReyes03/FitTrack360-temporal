@@ -11,7 +11,8 @@ class FakeSessionStorage implements SessionStorage {
   String? refreshToken;
 
   @override
-  Future<String?> readAccessToken() async => accessToken;
+  Future<String?> readAccessToken({bool forceRefresh = false}) async =>
+      accessToken;
 
   @override
   Future<String?> readRefreshToken() async => refreshToken;

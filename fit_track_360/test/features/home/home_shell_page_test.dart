@@ -34,7 +34,8 @@ class FakeSessionStorage implements SessionStorage {
   String? refreshToken;
 
   @override
-  Future<String?> readAccessToken() async => accessToken;
+  Future<String?> readAccessToken({bool forceRefresh = false}) async =>
+      accessToken;
 
   @override
   Future<String?> readRefreshToken() async => refreshToken;
@@ -227,7 +228,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Cerrar sesion'));
+    await tester.tap(find.text('Cerrar sesión'));
     await tester.pumpAndSettle();
 
     expect(find.text('Pantalla login'), findsOneWidget);

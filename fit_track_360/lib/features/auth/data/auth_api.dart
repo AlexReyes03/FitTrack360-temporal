@@ -7,23 +7,29 @@ const apiBaseUrl = String.fromEnvironment(
   defaultValue: 'http://10.0.2.2:3000',
 );
 
-/// Tokens devueltos por el API en register, login y refresh.
-class AuthTokens {
-  final String accessToken;
-  final String refreshToken;
-  final int expiresIn;
+/// Perfil sincronizado por Nest tras register/session (sin tokens propios).
+class AuthUser {
+  final String id;
+  final String email;
+  final String username;
+  final String displayName;
+  final String firebaseUid;
 
-  const AuthTokens({
-    required this.accessToken,
-    required this.refreshToken,
-    required this.expiresIn,
+  const AuthUser({
+    required this.id,
+    required this.email,
+    required this.username,
+    required this.displayName,
+    required this.firebaseUid,
   });
 
-  factory AuthTokens.fromJson(Map<String, dynamic> json) {
-    return AuthTokens(
-      accessToken: json['accessToken'] as String,
-      refreshToken: json['refreshToken'] as String,
-      expiresIn: json['expiresIn'] as int,
+  factory AuthUser.fromJson(Map<String, dynamic> json) {
+    return AuthUser(
+      id: json['id'] as String,
+      email: json['email'] as String,
+      username: json['username'] as String,
+      displayName: json['displayName'] as String,
+      firebaseUid: json['firebaseUid'] as String,
     );
   }
 }
@@ -52,8 +58,6 @@ class UserProfile {
   }
 }
 
-/// Normaliza el mensaje de error del API: une listas de class-validator con
-/// espacio, o devuelve un mensaje de red generico si no hay JSON.
 String apiErrorMessage(http.Response response) {
   try {
     final body = jsonDecode(utf8.decode(response.bodyBytes));
@@ -61,7 +65,7 @@ String apiErrorMessage(http.Response response) {
     if (message is List) return message.join(' ');
     if (message is String) return message;
   } catch (_) {
-    // Sin JSON util: cae al mensaje por defecto.
+    // Sin JSON util.
   }
   return 'No se pudo conectar';
 }
@@ -69,21 +73,24 @@ String apiErrorMessage(http.Response response) {
 Map<String, dynamic> _decodeBody(http.Response response) =>
     jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
-Future<AuthTokens> register({
+Map<String, String> _bearerHeaders(String idToken) => {
+  'Content-Type': 'application/json',
+  'Authorization': 'Bearer $idToken',
+};
+
+/// Crea el User en PostgreSQL tras el registro en Firebase Auth.
+Future<AuthUser> syncRegister({
+  required String idToken,
   required String username,
-  required String email,
-  required String password,
   required String displayName,
   required bool privacyConsent,
   required String privacyNoticeVersion,
 }) async {
   final response = await http.post(
     Uri.parse('$apiBaseUrl/api/v1/auth/register'),
-    headers: const {'Content-Type': 'application/json'},
+    headers: _bearerHeaders(idToken),
     body: jsonEncode({
       'username': username,
-      'email': email,
-      'password': password,
       'displayName': displayName,
       'privacyConsent': privacyConsent,
       'privacyNoticeVersion': privacyNoticeVersion,
@@ -92,68 +99,27 @@ Future<AuthTokens> register({
   if (response.statusCode != 201) {
     throw AuthApiException(apiErrorMessage(response));
   }
-  return AuthTokens.fromJson(_decodeBody(response));
+  return AuthUser.fromJson(_decodeBody(response));
 }
 
-Future<AuthTokens> login({
-  required String email,
-  required String password,
-}) async {
+/// Resuelve el User existente tras login Firebase.
+Future<AuthUser> syncSession({required String idToken}) async {
   final response = await http.post(
-    Uri.parse('$apiBaseUrl/api/v1/auth/login'),
-    headers: const {'Content-Type': 'application/json'},
-    body: jsonEncode({'email': email, 'password': password}),
+    Uri.parse('$apiBaseUrl/api/v1/auth/session'),
+    headers: _bearerHeaders(idToken),
   );
   if (response.statusCode != 200) {
     throw AuthApiException(apiErrorMessage(response));
   }
-  return AuthTokens.fromJson(_decodeBody(response));
+  return AuthUser.fromJson(_decodeBody(response));
 }
 
-Future<AuthTokens> refreshTokens({required String refreshToken}) async {
-  final response = await http.post(
-    Uri.parse('$apiBaseUrl/api/v1/auth/refresh'),
-    headers: const {'Content-Type': 'application/json'},
-    body: jsonEncode({'refreshToken': refreshToken}),
-  );
-  if (response.statusCode != 200) {
-    throw AuthApiException(apiErrorMessage(response));
-  }
-  return AuthTokens.fromJson(_decodeBody(response));
-}
-
-Future<void> logout({required String refreshToken}) async {
+Future<void> revokeRemoteSession({required String idToken}) async {
   final response = await http.post(
     Uri.parse('$apiBaseUrl/api/v1/auth/logout'),
-    headers: const {'Content-Type': 'application/json'},
-    body: jsonEncode({'refreshToken': refreshToken}),
+    headers: _bearerHeaders(idToken),
   );
   if (response.statusCode != 200 && response.statusCode != 204) {
-    throw AuthApiException(apiErrorMessage(response));
-  }
-}
-
-Future<void> forgotPassword({required String email}) async {
-  final response = await http.post(
-    Uri.parse('$apiBaseUrl/api/v1/auth/password/forgot'),
-    headers: const {'Content-Type': 'application/json'},
-    body: jsonEncode({'email': email}),
-  );
-  if (response.statusCode != 200) {
-    throw AuthApiException(apiErrorMessage(response));
-  }
-}
-
-Future<void> resetPassword({
-  required String code,
-  required String password,
-}) async {
-  final response = await http.post(
-    Uri.parse('$apiBaseUrl/api/v1/auth/password/reset'),
-    headers: const {'Content-Type': 'application/json'},
-    body: jsonEncode({'code': code, 'password': password}),
-  );
-  if (response.statusCode != 200) {
     throw AuthApiException(apiErrorMessage(response));
   }
 }

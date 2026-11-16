@@ -14,7 +14,7 @@ import '../../../design_system/widgets/app_background.dart';
 import '../../auth/data/logout_service.dart';
 
 /// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion
-/// revocando el refresh en el API, limpiando storage local y volviendo a login.
+/// (Firebase + revocacion Nest), volviendo a login.
 /// Muestra [OfflineBanner] sin red y recarga el perfil al recuperarla.
 class HomeShellPage extends StatefulWidget {
   const HomeShellPage({
@@ -34,9 +34,9 @@ class HomeShellPage extends StatefulWidget {
 }
 
 class _HomeShellPageState extends State<HomeShellPage> {
-  late final ApiClient _api = widget.apiClient ?? ApiClient();
   late final SessionStorage _storage =
-      widget.sessionStorage ?? SessionStorage();
+      widget.sessionStorage ?? appSessionStorage;
+  late final ApiClient _api = widget.apiClient ?? ApiClient(storage: _storage);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
   StreamSubscription<bool>? _connectivitySubscription;
@@ -62,8 +62,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
   }
 
   Future<void> _loadProfile() async {
-    // Dos cargas simultaneas con el access vencido harian dos refresh; el
-    // segundo usaria un token ya revocado y cerraria la sesion.
+    // Dos cargas simultaneas con ID token vencido fuerzan un solo refresh.
     if (_loadingProfile || _loggingOut) return;
     _loadingProfile = true;
     try {
@@ -180,9 +179,20 @@ class _HomeShellPageState extends State<HomeShellPage> {
                           onPressed: () => context.push('/app/ejercicios'),
                           child: const Text(
                             'Ejercicios',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
                           onPressed: () => context.push('/app/comidas'),
                           child: const Text(
                             'Comidas',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => context.push('/app/perfil'),
+                          child: const Text(
+                            'Perfil',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                         ),

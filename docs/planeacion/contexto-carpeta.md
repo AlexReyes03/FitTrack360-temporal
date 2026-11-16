@@ -1,6 +1,6 @@
 # Planeación de FitTrack360
 
-Este directorio centraliza la documentación de planeación de FitTrack360, incluyendo el caso de estudio, la estrategia de versionamiento y la arquitectura de alto nivel. Su contenido sirve como referencia para el desarrollo y seguimiento del proyecto, así como para las evidencias correspondientes a la Unidad I.
+Este directorio centraliza el índice de evidencia de planeación de FitTrack360, incluyendo el caso de estudio, la estrategia de versionamiento y la arquitectura de alto nivel. Su contenido sirve como referencia para el desarrollo y seguimiento del proyecto, así como para las evidencias correspondientes a la Unidad I.
 
 ## Índice
 

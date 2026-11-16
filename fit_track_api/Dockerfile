@@ -10,10 +10,10 @@ COPY package.json nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY prisma ./prisma
 
-RUN printf 'nodeLinker: hoisted\nallowBuilds:\n  "@parcel/watcher": true\n  unrs-resolver: true\n  prisma: true\n  "@prisma/client": true\n  "@prisma/engines": true\n  "@node-rs/argon2": true\n  "@scarf/scarf": false\n' > pnpm-workspace.yaml \
+RUN printf 'nodeLinker: hoisted\nallowBuilds:\n  "@parcel/watcher": true\n  unrs-resolver: true\n  prisma: true\n  "@prisma/client": true\n  "@prisma/engines": true\n  "@node-rs/argon2": true\n  "@firebase/util": true\n  protobufjs: true\n  "@scarf/scarf": false\n' > pnpm-workspace.yaml \
   && printf 'node-linker=hoisted\npackage-import-method=copy\n' > .npmrc \
   && pnpm install --ignore-scripts --no-frozen-lockfile \
-  && pnpm rebuild prisma @prisma/client @prisma/engines @node-rs/argon2 \
+  && pnpm rebuild prisma @prisma/client @prisma/engines @node-rs/argon2 @firebase/util protobufjs \
   && pnpm exec prisma generate \
   && pnpm run build \
   && cp -a node_modules/.prisma /tmp/prisma-generated \

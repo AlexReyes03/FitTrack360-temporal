@@ -43,7 +43,7 @@ flowchart TD
 
 ### Descripción de componentes (8 nodos)
 1. **App Móvil Flutter (`fit_track_360`):** Cliente para Android e iOS desarrollado en Flutter que proporciona la interfaz de usuario bajo Atomic Design y orquesta la lógica de presentación con MVVM.
-2. **API Gateway, Pipes y Guards (NestJS):** Punto de entrada del backend que gestiona el enrutamiento `/api/v1`, valida DTOs de entrada con `class-validator`, aplica limitación de tasa (*rate limit*) y verifica tokens JWT con `JwtAuthGuard`.
+2. **API Gateway, Pipes y Guards (NestJS):** Punto de entrada del backend que gestiona el enrutamiento `/api/v1`, valida DTOs de entrada con `class-validator`, aplica limitación de tasa (*rate limit*) y verifica ID tokens de Firebase Auth con `FirebaseAuthGuard` (exportado también como `JwtAuthGuard`).
 3. **Servicios de Dominio (NestJS Services):** Módulos que encapsulan las reglas de negocio para autenticación, gestión de entrenamientos, conteo de macronutrientes y proxies a servicios externos.
 4. **Prisma ORM y Capa de Repositorios:** Abstracción tipada para la construcción de consultas SQL seguras con protección automática contra inyecciones SQL y soporte para migraciones versionadas.
 5. **Base de Datos PostgreSQL:** Motor de base de datos relacional que garantiza persistencia transaccional (ACID) para usuarios, historiales de ejercicio, métricas corporales y catálogo base.
@@ -71,16 +71,18 @@ flowchart TD
 ## 5. Cómo se aísla el sistema (Seguridad y Privacidad)
 
 ### Autenticación y Autorización
-- **Tokens criptográficos JWT:**
-  - Token de acceso (*Access Token*): Vida útil corta de **15 minutos**, firmado con clave secreta asimétrica o HMAC-SHA256 (`JWT_ACCESS_SECRET`).
-  - Token de refresco (*Refresh Token*): Vida útil de **7 días** (`JWT_REFRESH_SECRET`), almacenado en PostgreSQL hasheado en la tabla `RefreshToken` y sujeto a rotación obligatoria en cada solicitud de refresco. Al cerrar sesión (*logout*), el token se revoca inmediatamente.
+- **Firebase Auth (ID token):**
+  - Flutter inicia sesión con Firebase Auth; el SDK renueva el ID token.
+  - Nest verifica el Bearer con `firebase-admin` y resuelve `User` por `firebaseUid`.
+  - `POST /auth/register` crea el perfil en PostgreSQL; `POST /auth/session` lo resuelve tras login.
+  - Logout: `signOut` en Flutter y, si hay red, `POST /auth/logout` revoca refresh tokens en Firebase Admin.
 - **Autorización por propiedad (`userId`):**
   - Todas las consultas de lectura, actualización y borrado en `WorkoutSession`, `MealLog`, `BodyMetric` y `Photo` incluyen obligatoriamente el predicado `where: { id, userId: req.user.id }`.
   - Si un usuario solicita un identificador que no le pertenece, el servicio lanza un `NotFoundException` (Regla S4), asegurando que un atacante no pueda inferir la existencia de registros de otros usuarios.
 
 ### Protección de secretos y variables de entorno
-- Los secretos (`DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `USDA_FDC_API_KEY`) residen exclusivamente en variables de entorno inyectadas por Docker o archivos locales `.env` no versionados.
-- El cliente móvil Flutter nunca almacena secretos de backend ni llaves de API externas; únicamente preserva los tokens JWT propios de la sesión del usuario en `flutter_secure_storage`.
+- Los secretos (`DATABASE_URL`, `FIREBASE_PRIVATE_KEY` / service account, `USDA_FDC_API_KEY`) residen exclusivamente en variables de entorno o archivos locales no versionados.
+- El cliente móvil Flutter no guarda secretos de backend; la sesión la mantiene Firebase Auth (ID token en memoria del SDK).
 
 ### Privacidad y Cumplimiento Normativo (LFPDPPP y Derechos ARCO)
 - **Consentimiento informado:** Se registra en la base de datos la fecha y hora exacta (`privacyConsentAt`) y la versión aceptada (`privacyNoticeVersion`) al momento de crear la cuenta.

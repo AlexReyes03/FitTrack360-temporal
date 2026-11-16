@@ -1,16 +1,15 @@
 import { INestApplication } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { configureApp } from '../../src/app.setup';
+import { FIREBASE_TOKEN_VERIFIER } from '../../src/auth/firebase-token.verifier';
+import { MockFirebaseTokenVerifier } from '../../src/auth/firebase-token.verifier';
 import { PrismaModule } from '../../src/prisma/prisma.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { UsersModule } from '../../src/users/users.module';
-import { createUsersStore, sampleUsers } from './users.fakes';
-
-const SECRET = 'secreto-de-prueba';
+import { createUsersStore, mockIdToken, sampleUsers } from './users.fakes';
 
 describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
   let app: INestApplication<App>;
@@ -20,12 +19,17 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
 
   beforeEach(async () => {
     store = createUsersStore(sampleUsers());
+    anaToken = mockIdToken('firebase-ana', 'ana@test.com');
+    betoToken = mockIdToken('firebase-beto', 'beto@test.com');
+
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
           ignoreEnvFile: true,
-          load: [() => ({ JWT_ACCESS_SECRET: SECRET, SMTP_HOST: 'localhost' })],
+          load: [
+            () => ({ FIREBASE_AUTH_MODE: 'mock', SMTP_HOST: 'localhost' }),
+          ],
         }),
         PrismaModule,
         UsersModule,
@@ -33,13 +37,12 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(store)
+      .overrideProvider(FIREBASE_TOKEN_VERIFIER)
+      .useValue(new MockFirebaseTokenVerifier())
       .compile();
     app = moduleRef.createNestApplication<INestApplication<App>>();
     configureApp(app);
     await app.init();
-    const jwt = new JwtService({ secret: SECRET });
-    anaToken = await jwt.signAsync({ sub: 'user-ana' });
-    betoToken = await jwt.signAsync({ sub: 'user-beto' });
   });
 
   afterEach(async () => {

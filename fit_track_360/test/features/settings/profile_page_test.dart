@@ -49,7 +49,7 @@ Future<void> _pump(WidgetTester tester, _Deps deps) async {
           connectivityService: deps.connectivity,
           logoutService: LogoutService(
             storage: deps.storage,
-            revoke: ({required refreshToken}) async {
+            revoke: ({required idToken}) async {
               if (deps.revokeFails) throw Exception('sin red');
             },
           ),

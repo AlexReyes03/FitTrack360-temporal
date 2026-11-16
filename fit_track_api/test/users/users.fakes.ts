@@ -1,13 +1,14 @@
 /**
  * Almacén en memoria que sustituye a Prisma para las pruebas de perfil.
- * Solo implementa las operaciones que usa UsersService.
+ * Solo implementa las operaciones que usa UsersService y FirebaseAuthGuard.
  */
 export interface StoredUser {
   id: string;
+  firebaseUid: string;
   email: string;
   username: string;
   displayName: string;
-  passwordHash: string;
+  passwordHash: string | null;
 }
 
 export type StoredSettings = Record<string, unknown> & { userId: string };
@@ -17,6 +18,7 @@ export function createUsersStore(users: StoredUser[]) {
 
   const pick = (user: StoredUser) => ({
     id: user.id,
+    firebaseUid: user.firebaseUid,
     email: user.email,
     username: user.username,
     displayName: user.displayName,
@@ -26,8 +28,24 @@ export function createUsersStore(users: StoredUser[]) {
     users,
     settings,
     user: {
-      findUnique: ({ where }: { where: { id: string } }) => {
-        const user = users.find((u) => u.id === where.id);
+      findUnique: ({
+        where,
+      }: {
+        where: {
+          id?: string;
+          firebaseUid?: string;
+          email?: string;
+          username?: string;
+        };
+      }) => {
+        const user = users.find(
+          (u) =>
+            (where.id !== undefined && u.id === where.id) ||
+            (where.firebaseUid !== undefined &&
+              u.firebaseUid === where.firebaseUid) ||
+            (where.email !== undefined && u.email === where.email) ||
+            (where.username !== undefined && u.username === where.username),
+        );
         return Promise.resolve(user ? pick(user) : null);
       },
       update: ({
@@ -76,17 +94,24 @@ export function sampleUsers(): StoredUser[] {
   return [
     {
       id: 'user-ana',
+      firebaseUid: 'firebase-ana',
       email: 'ana@test.com',
       username: 'ana',
       displayName: 'Ana',
-      passwordHash: 'hash-secreto-ana',
+      passwordHash: null,
     },
     {
       id: 'user-beto',
+      firebaseUid: 'firebase-beto',
       email: 'beto@test.com',
       username: 'beto',
       displayName: 'Beto',
-      passwordHash: 'hash-secreto-beto',
+      passwordHash: null,
     },
   ];
+}
+
+/** Token mock aceptado por MockFirebaseTokenVerifier. */
+export function mockIdToken(firebaseUid: string, email: string): string {
+  return `mock:${firebaseUid}:${email}`;
 }

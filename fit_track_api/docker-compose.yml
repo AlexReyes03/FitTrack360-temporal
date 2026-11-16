@@ -35,8 +35,10 @@ services:
     environment:
       PORT: ${PORT:-3000}
       DATABASE_URL: postgresql://${POSTGRES_USER:-fittrack}:${POSTGRES_PASSWORD:-fittrack_dev_password}@postgres:5432/${POSTGRES_DB:-fittrack_db}
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me}
+      FIREBASE_AUTH_MODE: ${FIREBASE_AUTH_MODE:-admin}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      FIREBASE_CLIENT_EMAIL: ${FIREBASE_CLIENT_EMAIL:-}
+      FIREBASE_PRIVATE_KEY: ${FIREBASE_PRIVATE_KEY:-}
       SMTP_HOST: mailpit
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}

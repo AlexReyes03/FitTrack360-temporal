@@ -142,19 +142,17 @@ docker compose up -d
 
 El servicio `api` habla con Postgres por el hostname `postgres` y con Mailpit por `mailpit`. Esas direcciones solo existen dentro de la red del compose.
 
-## Auth, correo local y archivos
+## Auth (Firebase), correo local y archivos
 
-Endpoints nuevos bajo el prefijo `api/v1`:
+Identidad con **Firebase Auth**; dominio en PostgreSQL. Prefijo `api/v1`:
 
-- `POST /auth/refresh` y `POST /auth/logout`.
-- `GET /users/me` con Bearer access token.
-- `POST /auth/password/forgot` y `POST /auth/password/reset`.
-- `POST /storage/files`, `GET /storage/files/:id` y `DELETE /storage/files/:id` con Bearer access token.
+- `POST /auth/register` y `POST /auth/session` con Bearer = ID token de Firebase.
+- `POST /auth/logout` revoca refresh tokens en Firebase Admin (opcional si hay red).
+- `GET /users/me` y storage con el mismo Bearer.
+- Variables: `FIREBASE_AUTH_MODE`, `FIREBASE_PROJECT_ID`, credenciales de service account (ver `.env.example` y `docs/task-planning/firebase-auth-manual-checklist.md`).
+- Tests/CI: `FIREBASE_AUTH_MODE=mock` y tokens `mock:<uid>:<email>`.
 
-El correo de recuperacion usa SMTP hacia Mailpit (`SMTP_PORT=1025`, sin TLS).
-Dentro del compose el host es el servicio `mailpit`. Si el API corre en el host,
-usa `127.0.0.1` y la interfaz en http://localhost:8025. Si SMTP no responde,
-`password/forgot` responde 200 sin enviar correo.
+Mailpit sigue disponible para SMTP local; el reset de contraseña lo envía Firebase.
 
 Los archivos se guardan en `UPLOAD_DIR` (por defecto `./uploads`, ignorado por git).
 Cada usuario solo puede leer o borrar sus propios archivos; un id ajeno responde 404.

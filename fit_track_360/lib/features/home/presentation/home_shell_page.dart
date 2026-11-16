@@ -180,9 +180,20 @@ class _HomeShellPageState extends State<HomeShellPage> {
                           onPressed: () => context.push('/app/ejercicios'),
                           child: const Text(
                             'Ejercicios',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
                           onPressed: () => context.push('/app/comidas'),
                           child: const Text(
                             'Comidas',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () => context.push('/app/nivelacion-t3'),
+                          child: const Text(
+                            'Nivelacion T3',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                         ),

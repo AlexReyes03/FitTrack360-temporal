@@ -10,6 +10,7 @@ import '../features/exercises/presentation/exercise_detail_page.dart';
 import '../features/exercises/presentation/exercises_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
 import '../features/meals/presentation/meals_page.dart';
+import '../features/nivelacion_t3/presentation/lista_tres_estados_page.dart';
 import '../features/progress/presentation/progress_photo_page.dart';
 import '../features/workouts/domain/workout_session_draft.dart';
 import '../features/workouts/presentation/workout_detail_page.dart';
@@ -70,6 +71,8 @@ final appRouter = GoRouter(
       path: '/app/entrenamientos/:id',
       builder: (context, state) =>
           WorkoutDetailPage(sessionId: state.pathParameters['id']!),
+    ),
+    GoRoute(
       path: '/app/perfil',
       builder: (context, state) => const ProfilePage(),
     ),
@@ -85,6 +88,10 @@ final appRouter = GoRouter(
       path: '/app/ejercicios/:id',
       builder: (context, state) =>
           ExerciseDetailPage(exerciseId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/app/nivelacion-t3',
+      builder: (context, state) => const ListaTresEstadosPage(),
     ),
   ],
 );

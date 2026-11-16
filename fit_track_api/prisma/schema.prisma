@@ -9,9 +9,12 @@ datasource db {
 
 model User {
   id                   String              @id @default(uuid())
+  /// UID de Firebase Auth. Obligatorio para cuentas nuevas (AUTH-01).
+  firebaseUid          String?             @unique
   email                String              @unique
   username             String              @unique
-  passwordHash         String
+  /// En desuso tras Firebase Auth; se conserva nullable por wipe 2A.
+  passwordHash         String?
   displayName          String
   privacyConsentAt     DateTime
   privacyNoticeVersion String

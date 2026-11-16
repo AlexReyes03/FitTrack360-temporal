@@ -38,10 +38,14 @@
 
 | Prueba | Resultado |
 |--------|-----------|
-| Creación de rama y 3+ commits locales | Sí (ver `git log` en `feat/lista-tres-estados`) |
-| `flutter pub get` / `flutter analyze` / `flutter test` / `flutter run` | **No ejecutados:** el SDK configurado (`C:\src\flutter`) no existe en esta máquina |
-| Capturas de los tres estados | **Pendientes** (ver `docs/evidencia-t3/INSTRUCCIONES.md`) |
-| Revisión estática del código T3 en el editor | Sí (archivos creados y cableados) |
+| Creación de rama y commits locales | Sí (`feat/lista-tres-estados`) |
+| Instalación Flutter | Sí: clone oficial `stable` en `C:\src\flutter` (3.50.0 / Dart 3.14.0) + PATH usuario |
+| `flutter doctor -v` | Flutter OK; Chrome OK; Android licenses pendientes; VS C++ ausente |
+| `flutter pub get` | OK |
+| `flutter analyze` (archivos T3) | 0 errors; 1 info deprecación `material.dart` (global en 3.50) |
+| `flutter test .../lista_tres_estados_page_test.dart` | PASSED |
+| `flutter test .../captura_evidencia_t3_test.dart` | PASSED → PNG en `docs/evidencia-t3/` |
+| `flutter run -d chrome -t lib/main_t3_demo.dart --web-port=7357` | OK (app en Chrome, banner DEBUG) |
 
 ## Bloques marcados con `// IA:`
 

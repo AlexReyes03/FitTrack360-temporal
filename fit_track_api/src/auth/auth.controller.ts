@@ -1,18 +1,21 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  Post,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { AuthResponseDto } from './dto/auth-response.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { LoginDto } from './dto/login.dto';
-import { LogoutDto } from './dto/logout.dto';
-import { RefreshDto } from './dto/refresh.dto';
+import { AuthUserDto } from './dto/auth-response.dto';
 import { RegisterDto } from './dto/register.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -21,51 +24,50 @@ export class AuthController {
 
   @Post('register')
   @HttpCode(201)
-  @ApiOperation({ summary: 'Registra un usuario y emite tokens' })
-  @ApiOkResponse({ type: AuthResponseDto })
-  register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
-    return this.authService.register(dto);
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Sincroniza un usuario nuevo de Firebase Auth con PostgreSQL (Bearer = ID token)',
+  })
+  @ApiOkResponse({ type: AuthUserDto })
+  register(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() dto: RegisterDto,
+  ): Promise<AuthUserDto> {
+    return this.authService.register(this.extractBearer(authorization), dto);
   }
 
-  @Post('login')
+  @Post('session')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Inicia sesion y emite tokens' })
-  @ApiOkResponse({ type: AuthResponseDto })
-  login(@Body() dto: LoginDto): Promise<AuthResponseDto> {
-    return this.authService.login(dto);
-  }
-
-  @Post('refresh')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Rota el refresh token y emite un par nuevo' })
-  @ApiOkResponse({ type: AuthResponseDto })
-  refresh(@Body() dto: RefreshDto): Promise<AuthResponseDto> {
-    return this.authService.refresh(dto);
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Resuelve el User de PostgreSQL tras login Firebase (Bearer = ID token)',
+  })
+  @ApiOkResponse({ type: AuthUserDto })
+  session(
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<AuthUserDto> {
+    return this.authService.session(this.extractBearer(authorization));
   }
 
   @Post('logout')
   @HttpCode(204)
-  @ApiOperation({ summary: 'Revoca el refresh token recibido' })
-  @ApiNoContentResponse()
-  logout(@Body() dto: LogoutDto): Promise<void> {
-    return this.authService.logout(dto);
-  }
-
-  @Post('password/forgot')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Solicita un codigo de recuperacion por correo' })
-  @ApiOkResponse({
-    description: 'Respuesta uniforme aunque el correo no exista',
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Revoca refresh tokens de Firebase para el UID del Bearer',
   })
-  forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
-    return this.authService.forgotPassword(dto);
+  @ApiNoContentResponse()
+  logout(
+    @Headers('authorization') authorization: string | undefined,
+  ): Promise<void> {
+    return this.authService.logout(this.extractBearer(authorization));
   }
 
-  @Post('password/reset')
-  @HttpCode(200)
-  @ApiOperation({ summary: 'Restablece la contraseña con un codigo vigente' })
-  @ApiOkResponse({ description: 'contraseña actualizada' })
-  resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
-    return this.authService.resetPassword(dto);
+  private extractBearer(authorization: string | undefined): string {
+    if (!authorization?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Token requerido');
+    }
+    return authorization.slice('Bearer '.length);
   }
 }

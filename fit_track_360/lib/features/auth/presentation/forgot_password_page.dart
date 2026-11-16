@@ -7,10 +7,11 @@ import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../data/auth_api.dart';
+import '../data/firebase_auth_service.dart';
 import '../domain/auth_validators.dart';
 
-/// Recuperar contraseña: envia el correo al API. El API responde 200 aunque
-/// el correo no exista, para no filtrar cuentas.
+/// Recuperar contraseña: Firebase envia un enlace por correo.
+/// No revela si el correo existe.
 class ForgotPasswordPage extends StatefulWidget {
   const ForgotPasswordPage({super.key});
 
@@ -19,6 +20,7 @@ class ForgotPasswordPage extends StatefulWidget {
 }
 
 class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
+  final FirebaseAuthService _auth = FirebaseAuthService();
   final TextEditingController _emailController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
 
@@ -67,7 +69,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
       _submitting = true;
     });
     try {
-      await forgotPassword(email: email);
+      await _auth.sendPasswordResetEmail(email: email);
       if (!mounted) return;
       setState(() => _sent = true);
     } on AuthApiException catch (e) {
@@ -107,7 +109,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Te enviaremos un codigo de 6 digitos a tu correo.',
+                        'Te enviaremos un enlace para restablecer tu contraseña.',
                         style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
@@ -125,7 +127,7 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       ),
                       const SizedBox(height: 24),
                       PrimaryButton(
-                        label: _submitting ? 'Enviando...' : 'Enviar codigo',
+                        label: _submitting ? 'Enviando...' : 'Enviar enlace',
                         onPressed: _submitting ? null : _submit,
                       ),
                       if (_error != null) ...[
@@ -135,18 +137,11 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
                       if (_sent) ...[
                         const SizedBox(height: 16),
                         const _InfoBanner(
-                          message: 'Si el correo existe, enviamos un codigo de recuperacion.',
+                          message: 'Si el correo existe, enviamos un enlace de recuperacion.',
                           danger: false,
                         ),
                       ],
                       const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: () => context.push('/reset-password'),
-                        child: const Text(
-                          'Ya tengo un codigo',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ),
                       TextButton(
                         onPressed: () => context.push('/login'),
                         child: const Text(

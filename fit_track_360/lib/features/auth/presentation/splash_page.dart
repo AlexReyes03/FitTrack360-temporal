@@ -8,8 +8,7 @@ import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 
-/// Placeholder Liquid Glass. Si hay access token va a /app; si no, permanece
-/// aqui. "Ir a Login" es un atajo temporal, sin logica de auth.
+/// Splash Liquid Glass. Si Firebase tiene sesion (ID token) va a /app.
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
 
@@ -26,7 +25,7 @@ class _SplashPageState extends State<SplashPage> {
 
   Future<void> _restoreSession() async {
     await Future.delayed(const Duration(milliseconds: 700));
-    final accessToken = await SessionStorage().readAccessToken();
+    final accessToken = await appSessionStorage.readAccessToken();
     if (!mounted || accessToken == null) return;
     context.go('/app');
   }
@@ -54,7 +53,7 @@ class _SplashPageState extends State<SplashPage> {
             const SizedBox(height: 32),
             SizedBox(
               width: 280,
-              child: PrimaryButton(label: 'Ir a Login', onPressed: _goToLogin),
+              child: PrimaryButton(label: 'Ingresar', onPressed: _goToLogin),
             ),
           ],
         ),

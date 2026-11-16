@@ -1,25 +1,30 @@
 import '../../../core/session_storage.dart';
 import 'auth_api.dart' as auth_api;
+import 'firebase_auth_service.dart';
 
-typedef RevokeRefreshToken = Future<void> Function({
-  required String refreshToken,
-});
+typedef RevokeIdToken = Future<void> Function({required String idToken});
 
-/// Cierre de sesión compartido por el shell y Perfil: revoca el refresh en
-/// `POST /auth/logout` y limpia [SessionStorage] siempre, aunque el API falle.
+/// Cierre de sesión: revoca en Nest (si hay red) y limpia Firebase / storage.
 class LogoutService {
-  LogoutService({SessionStorage? storage, RevokeRefreshToken? revoke})
-    : _storage = storage ?? SessionStorage(),
-      _revoke = revoke ?? auth_api.logout;
+  LogoutService({SessionStorage? storage, this.revoke, this.firebaseAuth})
+    : _storage = storage ?? appSessionStorage;
 
   final SessionStorage _storage;
-  final RevokeRefreshToken _revoke;
+  final RevokeIdToken? revoke;
+  final FirebaseAuthService? firebaseAuth;
 
   Future<void> logout() async {
-    final refreshToken = await _storage.readRefreshToken();
+    if (firebaseAuth != null) {
+      await firebaseAuth!.logout();
+      return;
+    }
+
+    final idToken = await _storage.readAccessToken();
     try {
-      if (refreshToken != null) {
-        await _revoke(refreshToken: refreshToken);
+      if (idToken != null && revoke != null) {
+        await revoke!(idToken: idToken);
+      } else if (idToken != null) {
+        await auth_api.revokeRemoteSession(idToken: idToken);
       }
     } catch (_) {
       // Si el API falla, la sesión local se limpia igual.

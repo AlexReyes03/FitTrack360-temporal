@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/session_storage.dart';
 import '../../../design_system/components/app_logo.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
@@ -9,6 +8,7 @@ import '../../../design_system/templates/form_page_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../data/auth_api.dart';
+import '../data/firebase_auth_service.dart';
 import '../domain/auth_validators.dart';
 
 class LoginPage extends StatefulWidget {
@@ -19,7 +19,7 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final SessionStorage _sessionStorage = SessionStorage();
+  final FirebaseAuthService _auth = FirebaseAuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
@@ -72,11 +72,7 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _submitting = true);
     try {
-      final tokens = await login(email: email, password: password);
-      await _sessionStorage.saveTokens(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      );
+      await _auth.login(email: email, password: password);
       if (!mounted) return;
       context.go('/app');
     } on AuthApiException catch (e) {

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { FoodsModule } from './foods/foods.module';
 import { HealthModule } from './health/health.module';
 import { MealsModule } from './meals/meals.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -20,6 +21,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
     UsersModule,
     StorageModule,
     WorkoutsModule,
+    FoodsModule,
     MealsModule,
     ExerciseMediaModule.register(),
   ],

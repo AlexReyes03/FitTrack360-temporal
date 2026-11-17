@@ -17,6 +17,7 @@ export interface WorkoutSetSnapshot {
 export interface WorkoutSessionSnapshot {
   id: string;
   userId: string;
+  routineId?: string | null;
   startedAt: Date;
   endedAt: Date | null;
   location: string | null;

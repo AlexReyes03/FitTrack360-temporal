@@ -60,6 +60,13 @@ export class WorkoutsService {
     userId: string,
     dto: CreateWorkoutDto,
   ): Promise<WorkoutResponseDto> {
+    if (dto.routineId) {
+      const routine = await this.prisma.routine.findFirst({
+        where: { id: dto.routineId, userId },
+        select: { id: true },
+      });
+      if (!routine) throw new NotFoundException('Rutina no encontrada');
+    }
     const startedAt = new Date(dto.startedAt);
     const endedAt = dto.endedAt ? new Date(dto.endedAt) : null;
     this.assertDateOrder(startedAt, endedAt);
@@ -68,6 +75,7 @@ export class WorkoutsService {
     const session = await this.sessions().create({
       data: {
         userId,
+        routineId: dto.routineId ?? null,
         startedAt,
         endedAt,
         location: normalizeLocation(dto.location),
@@ -279,6 +287,7 @@ function toSnapshot(session: StoredSession): WorkoutSessionSnapshot {
   return {
     id: session.id,
     userId: session.userId,
+    routineId: session.routineId ?? null,
     startedAt: session.startedAt,
     endedAt: session.endedAt,
     location: session.location ?? null,

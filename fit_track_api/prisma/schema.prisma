@@ -23,6 +23,7 @@ model User {
   refreshTokens        RefreshToken[]
   passwordResetCodes   PasswordResetCode[]
   workoutSessions      WorkoutSession[]
+  routines             Routine[]
   mealLogs             MealLog[]
   settings             UserSettings?
 }
@@ -75,7 +76,7 @@ model PasswordResetCode {
 }
 
 model Exercise {
-  id                 String       @id
+  id                 String            @id
   name               String
   nameEs             String?
   category           String?
@@ -83,16 +84,43 @@ model Exercise {
   equipment          String
   target             String
   muscleGroup        String?
-  secondaryMuscles   String[]     @default([])
+  secondaryMuscles   String[]          @default([])
   level              String?
   instructionsEs     String?
-  instructionStepsEs String[]     @default([])
+  instructionStepsEs String[]          @default([])
   commonErrors       String?
   imageFile          String
   gifFile            String
   mediaId            String?
   attribution        String
   workoutSets        WorkoutSet[]
+  routineExercises   RoutineExercise[]
+}
+
+model Routine {
+  id        String            @id @default(uuid())
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  exercises RoutineExercise[]
+  sessions  WorkoutSession[]
+
+  @@index([userId])
+}
+
+model RoutineExercise {
+  id         String   @id @default(uuid())
+  routineId  String
+  routine    Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  position   Int
+  targetSets Int
+  targetReps Int
+
+  @@unique([routineId, position])
 
   @@index([bodyPart])
   @@index([equipment])
@@ -103,6 +131,8 @@ model WorkoutSession {
   id        String       @id @default(uuid())
   userId    String
   user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId String?
+  routine   Routine?     @relation(fields: [routineId], references: [id], onDelete: SetNull)
   startedAt DateTime
   endedAt   DateTime?
   location  String?

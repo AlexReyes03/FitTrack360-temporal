@@ -182,6 +182,8 @@ export class WorkoutComparisonResponseDto {
 }
 
 export class WorkoutResponseDto {
+  @ApiPropertyOptional({ nullable: true })
+  routineId!: string | null;
   @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
   id!: string;
 
@@ -247,6 +249,7 @@ export class WorkoutResponseDto {
     const dto = new WorkoutResponseDto();
     dto.id = session.id;
     dto.userId = session.userId;
+    dto.routineId = session.routineId ?? null;
     dto.startedAt = session.startedAt;
     dto.endedAt = session.endedAt;
     dto.location = session.location;

@@ -12,6 +12,12 @@ import {
 import { CreateWorkoutSetDto } from './create-workout-set.dto';
 
 export class CreateWorkoutDto {
+  @ApiPropertyOptional({ description: 'Rutina de origen del mismo usuario' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  routineId?: string;
+
   @ApiProperty({
     description: 'Fecha y hora de inicio de la sesión en formato ISO 8601',
     example: '2026-11-04T10:00:00.000Z',

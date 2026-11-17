@@ -93,6 +93,10 @@ model Exercise {
   mediaId            String?
   attribution        String
   workoutSets        WorkoutSet[]
+
+  @@index([bodyPart])
+  @@index([equipment])
+  @@index([target])
 }
 
 model WorkoutSession {

@@ -8,26 +8,26 @@ Este documento describe los servicios externos, APIs de terceros y mecanismos de
 
 ## 2. Tabla de decisiones de integración
 
-| # | Decisión | Alternativa descartada | Por qué | Fecha |
-| :--- | :--- | :--- | :--- | :--- |
-| **I-01** | **Proxy centralizado para APIs de terceros:** Todas las llamadas a servicios externos (ej. USDA FoodData Central) son realizadas exclusivamente por el backend NestJS; la app Flutter nunca contacta directamente a terceros. | Consumir USDA FDC directamente desde Flutter utilizando la API key en la app móvil. | Previene la extracción de llaves privadas mediante ingeniería inversa del binario móvil (principio S3), reduce el consumo de datos móviles mediante normalización de payloads y permite cambiar de proveedor sin actualizar la app en tiendas. | 2026-10-22 |
-| **I-02** | **Gestión estricta de secretos en `.env`:** Ningún secreto, token o clave de API se versiona en Git. En el repositorio solo habita `.env.example` con valores de plantilla no funcionales. | Incrustar credenciales de desarrollo o llaves de prueba públicas en el código fuente. | Evita filtraciones de seguridad y garantiza portabilidad entre entornos locales, de staging y de producción. | 2026-10-22 |
-| **I-03** | **Almacenamiento de medios con abstracción desacoplada:** El manejo de fotos de progreso y comida se programa contra una interfaz `StorageService` implementando driver de disco local en el MVP, extensible a S3/R2 en producción. | Acoplar el código directamente a un SDK propietario como AWS S3 o Cloudinary desde el día uno. | Facilita el desarrollo y pruebas locales sin costos en la nube ni dependencias de internet en los tests de CI. | 2026-10-22 |
-| **I-04** | **Emulación de correo en desarrollo con Mailpit:** SMTP local para correos del producto (histórico de reset Nest). El reset de contraseña de Auth pasa a Firebase Auth. | Usar credenciales reales de Gmail / SendGrid en las máquinas de los desarrolladores. | Elimina bloqueos por filtros antispam en flujos SMTP locales. | 2026-10-22 |
-| **I-05** | **Identidad con Firebase Auth; dominio en PostgreSQL:** Flutter autentica con Firebase Auth (email/password). Nest verifica el ID token con `firebase-admin` y mapea `firebaseUid` a `User` en Prisma. Sin Firestore. | Mantener JWT/Argon2 propios o migrar el dominio a Firestore. | Separa identidad de datos relacionales (D-03); elimina doble sistema de sesión (decisión 1A AUTH-01). | 2026-11-15 |
+| #        | Decisión                                                                                                                                                                                                                            | Alternativa descartada                                                                         | Por qué                                                                                                                                                                                                                                        | Fecha      |
+| :------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------- |
+| **I-01** | **Proxy centralizado para APIs de terceros:** Todas las llamadas a servicios externos (ej. USDA FoodData Central) son realizadas exclusivamente por el backend NestJS; la app Flutter nunca contacta directamente a terceros.       | Consumir USDA FDC directamente desde Flutter utilizando la API key en la app móvil.            | Previene la extracción de llaves privadas mediante ingeniería inversa del binario móvil (principio S3), reduce el consumo de datos móviles mediante normalización de payloads y permite cambiar de proveedor sin actualizar la app en tiendas. | 2026-10-22 |
+| **I-02** | **Gestión estricta de secretos en `.env`:** Ningún secreto, token o clave de API se versiona en Git. En el repositorio solo habita `.env.example` con valores de plantilla no funcionales.                                          | Incrustar credenciales de desarrollo o llaves de prueba públicas en el código fuente.          | Evita filtraciones de seguridad y garantiza portabilidad entre entornos locales, de staging y de producción.                                                                                                                                   | 2026-10-22 |
+| **I-03** | **Almacenamiento de medios con abstracción desacoplada:** El manejo de fotos de progreso y comida se programa contra una interfaz `StorageService` implementando driver de disco local en el MVP, extensible a S3/R2 en producción. | Acoplar el código directamente a un SDK propietario como AWS S3 o Cloudinary desde el día uno. | Facilita el desarrollo y pruebas locales sin costos en la nube ni dependencias de internet en los tests de CI.                                                                                                                                 | 2026-10-22 |
+| **I-04** | **Emulación de correo en desarrollo con Mailpit:** SMTP local para correos del producto (histórico de reset Nest). El reset de contraseña de Auth pasa a Firebase Auth.                                                             | Usar credenciales reales de Gmail / SendGrid en las máquinas de los desarrolladores.           | Elimina bloqueos por filtros antispam en flujos SMTP locales.                                                                                                                                                                                  | 2026-10-22 |
+| **I-05** | **Identidad con Firebase Auth; dominio en PostgreSQL:** Flutter autentica con Firebase Auth (email/password). Nest verifica el ID token con `firebase-admin` y mapea `firebaseUid` a `User` en Prisma. Sin Firestore.               | Mantener JWT/Argon2 propios o migrar el dominio a Firestore.                                   | Separa identidad de datos relacionales (D-03); elimina doble sistema de sesión (decisión 1A AUTH-01).                                                                                                                                          | 2026-11-15 |
 
 ---
 
 ## 3. Familias de integraciones y orden en el roadmap
 
-| Orden | Familia | Integración / Herramienta | Para qué se usa | Fase del SOW |
-| :---: | :--- | :--- | :--- | :---: |
-| **1** | **Base de Datos** | PostgreSQL 16 + Prisma ORM | Almacenamiento persistente relacional de usuarios, sesiones, comidas y catálogo de ejercicios. | Fase 0 |
-| **2** | **Autenticación** | Firebase Auth + `firebase-admin` | Identidad y sesión (ID token); Nest sincroniza `User` por `firebaseUid`. | Fase 1 / AUTH-01 |
-| **3** | **Correo Local** | Nodemailer + Mailpit | Correos locales opcionales; el reset de contraseña lo envía Firebase. | Fase 1 |
-| **4** | **Almacenamiento** | `StorageService` (Disco local / `uploads/`) | Almacenamiento de fotos de progreso corporal y comidas capturadas por el usuario (P1). | Fase 1–2 |
-| **5** | **Media Estática** | NestJS Serve-Static (`public/exercises/`) | Entrega de 1324 imágenes JPG y 1324 GIFs animados de ejercicios Gym Visual bajo `/static/exercises/...`. | Fase 2–3 |
-| **6** | **API de Terceros** | USDA FoodData Central (FDC) | Búsqueda de catálogo nutricional público de alimentos y extracción de calorías y macronutrientes. | Fase 3 |
+| Orden | Familia             | Integración / Herramienta                   | Para qué se usa                                                                                          |   Fase del SOW   |
+| :---: | :------------------ | :------------------------------------------ | :------------------------------------------------------------------------------------------------------- | :--------------: |
+| **1** | **Base de Datos**   | PostgreSQL 16 + Prisma ORM                  | Almacenamiento persistente relacional de usuarios, sesiones, comidas y catálogo de ejercicios.           |      Fase 0      |
+| **2** | **Autenticación**   | Firebase Auth + `firebase-admin`            | Identidad y sesión (ID token); Nest sincroniza `User` por `firebaseUid`.                                 | Fase 1 / AUTH-01 |
+| **3** | **Correo Local**    | Nodemailer + Mailpit                        | Correos locales opcionales; el reset de contraseña lo envía Firebase.                                    |      Fase 1      |
+| **4** | **Almacenamiento**  | `StorageService` (Disco local / `uploads/`) | Almacenamiento de fotos de progreso corporal y comidas capturadas por el usuario (P1).                   |     Fase 1–2     |
+| **5** | **Media Estática**  | NestJS Serve-Static (`public/exercises/`)   | Entrega de 1324 imágenes JPG y 1324 GIFs animados de ejercicios Gym Visual bajo `/static/exercises/...`. |     Fase 2–3     |
+| **6** | **API de Terceros** | USDA FoodData Central (FDC)                 | Búsqueda de catálogo nutricional público de alimentos y extracción de calorías y macronutrientes.        |      Fase 3      |
 
 ---
 
@@ -38,21 +38,23 @@ Este documento describe los servicios externos, APIs de terceros y mecanismos de
 USDA FDC es la base de datos oficial del Departamento de Agricultura de los Estados Unidos que ofrece información nutricional de alimentos en formato abierto y gratuito.
 
 - **Proveedor y documentación:** United States Department of Agriculture (`https://fdc.nal.usda.gov/api-guide.html`).
-- **Endpoint consumido:** `GET https://api.nal.usda.gov/fdc/v1/foods/search`.
-- **Credencial requerida:** `USDA_FDC_API_KEY`, configurada únicamente en `fit_track_api/.env`.
+- **Endpoint consumido por el servidor:** `GET https://api.nal.usda.gov/fdc/v1/foods/search`.
+- **Contrato hacia Flutter:** `GET /api/v1/foods/search?q={termino}` con Bearer JWT. Flutter no llama a USDA. Una respuesta 200 es un arreglo de hasta 20 alimentos `{ fdcId, description, name, servingG, kcal, proteinG, carbsG, fatG }` por 100 g (`brandOwner` solo si USDA lo trae). Cualquier otro estado abre captura manual.
+- **Credencial requerida:** `USDA_FDC_API_KEY`, solo en el entorno del servidor (`fit_track_api/.env`, no versionado). `.env.example` documenta el nombre con valor vacío. La key viaja únicamente en la petición saliente del API. No se escribe en logs, en el cuerpo HTTP, en Swagger ni en el repositorio.
 - **Flujo de integración:**
   1. La aplicación móvil solicita búsqueda mediante `GET /api/v1/foods/search?q={termino}` incluyendo Bearer token JWT.
-  2. El módulo `MealsModule` de NestJS recibe la petición y delega a `UsdaFoodService`.
-  3. `UsdaFoodService` ejecuta una petición HTTP con Axios aplicando un timeout estricto de **5000 ms**.
-  4. La respuesta de USDA se normaliza extrayendo únicamente los identificadores de nutrientes requeridos:
-     - `Nutrient ID 1008`: Energía / Calorías (`kcal`).
-     - `Nutrient ID 1003`: Proteínas (`proteinG`).
-     - `Nutrient ID 1004`: Grasas totales (`fatG`).
-     - `Nutrient ID 1005`: Carbohidratos disponibles (`carbsG`).
-  5. Se retorna al cliente Flutter una lista simplificada de DTOs (`FoodItemDto`).
+  2. `FoodsModule` (`FoodsController`) valida `q` con el `ValidationPipe` global (`whitelist`, `forbidNonWhitelisted`). `q` vacío o de más de 120 caracteres responde 400.
+  3. `UsdaFoodService` lee `USDA_FDC_API_KEY`. Si falta o está en blanco, no llama a USDA.
+  4. `FetchUsdaHttpClient` (`fetch`, cliente inyectable) ejecuta la petición con timeout de abort de **5000 ms** y `pageSize=20`.
+  5. La respuesta de USDA se normaliza por 100 g. Se prefiere el id de nutriente y, si no viene, el número legado:
+     - `1008` / `208`: Energía / Calorías (`kcal`).
+     - `1003` / `203`: Proteínas (`proteinG`).
+     - `1004` / `204`: Grasas totales (`fatG`).
+     - `1005` / `205`: Carbohidratos (`carbsG`).
+  6. Se retorna al cliente Flutter un arreglo de `FoodItemDto`. Una búsqueda sin coincidencias es 200 con `[]`.
 - **Degradación ante fallos:**
-  - Si la llamada a USDA arroja timeout (>5 s), error 500 o límite de cuota (HTTP 429), la API devuelve un error tipado `{ code: 'USDA_UNAVAILABLE', message: 'Servicio nutricional no disponible temporalmente' }`.
-  - La aplicación móvil captura este estado y despliega inmediatamente la opción de **Captura manual**, donde el usuario puede registrar su alimento digitando los macros sin perder su flujo de alimentación.
+  - Timeout (>5 s), fallo de red, HTTP no exitoso de USDA (incluye 429 y 5xx) o key ausente: la API responde HTTP 503 `{ code: 'USDA_UNAVAILABLE', message: 'Servicio nutricional no disponible temporalmente' }`. Ese cuerpo no incluye la key ni la URL.
+  - La aplicación móvil trata cualquier respuesta distinta de 200 como **Captura manual**: el usuario registra nombre, porción y macros sin salir del flujo.
 - **Limitación documentada:** La base de datos de USDA contiene registros primordialmente en idioma inglés. La interfaz de usuario documenta este comportamiento y ofrece traducción de términos comunes en la guía de uso.
 
 ---

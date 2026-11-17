@@ -32,8 +32,9 @@ export class RegisterDto {
   @Equals(true)
   privacyConsent!: boolean;
 
-  @ApiProperty({ example: '1' })
+  @ApiProperty({ example: '2' })
   @IsString()
   @IsNotEmpty()
+  @Equals('2')
   privacyNoticeVersion!: string;
 }

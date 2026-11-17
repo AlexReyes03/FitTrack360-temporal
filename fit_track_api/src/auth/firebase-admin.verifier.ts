@@ -39,6 +39,10 @@ export class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
     }
   }
 
+  async deleteUser(uid: string): Promise<void> {
+    await this.getAuthOrThrow().deleteUser(uid);
+  }
+
   async revokeRefreshTokens(uid: string): Promise<void> {
     const auth = this.getAuthOrThrow();
     await auth.revokeRefreshTokens(uid);

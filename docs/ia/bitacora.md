@@ -46,6 +46,8 @@
 
 | 2026-11-16 | Miguel Ángel Sánchez Pérez | Codex | #123 | Implementar fotos privadas con reencodificación sin EXIF/GPS, asociaciones propias y pruebas. | `fit_track_api/src/photos/`, `fit_track_api/prisma/`, `fit_track_api/test/photos/`, `docs/specs/05-datos.md` | Se usa sharp y almacenamiento local existente; se comprueban EXIF, formatos e aislamiento. | Rama `feat/w12-04-fotos` |
 
+| 2026-11-16 | Miguel Ángel Sánchez Pérez | Codex | #126 | Actualizar aviso sin marcadores, versionar consentimiento e implementar exportación y eliminación de cuenta. | `fit_track_api/src/privacy/`, `fit_track_api/src/auth/`, `fit_track_api/src/storage/`, `fit_track_api/test/privacy/`, `fit_track_360/lib/features/settings/`, `docs/copy/aviso-privacidad.md` | Se usan consultas por dueño, cascadas y eliminación de identidad y archivos; se prueban aislamiento y fallos. | Rama `feat/w12-07-privacidad-arco` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

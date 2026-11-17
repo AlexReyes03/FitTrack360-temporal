@@ -130,7 +130,7 @@ class _RegisterPageState extends State<RegisterPage> {
         password: password,
         displayName: displayName,
         privacyConsent: true,
-        privacyNoticeVersion: '1',
+        privacyNoticeVersion: '2',
       );
       if (!mounted) return;
       context.go('/app');

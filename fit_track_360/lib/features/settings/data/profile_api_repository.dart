@@ -51,8 +51,7 @@ class ProfileApiRepository implements ProfileRepository {
         throw const ExportUnavailableException();
       }
       final text = utf8.decode(response.bodyBytes);
-      jsonDecode(text); // Solo se acepta JSON válido.
-      return text;
+      return const JsonEncoder.withIndent('  ').convert(jsonDecode(text));
     } on SessionExpiredException {
       rethrow;
     } catch (_) {

@@ -16,6 +16,8 @@ Este documento describe los servicios externos, APIs de terceros y mecanismos de
 | **I-04** | **Emulación de correo en desarrollo con Mailpit:** SMTP local para correos del producto (histórico de reset Nest). El reset de contraseña de Auth pasa a Firebase Auth.                                                             | Usar credenciales reales de Gmail / SendGrid en las máquinas de los desarrolladores.           | Elimina bloqueos por filtros antispam en flujos SMTP locales.                                                                                                                                                                                  | 2026-10-22 |
 | **I-05** | **Identidad con Firebase Auth; dominio en PostgreSQL:** Flutter autentica con Firebase Auth (email/password). Nest verifica el ID token con `firebase-admin` y mapea `firebaseUid` a `User` en Prisma. Sin Firestore.               | Mantener JWT/Argon2 propios o migrar el dominio a Firestore.                                   | Separa identidad de datos relacionales (D-03); elimina doble sistema de sesión (decisión 1A AUTH-01).                                                                                                                                          | 2026-11-15 |
 
+| **I-06** | La exportación y eliminación de cuenta operan en la API autenticada; la eliminación prepara archivos, elimina la identidad Firebase y aplica cascadas en PostgreSQL. | Tratar la eliminación como una operación exclusivamente local. | La identidad y los archivos están fuera de PostgreSQL y deben gestionarse junto con los registros. | 2026-11-16 |
+
 ---
 
 ## 3. Familias de integraciones y orden en el roadmap

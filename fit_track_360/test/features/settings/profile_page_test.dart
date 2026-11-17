@@ -309,7 +309,8 @@ void main() {
       await _pump(tester, _Deps());
       await tester.tap(find.text('Aviso de privacidad'));
       await tester.pumpAndSettle();
-      expect(find.text('Responsable del tratamiento'), findsOneWidget);
+      expect(find.text('Datos de la cuenta'), findsOneWidget);
+      expect(find.textContaining('[NOMBRE'), findsNothing);
     });
 
     testWidgets('cerrar sesión limpia la sesión aunque el API falle', (

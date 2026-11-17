@@ -12,6 +12,7 @@ export interface FirebaseTokenVerifier {
   verifyIdToken(idToken: string): Promise<VerifiedFirebaseToken>;
   /** Revoca refresh tokens del usuario en Firebase (logout remoto). */
   revokeRefreshTokens?(uid: string): Promise<void>;
+  deleteUser?(uid: string): Promise<void>;
 }
 
 export const FIREBASE_TOKEN_VERIFIER = Symbol('FIREBASE_TOKEN_VERIFIER');
@@ -39,6 +40,10 @@ export class MockFirebaseTokenVerifier implements FirebaseTokenVerifier {
       throw new Error('Token mock invalido');
     }
     return { uid, email };
+  }
+
+  async deleteUser(_uid: string): Promise<void> {
+    // No existe una identidad persistida en modo mock.
   }
 
   async revokeRefreshTokens(_uid: string): Promise<void> {

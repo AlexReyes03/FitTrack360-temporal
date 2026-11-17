@@ -86,7 +86,9 @@ void main() {
       final repo = ProfileApiRepository(
         ApiClient(storage: FakeSessionStorage(), httpClient: client),
       );
-      expect(jsonDecode(await repo.exportData()), {'profile': {}});
+      final exported = await repo.exportData();
+      expect(jsonDecode(exported), {'profile': {}});
+      expect(exported, contains('\n  '));
     });
 
     test('exportData 404 o fallo de red lanza ExportUnavailable', () async {

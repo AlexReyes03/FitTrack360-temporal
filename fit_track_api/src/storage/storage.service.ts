@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createReadStream, type ReadStream } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -89,6 +89,27 @@ export class StorageService {
       force: true,
     });
     await rm(join(directory, `${fileId}.meta.json`), { force: true });
+  }
+
+  async stageUserRemoval(
+    userId: string,
+  ): Promise<{ commit: () => Promise<void>; rollback: () => Promise<void> }> {
+    const original = join(this.root, userId);
+    const staged = join(this.root, `.deleting-${randomUUID()}`);
+    try {
+      await rename(original, staged);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      return { commit: async () => {}, rollback: async () => {} };
+    }
+    return {
+      commit: async () => {
+        await rm(staged, { recursive: true, force: true });
+      },
+      rollback: async () => {
+        await rename(staged, original);
+      },
+    };
   }
 
   private async readMetadata(

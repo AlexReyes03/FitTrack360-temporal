@@ -19,6 +19,8 @@ Este documento define la estructura conceptual de datos, las relaciones entre en
 
 | **M-07** | Las rutinas tienen ejercicios con posición única y metas positivas; iniciar una rutina copia sus metas a series con peso inicial cero y conserva `routineId` opcional en la sesión. | Calcular la sesión desde la rutina mutable cada vez. | Las sesiones conservan sus series si la rutina cambia o se elimina; se mantiene el aislamiento por usuario. | 2026-11-16 |
 
+| **M-08** | Las fotos se reencodan antes de almacenarlas y se vinculan opcionalmente a una comida o métrica del mismo dueño; `Photo` guarda dimensiones y clave de almacenamiento. | Guardar el original con EXIF o permitir referencias ajenas. | Evita conservar ubicación GPS y limita el acceso a los datos privados. | 2026-11-16 |
+
 ---
 
 ## 3. Diagrama Entidad-Relación Conceptual (Mermaid)

@@ -44,6 +44,8 @@
 
 | 2026-11-16 | Miguel Ángel Sánchez Pérez | Codex | #121 | Crear CRUD de rutinas propias, duplicación e inicio de sesión con series precargadas y pruebas de aislamiento. | `fit_track_api/src/routines/`, `fit_track_api/src/workouts/`, `fit_track_api/prisma/`, `fit_track_api/test/routines/`, `docs/specs/05-datos.md` | Implementación y pruebas de rutinas en rama apilada. | Rama `feat/w12-02-rutinas` |
 
+| 2026-11-16 | Miguel Ángel Sánchez Pérez | Codex | #123 | Implementar fotos privadas con reencodificación sin EXIF/GPS, asociaciones propias y pruebas. | `fit_track_api/src/photos/`, `fit_track_api/prisma/`, `fit_track_api/test/photos/`, `docs/specs/05-datos.md` | Se usa sharp y almacenamiento local existente; se comprueban EXIF, formatos e aislamiento. | Rama `feat/w12-04-fotos` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

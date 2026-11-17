@@ -35,7 +35,7 @@ $ pnpm run prisma:migrate
 $ pnpm run prisma:seed
 ```
 
-> **Nota (W9-12):** El script `prisma/seed.ts` carga una muestra inicial de 5 ejercicios para validación técnica de forma idempotente. La carga del catálogo completo (1324 ejercicios) está fuera del alcance de este PR y se ejecutará posteriormente.
+> **Nota (W11-02):** El script `prisma/seed.ts` carga de forma idempotente el catálogo completo de `seed/exercises.es.json` (1 324 ejercicios). La media se sirve en `/static/exercises/images` y `/static/exercises/videos`.
 
 ## Project setup
 
@@ -133,12 +133,12 @@ Desde `fit_track_api/`, un solo compose levanta Postgres, el API y Mailpit:
 docker compose up -d
 ```
 
-| Servicio | Puerto en el host | Uso |
-| --- | --- | --- |
-| API | `3000` | HTTP |
-| Postgres | `5432` | Base de datos |
-| Mailpit SMTP | `1025` | Correo local, sin TLS |
-| Mailpit UI | `8025` | http://localhost:8025 |
+| Servicio     | Puerto en el host | Uso                   |
+| ------------ | ----------------- | --------------------- |
+| API          | `3000`            | HTTP                  |
+| Postgres     | `5432`            | Base de datos         |
+| Mailpit SMTP | `1025`            | Correo local, sin TLS |
+| Mailpit UI   | `8025`            | http://localhost:8025 |
 
 El servicio `api` habla con Postgres por el hostname `postgres` y con Mailpit por `mailpit`. Esas direcciones solo existen dentro de la red del compose.
 
@@ -163,11 +163,11 @@ El API usa un solo puerto de desarrollo: `PORT=3000` (ver `.env.example`). `src/
 lo valida al arrancar: si `PORT` no es un entero entre 1 y 65535, el proceso termina con un
 mensaje en vez de quedar escuchando en otro lado.
 
-| Cómo corre el API | URL desde la Mac/PC | URL desde la app |
-| --- | --- | --- |
-| `pnpm start:dev` | `http://localhost:3000` | Emulador Android: `http://10.0.2.2:3000` (default de Flutter) |
+| Cómo corre el API                        | URL desde la Mac/PC     | URL desde la app                                                                      |
+| ---------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
+| `pnpm start:dev`                         | `http://localhost:3000` | Emulador Android: `http://10.0.2.2:3000` (default de Flutter)                         |
 | Docker desde `pnpm dev` (`-p PORT:PORT`) | `http://localhost:3000` | Teléfono físico: el panel aplica `adb reverse tcp:3000` y usa `http://localhost:3000` |
-| `docker compose up -d` (`3000:3000`) | `http://localhost:3000` | Igual que arriba: emulador `10.0.2.2:3000`, teléfono con `adb reverse tcp:3000` |
+| `docker compose up -d` (`3000:3000`)     | `http://localhost:3000` | Igual que arriba: emulador `10.0.2.2:3000`, teléfono con `adb reverse tcp:3000`       |
 
 El compose publica `3000:3000` fijo y pasa `PORT` al contenedor, así que con el compose deja
 `PORT=3000`: otro valor haría que el API escuche en un puerto que el compose no publica. El panel

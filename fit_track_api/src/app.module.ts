@@ -7,6 +7,7 @@ import { FoodsModule } from './foods/foods.module';
 import { HealthModule } from './health/health.module';
 import { MealsModule } from './meals/meals.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PhotosModule } from './photos/photos.module';
 import { RoutinesModule } from './routines/routines.module';
 import { ExercisesModule } from './exercises/exercises.module';
 import { ExerciseMediaModule } from './static/exercise-media.module';
@@ -22,6 +23,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
     AuthModule,
     UsersModule,
     StorageModule,
+    PhotosModule,
     WorkoutsModule,
     RoutinesModule,
     FoodsModule,

@@ -24,6 +24,8 @@ model User {
   passwordResetCodes   PasswordResetCode[]
   workoutSessions      WorkoutSession[]
   routines             Routine[]
+  photos               Photo[]
+  bodyMetrics          BodyMetric[]
   mealLogs             MealLog[]
   settings             UserSettings?
 }
@@ -157,6 +159,37 @@ model WorkoutSet {
   updatedAt  DateTime       @updatedAt
 }
 
+model BodyMetric {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  measuredAt     DateTime
+  weightKg       Float?
+  bodyFatPercent Float?
+  waistCm        Float?
+  photos         Photo[]
+
+  @@index([userId])
+}
+
+model Photo {
+  id         String      @id @default(uuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storageKey String
+  mimeType   String
+  sizeBytes  Int
+  width      Int
+  height     Int
+  mealId     String?
+  meal       MealLog?    @relation(fields: [mealId], references: [id], onDelete: SetNull)
+  metricId   String?
+  metric     BodyMetric? @relation(fields: [metricId], references: [id], onDelete: SetNull)
+  createdAt  DateTime    @default(now())
+
+  @@index([userId])
+}
+
 enum MealType {
   BREAKFAST
   LUNCH
@@ -175,6 +208,7 @@ model MealLog {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   items     MealItem[]
+  photos    Photo[]
 }
 
 model MealItem {

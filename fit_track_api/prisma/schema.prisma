@@ -121,6 +121,10 @@ model RoutineExercise {
   targetReps Int
 
   @@unique([routineId, position])
+
+  @@index([bodyPart])
+  @@index([equipment])
+  @@index([target])
 }
 
 model WorkoutSession {

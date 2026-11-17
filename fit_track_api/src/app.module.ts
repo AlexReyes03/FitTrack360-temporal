@@ -3,10 +3,12 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { FoodsModule } from './foods/foods.module';
 import { HealthModule } from './health/health.module';
 import { MealsModule } from './meals/meals.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RoutinesModule } from './routines/routines.module';
+import { ExercisesModule } from './exercises/exercises.module';
 import { ExerciseMediaModule } from './static/exercise-media.module';
 import { StorageModule } from './storage/storage.module';
 import { UsersModule } from './users/users.module';
@@ -22,7 +24,9 @@ import { WorkoutsModule } from './workouts/workouts.module';
     StorageModule,
     WorkoutsModule,
     RoutinesModule,
+    FoodsModule,
     MealsModule,
+    ExercisesModule,
     ExerciseMediaModule.register(),
   ],
   controllers: [AppController],

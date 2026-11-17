@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBadRequestResponse,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
@@ -41,11 +42,15 @@ export class WorkoutsController {
   @Post()
   @ApiOperation({
     summary:
-      'Crea una nueva sesión de entrenamiento para el usuario autenticado',
+      'Crea una sesión con series, volumen, duración y comparación del mismo usuario',
   })
   @ApiCreatedResponse({
-    description: 'Sesión creada exitosamente',
+    description: 'Sesión creada con sus series',
     type: WorkoutResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Fechas inválidas, series mal formadas o ejercicio inexistente (400)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',

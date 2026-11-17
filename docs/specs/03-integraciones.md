@@ -40,21 +40,23 @@ Este documento describe los servicios externos, APIs de terceros y mecanismos de
 USDA FDC es la base de datos oficial del Departamento de Agricultura de los Estados Unidos que ofrece información nutricional de alimentos en formato abierto y gratuito.
 
 - **Proveedor y documentación:** United States Department of Agriculture (`https://fdc.nal.usda.gov/api-guide.html`).
-- **Endpoint consumido:** `GET https://api.nal.usda.gov/fdc/v1/foods/search`.
-- **Credencial requerida:** `USDA_FDC_API_KEY`, configurada únicamente en `fit_track_api/.env`.
+- **Endpoint consumido por el servidor:** `GET https://api.nal.usda.gov/fdc/v1/foods/search`.
+- **Contrato hacia Flutter:** `GET /api/v1/foods/search?q={termino}` con Bearer JWT. Flutter no llama a USDA. Una respuesta 200 es un arreglo de hasta 20 alimentos `{ fdcId, description, name, servingG, kcal, proteinG, carbsG, fatG }` por 100 g (`brandOwner` solo si USDA lo trae). Cualquier otro estado abre captura manual.
+- **Credencial requerida:** `USDA_FDC_API_KEY`, solo en el entorno del servidor (`fit_track_api/.env`, no versionado). `.env.example` documenta el nombre con valor vacío. La key viaja únicamente en la petición saliente del API. No se escribe en logs, en el cuerpo HTTP, en Swagger ni en el repositorio.
 - **Flujo de integración:**
   1. La aplicación móvil solicita búsqueda mediante `GET /api/v1/foods/search?q={termino}` incluyendo Bearer token JWT.
-  2. El módulo `MealsModule` de NestJS recibe la petición y delega a `UsdaFoodService`.
-  3. `UsdaFoodService` ejecuta una petición HTTP con Axios aplicando un timeout estricto de **5000 ms**.
-  4. La respuesta de USDA se normaliza extrayendo únicamente los identificadores de nutrientes requeridos:
-     - `Nutrient ID 1008`: Energía / Calorías (`kcal`).
-     - `Nutrient ID 1003`: Proteínas (`proteinG`).
-     - `Nutrient ID 1004`: Grasas totales (`fatG`).
-     - `Nutrient ID 1005`: Carbohidratos disponibles (`carbsG`).
-  5. Se retorna al cliente Flutter una lista simplificada de DTOs (`FoodItemDto`).
+  2. `FoodsModule` (`FoodsController`) valida `q` con el `ValidationPipe` global (`whitelist`, `forbidNonWhitelisted`). `q` vacío o de más de 120 caracteres responde 400.
+  3. `UsdaFoodService` lee `USDA_FDC_API_KEY`. Si falta o está en blanco, no llama a USDA.
+  4. `FetchUsdaHttpClient` (`fetch`, cliente inyectable) ejecuta la petición con timeout de abort de **5000 ms** y `pageSize=20`.
+  5. La respuesta de USDA se normaliza por 100 g. Se prefiere el id de nutriente y, si no viene, el número legado:
+     - `1008` / `208`: Energía / Calorías (`kcal`).
+     - `1003` / `203`: Proteínas (`proteinG`).
+     - `1004` / `204`: Grasas totales (`fatG`).
+     - `1005` / `205`: Carbohidratos (`carbsG`).
+  6. Se retorna al cliente Flutter un arreglo de `FoodItemDto`. Una búsqueda sin coincidencias es 200 con `[]`.
 - **Degradación ante fallos:**
-  - Si la llamada a USDA arroja timeout (>5 s), error 500 o límite de cuota (HTTP 429), la API devuelve un error tipado `{ code: 'USDA_UNAVAILABLE', message: 'Servicio nutricional no disponible temporalmente' }`.
-  - La aplicación móvil captura este estado y despliega inmediatamente la opción de **Captura manual**, donde el usuario puede registrar su alimento digitando los macros sin perder su flujo de alimentación.
+  - Timeout (>5 s), fallo de red, HTTP no exitoso de USDA (incluye 429 y 5xx) o key ausente: la API responde HTTP 503 `{ code: 'USDA_UNAVAILABLE', message: 'Servicio nutricional no disponible temporalmente' }`. Ese cuerpo no incluye la key ni la URL.
+  - La aplicación móvil trata cualquier respuesta distinta de 200 como **Captura manual**: el usuario registra nombre, porción y macros sin salir del flujo.
 - **Limitación documentada:** La base de datos de USDA contiene registros primordialmente en idioma inglés. La interfaz de usuario documenta este comportamiento y ofrece traducción de términos comunes en la guía de uso.
 
 ---

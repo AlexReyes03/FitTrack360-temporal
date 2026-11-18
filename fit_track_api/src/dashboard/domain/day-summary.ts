@@ -65,3 +65,66 @@ export function sumNutrition(items: readonly Nutrients[]): Nutrients {
     { ...ZERO_NUTRIENTS },
   );
 }
+
+/**
+ * Macros de un MealItem tal como se congelaron al registrarlo (decisión M-02):
+ * kcal y gramos por porción consumida. No se recalculan contra USDA.
+ */
+export interface FrozenMealItemMacros {
+  kcal: number;
+  proteinG: number;
+  carbsG: number;
+  fatG: number;
+}
+
+/** Metas diarias contra las que se compara lo consumido. */
+export interface DailyGoals {
+  dailyCalorieGoal: number;
+  proteinGoalG: number;
+  carbsGoalG: number;
+  fatGoalG: number;
+}
+
+/** Mismo redondeo que los totales de una comida (MealResponseDto). */
+const round2 = (value: number): number => Math.round(value * 100) / 100;
+
+const roundNutrients = (n: Nutrients): Nutrients => ({
+  calories: round2(n.calories),
+  proteinG: round2(n.proteinG),
+  carbsG: round2(n.carbsG),
+  fatG: round2(n.fatG),
+});
+
+/**
+ * Consumido del día: suma de los MealItem de todas las comidas recibidas.
+ * Quien llama decide qué comidas son del día y del usuario; aquí solo se suma.
+ * Una comida sin alimentos aporta cero.
+ */
+export function sumMealItems(
+  meals: readonly { items: readonly FrozenMealItemMacros[] }[],
+): Nutrients {
+  const items = meals.flatMap((meal) => meal.items);
+  return roundNutrients(
+    sumNutrition(
+      items.map((item) => ({
+        calories: item.kcal,
+        proteinG: item.proteinG,
+        carbsG: item.carbsG,
+        fatG: item.fatG,
+      })),
+    ),
+  );
+}
+
+/** Meta menos consumido; negativo si se excedió la meta. */
+export function remainingAgainst(
+  goals: DailyGoals,
+  consumed: Nutrients,
+): Nutrients {
+  return roundNutrients({
+    calories: goals.dailyCalorieGoal - consumed.calories,
+    proteinG: goals.proteinGoalG - consumed.proteinG,
+    carbsG: goals.carbsGoalG - consumed.carbsG,
+    fatG: goals.fatGoalG - consumed.fatG,
+  });
+}

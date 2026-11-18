@@ -2,11 +2,12 @@ import { BadRequestException } from '@nestjs/common';
 import { DashboardService } from '../../src/dashboard/dashboard.service';
 import {
   resolveDay,
+  sumMealItems,
   sumNutrition,
 } from '../../src/dashboard/domain/day-summary';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { DEFAULT_SETTINGS } from '../../src/users/domain/profile-rules';
-import { createDashboardStore } from './dashboard.fakes';
+import { createDashboardStore, type FakeMealItem } from './dashboard.fakes';
 
 const ANA = 'user-ana';
 const BETO = 'user-beto';
@@ -30,11 +31,38 @@ const session = (
   notes: null,
 });
 
-const meal = (id: string, userId: string, eatenAt: string) => ({
+const meal = (
+  id: string,
+  userId: string,
+  eatenAt: string,
+  items: FakeMealItem[] = [],
+) => ({
   id,
   userId,
   eatenAt: new Date(eatenAt),
   mealType: 'LUNCH',
+  items,
+});
+
+const item = (
+  kcal: number,
+  proteinG: number,
+  carbsG: number,
+  fatG: number,
+): FakeMealItem => ({ kcal, proteinG, carbsG, fatG });
+
+const metric = (
+  id: string,
+  userId: string,
+  measuredAt: string,
+  weightKg: number | null = 70,
+) => ({
+  id,
+  userId,
+  measuredAt: new Date(measuredAt),
+  weightKg,
+  bodyFatPercent: null,
+  waistCm: null,
 });
 
 describe('Dominio del resumen del día (W12-06)', () => {
@@ -67,6 +95,24 @@ describe('Dominio del resumen del día (W12-06)', () => {
         { calories: 450.5, proteinG: 35, carbsG: 40, fatG: 15.5 },
       ]),
     ).toEqual({ calories: 750.5, proteinG: 55, carbsG: 70, fatG: 25.5 });
+  });
+
+  it('suma los MealItem congelados de todas las comidas (kcal -> calories)', () => {
+    expect(
+      sumMealItems([
+        { items: [item(300, 20, 30, 10), item(150, 5, 20, 4)] },
+        { items: [] },
+        { items: [item(450.5, 35, 40, 15.5)] },
+      ]),
+    ).toEqual({ calories: 900.5, proteinG: 60, carbsG: 90, fatG: 29.5 });
+  });
+
+  it('redondea los totales a 2 decimales como los totales de comidas', () => {
+    expect(
+      sumMealItems([
+        { items: [item(0.1, 0.1, 0.1, 0.1), item(0.2, 0.2, 0.2, 0.2)] },
+      ]),
+    ).toEqual({ calories: 0.3, proteinG: 0.3, carbsG: 0.3, fatG: 0.3 });
   });
 });
 
@@ -178,5 +224,132 @@ describe('DashboardService.today (W12-06)', () => {
     expect(summary.nutrition.goals.dailyCalorieGoal).toBe(
       DEFAULT_SETTINGS.dailyCalorieGoal,
     );
+  });
+});
+
+describe('DashboardService.today: totales reales de comidas (W12-06, M-02)', () => {
+  const NOW = new Date('2026-11-10T18:00:00Z');
+  const UTC_MINUS_6 = { date: '2026-11-10', utcOffsetMinutes: -360 };
+
+  it('consumed coincide con la suma de los MealItem de las comidas del día', async () => {
+    const summary = await serviceWith({
+      meals: [
+        meal('desayuno', ANA, '2026-11-10T14:00:00Z', [
+          item(300, 20, 30, 10),
+          item(120.25, 4, 18, 3.5),
+        ]),
+        meal('cena', ANA, '2026-11-11T02:00:00Z', [item(500, 40, 45, 18)]), // 20:00 del 10 local
+        meal('ayer', ANA, '2026-11-09T18:00:00Z', [item(999, 99, 99, 99)]),
+        meal('manana', ANA, '2026-11-11T08:00:00Z', [item(777, 77, 77, 77)]),
+        meal('ajena', BETO, '2026-11-10T15:00:00Z', [item(888, 88, 88, 88)]),
+      ],
+    }).today(ANA, UTC_MINUS_6, NOW);
+
+    expect(summary.nutrition.mealsLogged).toBe(2);
+    expect(summary.nutrition.consumed).toEqual({
+      calories: 920.25,
+      proteinG: 64,
+      carbsG: 93,
+      fatG: 31.5,
+    });
+    expect(summary.nutrition.remaining).toEqual({
+      calories: DEFAULT_SETTINGS.dailyCalorieGoal - 920.25,
+      proteinG: DEFAULT_SETTINGS.proteinGoalG - 64,
+      carbsG: DEFAULT_SETTINGS.carbsGoalG - 93,
+      fatG: DEFAULT_SETTINGS.fatGoalG - 31.5,
+    });
+  });
+
+  it('respeta los bordes del día local: incluye 00:00 y excluye 24:00', async () => {
+    const summary = await serviceWith({
+      meals: [
+        meal('inicio', ANA, '2026-11-10T06:00:00.000Z', [item(100, 1, 1, 1)]), // 00:00 local
+        meal('fin', ANA, '2026-11-11T05:59:59.999Z', [item(10, 1, 1, 1)]), // 23:59:59.999 local
+        meal('antes', ANA, '2026-11-10T05:59:59.999Z', [item(1000, 9, 9, 9)]), // 23:59 del 9
+        meal('despues', ANA, '2026-11-11T06:00:00.000Z', [item(2000, 9, 9, 9)]), // 00:00 del 11
+      ],
+    }).today(ANA, UTC_MINUS_6, NOW);
+
+    expect(summary.nutrition.mealsLogged).toBe(2);
+    expect(summary.nutrition.consumed).toEqual({
+      calories: 110,
+      proteinG: 2,
+      carbsG: 2,
+      fatG: 2,
+    });
+  });
+
+  it('el desplazamiento horario cambia qué comidas son del día', async () => {
+    // 2026-11-11T03:00Z: en UTC ya es el 11; en UTC-6 todavía es el 10.
+    const seed = {
+      meals: [
+        meal('noche', ANA, '2026-11-11T03:00:00Z', [item(400, 30, 20, 10)]),
+      ],
+    };
+    const local = await serviceWith(seed).today(ANA, UTC_MINUS_6, NOW);
+    const utc = await serviceWith(seed).today(
+      ANA,
+      { date: '2026-11-10', utcOffsetMinutes: 0 },
+      NOW,
+    );
+
+    expect(local.nutrition.consumed.calories).toBe(400);
+    expect(utc.nutrition.consumed.calories).toBe(0);
+  });
+
+  it('una comida sin alimentos cuenta como registrada pero aporta cero', async () => {
+    const summary = await serviceWith({
+      meals: [meal('vacia', ANA, '2026-11-10T14:00:00Z')],
+    }).today(ANA, { date: '2026-11-10', utcOffsetMinutes: 0 }, NOW);
+
+    expect(summary.nutrition.mealsLogged).toBe(1);
+    expect(summary.nutrition.consumed).toEqual({
+      calories: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatG: 0,
+    });
+  });
+
+  it('no suma alimentos de otro usuario aunque sean del mismo día', async () => {
+    const summary = await serviceWith({
+      meals: [
+        meal('ajena', BETO, '2026-11-10T14:00:00Z', [item(700, 50, 60, 20)]),
+      ],
+    }).today(ANA, { date: '2026-11-10', utcOffsetMinutes: 0 }, NOW);
+
+    expect(summary.nutrition.consumed.calories).toBe(0);
+  });
+});
+
+describe('DashboardService.today: última métrica (W12-06, BodyMetric)', () => {
+  const NOW = new Date('2026-11-10T18:00:00Z');
+  const DAY = { date: '2026-11-10', utcOffsetMinutes: 0 };
+
+  it('devuelve la última BodyMetric del usuario hasta el fin del día', async () => {
+    const summary = await serviceWith({
+      metrics: [
+        metric('vieja', ANA, '2026-11-01T08:00:00Z', 72.5),
+        metric('ultima', ANA, '2026-11-10T07:00:00Z', 71.8),
+        metric('futura', ANA, '2026-11-12T07:00:00Z', 70),
+        metric('ajena', BETO, '2026-11-10T09:00:00Z', 90),
+      ],
+    }).today(ANA, DAY, NOW);
+
+    expect(summary.latestMetric).toEqual({
+      id: 'ultima',
+      measuredAt: '2026-11-10T07:00:00.000Z',
+      weightKg: 71.8,
+      bodyFatPercent: null,
+      waistCm: null,
+    });
+  });
+
+  it('sin métricas propias es null aunque otro usuario tenga', async () => {
+    const summary = await serviceWith({
+      metrics: [metric('ajena', BETO, '2026-11-10T09:00:00Z', 90)],
+    }).today(ANA, DAY, NOW);
+
+    expect(summary.latestMetric).toBeNull();
   });
 });

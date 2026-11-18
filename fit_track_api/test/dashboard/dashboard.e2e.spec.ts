@@ -34,6 +34,17 @@ describe('GET /api/v1/dashboard/today (W12-06)', () => {
           userId: 'user-ana',
           eatenAt: new Date('2026-11-10T14:00:00Z'),
           mealType: 'LUNCH',
+          items: [
+            { kcal: 247.5, proteinG: 46.5, carbsG: 0, fatG: 5.4 },
+            { kcal: 130, proteinG: 2.7, carbsG: 28, fatG: 0.3 },
+          ],
+        },
+        {
+          id: 'm-ayer',
+          userId: 'user-ana',
+          eatenAt: new Date('2026-11-09T14:00:00Z'),
+          mealType: 'DINNER',
+          items: [{ kcal: 900, proteinG: 50, carbsG: 80, fatG: 40 }],
         },
       ],
       sessions: [
@@ -89,6 +100,12 @@ describe('GET /api/v1/dashboard/today (W12-06)', () => {
 
     expect(response.body.date).toBe('2026-11-10');
     expect(response.body.nutrition.mealsLogged).toBe(1);
+    expect(response.body.nutrition.consumed).toEqual({
+      calories: 377.5,
+      proteinG: 49.2,
+      carbsG: 28,
+      fatG: 5.7,
+    });
     expect(response.body.session).toMatchObject({ id: 's1', isToday: true });
     expect(response.body.latestMetric).toBeNull();
   });
@@ -100,7 +117,14 @@ describe('GET /api/v1/dashboard/today (W12-06)', () => {
       .expect(200);
 
     expect(response.body.nutrition.mealsLogged).toBe(0);
+    expect(response.body.nutrition.consumed).toEqual({
+      calories: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatG: 0,
+    });
     expect(response.body.session).toBeNull();
+    expect(response.body.latestMetric).toBeNull();
   });
 
   it.each([
@@ -121,5 +145,9 @@ describe('GET /api/v1/dashboard/today (W12-06)', () => {
     const operation = response.body.paths['/api/v1/dashboard/today']?.get;
     expect(operation?.tags).toContain('dashboard');
     expect(operation?.responses?.['200']).toBeDefined();
+    const schemas = response.body.components.schemas;
+    expect(Object.keys(schemas.LatestMetricDto.properties)).toEqual(
+      expect.arrayContaining(['id', 'measuredAt', 'weightKg']),
+    );
   });
 });

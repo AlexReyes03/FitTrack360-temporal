@@ -1,9 +1,26 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { DEFAULT_SETTINGS } from '../users/domain/profile-rules';
-import { resolveDay, sumNutrition, ZERO_NUTRIENTS } from './domain/day-summary';
+import {
+  remainingAgainst,
+  resolveDay,
+  sumMealItems,
+  type DailyGoals,
+} from './domain/day-summary';
 import { DashboardQueryDto } from './dto/dashboard-query.dto';
-import { DashboardTodayDto, DaySessionDto } from './dto/dashboard-response.dto';
+import {
+  DashboardTodayDto,
+  DaySessionDto,
+  LatestMetricDto,
+} from './dto/dashboard-response.dto';
+
+/** Macros congelados que el resumen necesita de cada MealItem (M-02). */
+const MEAL_ITEM_MACROS = {
+  kcal: true,
+  proteinG: true,
+  carbsG: true,
+  fatG: true,
+} as const;
 
 @Injectable()
 export class DashboardService {
@@ -21,14 +38,21 @@ export class DashboardService {
     const utcOffsetMinutes = query.utcOffsetMinutes ?? 0;
     const day = resolveDay(query.date, utcOffsetMinutes, now);
 
-    const [meals, settings, todaySession] = await Promise.all([
+    const [meals, settings, todaySession, metric] = await Promise.all([
+      // Comidas del día local [start, end) del usuario, con sus alimentos.
       this.prisma.mealLog.findMany({
         where: { userId, eatenAt: { gte: day.start, lt: day.end } },
+        include: { items: { select: MEAL_ITEM_MACROS } },
       }),
       this.prisma.userSettings.findUnique({ where: { userId } }),
       this.prisma.workoutSession.findFirst({
         where: { userId, startedAt: { gte: day.start, lt: day.end } },
         orderBy: { startedAt: 'desc' },
+      }),
+      // Última métrica corporal registrada hasta el fin del día consultado.
+      this.prisma.bodyMetric.findFirst({
+        where: { userId, measuredAt: { lt: day.end } },
+        orderBy: { measuredAt: 'desc' },
       }),
     ]);
 
@@ -41,11 +65,11 @@ export class DashboardService {
         orderBy: { startedAt: 'desc' },
       }));
 
-    // MealLog todavía no guarda alimentos con nutrientes: el modelo MealItem
-    // (decisión M-02) no existe. Cuando exista, aquí se mapean los items de
-    // cada comida a Nutrients; por ahora cada comida aporta cero.
-    const consumed = sumNutrition(meals.map(() => ZERO_NUTRIENTS));
-    const goals = {
+    // Suma de los MealItem (macros congelados, M-02) de las comidas del día.
+    // No se reutiliza GET /meals/summary porque su día es UTC fijo y aquí el
+    // día es el local del cliente (date + utcOffsetMinutes).
+    const consumed = sumMealItems(meals);
+    const goals: DailyGoals = {
       dailyCalorieGoal:
         settings?.dailyCalorieGoal ?? DEFAULT_SETTINGS.dailyCalorieGoal,
       proteinGoalG: settings?.proteinGoalG ?? DEFAULT_SETTINGS.proteinGoalG,
@@ -60,17 +84,10 @@ export class DashboardService {
         mealsLogged: meals.length,
         consumed,
         goals,
-        remaining: {
-          calories: goals.dailyCalorieGoal - consumed.calories,
-          proteinG: goals.proteinGoalG - consumed.proteinG,
-          carbsG: goals.carbsGoalG - consumed.carbsG,
-          fatG: goals.fatGoalG - consumed.fatG,
-        },
+        remaining: remainingAgainst(goals, consumed),
       },
       session: session ? toSession(session, todaySession !== null) : null,
-      // Punto de extensión: el modelo de métricas corporales llega con #122.
-      // Entonces se consulta la última BodyMetric del userId aquí.
-      latestMetric: null,
+      latestMetric: metric ? toMetric(metric) : null,
     };
   }
 }
@@ -90,5 +107,21 @@ function toSession(
     endedAt: session.endedAt?.toISOString() ?? null,
     notes: session.notes,
     isToday,
+  };
+}
+
+function toMetric(metric: {
+  id: string;
+  measuredAt: Date;
+  weightKg: number | null;
+  bodyFatPercent: number | null;
+  waistCm: number | null;
+}): LatestMetricDto {
+  return {
+    id: metric.id,
+    measuredAt: metric.measuredAt.toISOString(),
+    weightKg: metric.weightKg,
+    bodyFatPercent: metric.bodyFatPercent,
+    waistCm: metric.waistCm,
   };
 }

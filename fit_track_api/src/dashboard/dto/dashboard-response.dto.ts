@@ -20,7 +20,11 @@ export class DayNutritionDto {
   @ApiProperty({ description: 'Comidas registradas en el día' })
   mealsLogged!: number;
 
-  @ApiProperty({ type: NutrientsDto })
+  @ApiProperty({
+    type: NutrientsDto,
+    description:
+      'Suma de los MealItem (macros congelados) de las comidas del día, a 2 decimales',
+  })
   consumed!: NutrientsDto;
 
   @ApiProperty({ type: UserGoalsDto })
@@ -51,6 +55,24 @@ export class DaySessionDto {
   isToday!: boolean;
 }
 
+/** Última métrica corporal (BodyMetric) medida hasta el día consultado. */
+export class LatestMetricDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ format: 'date-time' })
+  measuredAt!: string;
+
+  @ApiProperty({ nullable: true, type: Number, example: 71.8 })
+  weightKg!: number | null;
+
+  @ApiProperty({ nullable: true, type: Number, example: 18.5 })
+  bodyFatPercent!: number | null;
+
+  @ApiProperty({ nullable: true, type: Number, example: 82 })
+  waistCm!: number | null;
+}
+
 export class DashboardTodayDto {
   @ApiProperty({ example: '2026-11-10' })
   date!: string;
@@ -64,11 +86,11 @@ export class DashboardTodayDto {
   @ApiPropertyOptional({ type: DaySessionDto, nullable: true })
   session!: DaySessionDto | null;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
+    type: LatestMetricDto,
     nullable: true,
-    type: Object,
     description:
-      'Última métrica corporal. Siempre null hasta que exista el módulo de progreso (#122)',
+      'Última BodyMetric del usuario medida antes del fin del día; null si no hay',
   })
-  latestMetric!: null;
+  latestMetric!: LatestMetricDto | null;
 }

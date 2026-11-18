@@ -114,6 +114,14 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
     ['campo no permitido', { passwordHash: 'x' }],
     ['intento de cambiar el id', { id: 'user-beto' }],
     ['campo no permitido en metas', { goals: { userId: 'user-beto' } }],
+    [
+      'meta de calorías sobre el máximo (W12-16)',
+      { displayName: 'Ana X', goals: { dailyCalorieGoal: 20001 } },
+    ],
+    [
+      'proteína sobre el máximo (W12-16)',
+      { displayName: 'Ana X', goals: { proteinGoalG: 2001 } },
+    ],
   ])('PATCH con %s responde 400 y no guarda nada', async (_caso, body) => {
     await request(server())
       .patch('/api/v1/users/me')
@@ -122,6 +130,49 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
       .expect(400);
     expect(store.settings).toHaveLength(0);
     expect(store.users[0].displayName).toBe('Ana');
+  });
+
+  it('PATCH parcial con una sola meta no persiste undefined ni pisa defaults (W12-16)', async () => {
+    await request(server())
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${anaToken}`)
+      .send({ goals: { proteinGoalG: 175 } })
+      .expect(200);
+
+    expect(store.settings).toHaveLength(1);
+    const undefinedKeys = Object.entries(store.settings[0])
+      .filter(([, value]) => value === undefined)
+      .map(([key]) => key);
+    expect(undefinedKeys).toEqual([]);
+
+    const response = await request(server())
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${anaToken}`)
+      .expect(200);
+    expect(response.body.goals).toEqual({
+      dailyCalorieGoal: 2000,
+      proteinGoalG: 175,
+      carbsGoalG: 250,
+      fatGoalG: 65,
+    });
+    expect(response.body.preferences).toEqual({
+      weightUnit: 'kg',
+      distanceUnit: 'km',
+      restSeconds: 90,
+      notificationsEnabled: false,
+      biometricEnabled: false,
+    });
+  });
+
+  it('PATCH que falla al guardar ajustes no deja el nombre cambiado (W12-16)', async () => {
+    store.faults.settingsUpsert = new Error('fallo simulado de la base');
+    await request(server())
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${anaToken}`)
+      .send({ displayName: 'Ana a medias', goals: { fatGoalG: 70 } })
+      .expect(500);
+    expect(store.users[0].displayName).toBe('Ana');
+    expect(store.settings).toHaveLength(0);
   });
 
   it('el PATCH de Ana no altera el perfil de Beto', async () => {

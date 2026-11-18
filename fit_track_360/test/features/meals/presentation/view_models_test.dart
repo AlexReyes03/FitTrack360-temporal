@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:fit_track_360/core/async_state.dart';
+import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/features/meals/domain/daily_summary.dart';
 import 'package:fit_track_360/features/meals/domain/food_item.dart';
 import 'package:fit_track_360/features/meals/domain/food_search_repository.dart';
+import 'package:fit_track_360/features/meals/domain/local_day.dart';
 import 'package:fit_track_360/features/meals/domain/macros.dart';
 import 'package:fit_track_360/features/meals/domain/meal_entry.dart';
 import 'package:fit_track_360/features/meals/domain/meal_type.dart';
@@ -19,6 +23,15 @@ const _oats = FoodItem(
 );
 
 final _today = DateTime(2026, 11, 10, 12);
+
+NewMealEntry _oatsEntry(DateTime at) => NewMealEntry(
+  mealType: MealType.breakfast,
+  eatenAt: at,
+  name: 'Oats',
+  fdcId: '173904',
+  portionG: 50,
+  macros: _oats.forPortion(50),
+);
 
 void main() {
   group('MealsViewModel', () {
@@ -39,20 +52,108 @@ void main() {
       final vm = MealsViewModel(FakeMealsRepository(), now: () => _today);
       await vm.load();
 
-      final ok = await vm.add(
-        NewMealEntry(
-          mealType: MealType.breakfast,
-          eatenAt: _today,
-          name: 'Oats',
-          portionG: 50,
-          macros: _oats.forPortion(50),
-        ),
-      );
+      final ok = await vm.add(_oatsEntry(_today));
 
       expect(ok, isTrue);
       final summary = vm.state.dataOrNull!;
       expect(summary.totals.kcal, 190);
       expect(summary.sectionFor(MealType.breakfast).entries, hasLength(1));
+    });
+
+    test(
+      'pide los totales del día con la fecha local del dispositivo',
+      () async {
+        final repo = FakeMealsRepository();
+        final vm = MealsViewModel(repo, now: () => _today.toUtc());
+        await vm.load();
+        expect(repo.totalsRequests, [LocalDay.of(_today)]);
+        expect(repo.totalsRequests.single.key, '2026-11-10');
+      },
+    );
+
+    test('los totales del día vienen del resumen del API', () async {
+      final repo = FakeMealsRepository();
+      await repo.add(_oatsEntry(_today));
+      final vm = MealsViewModel(repo, now: () => _today);
+      await vm.load();
+      expect(vm.state.dataOrNull!.totals.kcal, 190);
+    });
+
+    test(
+      'si el resumen falla, el dominio suma los registros del día',
+      () async {
+        final repo = FakeMealsRepository()..totalsError = Exception('red');
+        await repo.add(_oatsEntry(_today));
+        final vm = MealsViewModel(repo, now: () => _today);
+        await vm.load();
+        expect(vm.state.dataOrNull!.totals.kcal, 190);
+      },
+    );
+
+    test('no notifica después de dispose (load pendiente)', () async {
+      final repo = FakeMealsRepository()..listGate = Completer<void>();
+      final vm = MealsViewModel(repo, now: () => _today);
+      var notified = 0;
+      vm.addListener(() => notified++);
+      final pending = vm.load();
+      final before = notified;
+      vm.dispose();
+      repo.listGate!.complete();
+      await expectLater(pending, completes);
+      expect(notified, before);
+    });
+
+    test('no notifica después de dispose (add pendiente)', () async {
+      final repo = FakeMealsRepository();
+      final vm = MealsViewModel(repo, now: () => _today);
+      await vm.load();
+      repo.listGate = Completer<void>();
+      final pending = vm.add(_oatsEntry(_today));
+      vm.dispose();
+      repo.listGate!.complete();
+      await expectLater(pending, completes);
+    });
+
+    test('la sesión expirada al cargar marca sessionExpired', () async {
+      final repo = FakeMealsRepository()
+        ..listError = const SessionExpiredException();
+      final vm = MealsViewModel(repo, now: () => _today);
+      await vm.load();
+      expect(vm.sessionExpired, isTrue);
+    });
+
+    test(
+      'la sesión expirada en add no se traga: marca sessionExpired',
+      () async {
+        final repo = FakeMealsRepository()
+          ..addError = const SessionExpiredException();
+        final vm = MealsViewModel(repo, now: () => _today);
+        await vm.load();
+        var notified = 0;
+        vm.addListener(() => notified++);
+
+        final ok = await vm.add(_oatsEntry(_today));
+
+        expect(ok, isFalse);
+        expect(vm.sessionExpired, isTrue);
+        expect(notified, greaterThan(0));
+      },
+    );
+
+    test('la sesión expirada en el resumen del día también redirige', () async {
+      final repo = FakeMealsRepository()
+        ..totalsError = const SessionExpiredException();
+      final vm = MealsViewModel(repo, now: () => _today);
+      await vm.load();
+      expect(vm.sessionExpired, isTrue);
+    });
+
+    test('otro error en add devuelve false sin marcar sesión', () async {
+      final repo = FakeMealsRepository()..addError = Exception('400');
+      final vm = MealsViewModel(repo, now: () => _today);
+      await vm.load();
+      expect(await vm.add(_oatsEntry(_today)), isFalse);
+      expect(vm.sessionExpired, isFalse);
     });
 
     test('empieza en Loading', () {
@@ -130,6 +231,7 @@ void main() {
       expect(entry.name, 'Oats');
       expect(entry.portionG, 50);
       expect(entry.macros.kcal, 190);
+      expect(entry.fdcId, '173904');
       vm.dispose();
     });
 
@@ -148,6 +250,7 @@ void main() {
       expect(entry.name, 'Tacos de pollo');
       expect(entry.mealType, MealType.lunch);
       expect(entry.macros, macros);
+      expect(entry.fdcId, isNull);
       expect(repo.queries, isEmpty);
       expect(
         vm.buildManualEntry(

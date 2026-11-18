@@ -98,4 +98,45 @@ void main() {
     expect(received?.exercises.first.targetSets, 4);
     expect(find.text(_emptyMessage), findsNothing);
   });
+
+  testWidgets('limpia el error al cambiar a una rutina con ejercicios', (
+    tester,
+  ) async {
+    Widget host(Routine routine) => MaterialApp(
+      home: Scaffold(
+        body: StartSessionButton(routine: routine, onStarted: (_) {}),
+      ),
+    );
+
+    await tester.pumpWidget(host(_emptyRoutine));
+    await tester.tap(find.text('Iniciar sesión'));
+    await tester.pump();
+    expect(find.text(_emptyMessage), findsOneWidget);
+
+    await tester.pumpWidget(host(_fullRoutine));
+    await tester.pump();
+
+    expect(find.text(_emptyMessage), findsNothing);
+  });
+
+  testWidgets('conserva el error si la nueva rutina sigue vacía', (
+    tester,
+  ) async {
+    Widget host(Routine routine) => MaterialApp(
+      home: Scaffold(
+        body: StartSessionButton(routine: routine, onStarted: (_) {}),
+      ),
+    );
+
+    await tester.pumpWidget(host(_emptyRoutine));
+    await tester.tap(find.text('Iniciar sesión'));
+    await tester.pump();
+
+    await tester.pumpWidget(
+      host(const Routine(id: 'rutina-3', name: 'Otra vacía', exercises: [])),
+    );
+    await tester.pump();
+
+    expect(find.text(_emptyMessage), findsOneWidget);
+  });
 }

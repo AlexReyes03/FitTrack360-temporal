@@ -62,31 +62,71 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     super.dispose();
   }
 
+  /// Vuelve a la pantalla anterior; si se abrió por enlace directo y no hay
+  /// historial, va al listado de entrenamientos.
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/app/entrenamientos');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffoldTemplate(
       body: SafeArea(
-        child: ListenableBuilder(
-          listenable: _viewModel,
-          builder: (context, _) => _viewModel.summary.when(
-            loading: () => const Center(
-              child: CircularProgressIndicator(color: AppColors.accentWhite),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xs,
+                AppSpacing.xs,
+                AppSpacing.md,
+                0,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Volver',
+                    onPressed: _goBack,
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const Text('Sesión', style: AppTypography.pageTitle),
+                ],
+              ),
             ),
-            data: (summary) => _DetailContent(
-              summary: summary,
-              comparison: _viewModel.comparison,
+            Expanded(
+              child: ListenableBuilder(
+                listenable: _viewModel,
+                builder: (context, _) => _viewModel.summary.when(
+                  loading: () => const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.accentWhite,
+                    ),
+                  ),
+                  data: (summary) => _DetailContent(
+                    summary: summary,
+                    comparison: _viewModel.comparison,
+                  ),
+                  error: (error, _) => _ErrorView(
+                    message: error is AuthApiException
+                        ? error.message
+                        : 'No se pudo conectar',
+                    onRetry: _viewModel.load,
+                  ),
+                  empty: () => _ErrorView(
+                    message: 'No hay datos de esta sesión',
+                    onRetry: _viewModel.load,
+                  ),
+                ),
+              ),
             ),
-            error: (error, _) => _ErrorView(
-              message: error is AuthApiException
-                  ? error.message
-                  : 'No se pudo conectar',
-              onRetry: _viewModel.load,
-            ),
-            empty: () => _ErrorView(
-              message: 'No hay datos de esta sesión',
-              onRetry: _viewModel.load,
-            ),
-          ),
+          ],
         ),
       ),
     );
@@ -105,8 +145,6 @@ class _DetailContent extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
-        Text('Sesión', style: AppTypography.pageTitle),
-        const SizedBox(height: AppSpacing.xs),
         Text(
           formatDateTime(summary.startedAt),
           style: AppTypography.body.copyWith(color: AppColors.textSecondary),

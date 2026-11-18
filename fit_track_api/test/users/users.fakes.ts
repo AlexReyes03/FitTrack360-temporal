@@ -1,6 +1,10 @@
 /**
  * Almacén en memoria que sustituye a Prisma para las pruebas de perfil.
  * Solo implementa las operaciones que usa UsersService y FirebaseAuthGuard.
+ *
+ * `$transaction` modela la atomicidad de Prisma: toma una instantánea de
+ * usuarios y ajustes y, si el callback falla, la restaura. `faults` permite
+ * simular el fallo de una operación concreta (p. ej. el upsert de ajustes).
  */
 export interface StoredUser {
   id: string;
@@ -23,7 +27,15 @@ export function createUsersStore(
   users: StoredUser[],
   workoutSessions: StoredWorkoutSession[] = [],
 ) {
+export interface StoreFaults {
+  /** Si se define, `userSettings.upsert` rechaza con este error. */
+  settingsUpsert?: Error;
+}
+
+export function createUsersStore(users: StoredUser[]) {
   const settings: StoredSettings[] = [];
+  const faults: StoreFaults = {};
+  const transactions = { started: 0, rolledBack: 0 };
 
   const pick = (user: StoredUser) => ({
     id: user.id,
@@ -39,6 +51,22 @@ export function createUsersStore(
     workoutSessions,
     /** Llamadas a workoutSession.count, para comprobar que no se lista. */
     countCalls: [] as unknown[],
+    faults,
+    transactions,
+    /** Solo la forma interactiva, que es la que usa UsersService. */
+    $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
+      transactions.started += 1;
+      const usersSnapshot = structuredClone(users);
+      const settingsSnapshot = structuredClone(settings);
+      try {
+        return await fn(store);
+      } catch (error) {
+        transactions.rolledBack += 1;
+        users.splice(0, users.length, ...usersSnapshot);
+        settings.splice(0, settings.length, ...settingsSnapshot);
+        throw error;
+      }
+    },
     user: {
       findUnique: ({
         where,
@@ -101,6 +129,9 @@ export function createUsersStore(
         create: StoredSettings;
         update: Record<string, unknown>;
       }) => {
+        if (faults.settingsUpsert) {
+          return Promise.reject(faults.settingsUpsert);
+        }
         const existing = settings.find((s) => s.userId === where.userId);
         if (existing) {
           Object.assign(existing, update);

@@ -103,6 +103,7 @@ class FoodSearchViewModel extends ChangeNotifier {
       mealType: _destination,
       eatenAt: eatenAt,
       name: food.name,
+      fdcId: food.fdcId?.toString(),
       portionG: _portionG,
       macros: food.forPortion(_portionG),
     );

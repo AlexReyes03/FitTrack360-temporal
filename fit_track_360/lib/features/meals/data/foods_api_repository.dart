@@ -7,13 +7,14 @@ import '../domain/food_search_repository.dart';
 import '../domain/macros.dart';
 import 'meals_api_repository.dart';
 
-/// FoodSearchRepository contra el proxy propio (#112):
-/// `GET /api/v1/foods/search?q=` → lista de FoodItemDto
-/// `{fdcId, description|name, servingG?, kcal, proteinG, carbsG, fatG}`
-/// por 100 g. Nunca llama a USDA directo. Cualquier respuesta distinta de
-/// 200 (404 mientras no exista el endpoint, 429, 5xx, USDA_UNAVAILABLE),
-/// un payload inesperado o un timeout se traducen en
-/// [FoodSearchUnavailableException].
+/// FoodSearchRepository contra el proxy propio (`fit_track_api/src/foods/`,
+/// PR #153): `GET /api/v1/foods/search?q=` → arreglo de FoodItemDto
+/// `{fdcId: number, description, name, servingG: 100, kcal, proteinG,
+/// carbsG, fatG, brandOwner?}` por 100 g (también acepta `{items}`).
+/// Nunca llama a USDA directo. Cualquier respuesta distinta de 200 (400 por
+/// `q` vacío o > 120, 503 USDA_UNAVAILABLE, otros 4xx/5xx), un payload
+/// inesperado o un timeout se traducen en [FoodSearchUnavailableException];
+/// [SessionExpiredException] se propaga para redirigir a `/login`.
 class FoodsApiRepository implements FoodSearchRepository {
   FoodsApiRepository({
     required this._get,

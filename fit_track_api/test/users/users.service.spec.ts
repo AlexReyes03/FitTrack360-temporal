@@ -1,6 +1,10 @@
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { DEFAULT_SETTINGS } from '../../src/users/domain/profile-rules';
+import {
+  assertValidGoals,
+  DEFAULT_SETTINGS,
+  GOAL_LIMITS,
+} from '../../src/users/domain/profile-rules';
 import { UsersService } from '../../src/users/users.service';
 import {
   createUsersStore,

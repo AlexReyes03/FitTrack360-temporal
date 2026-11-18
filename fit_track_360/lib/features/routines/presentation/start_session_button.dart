@@ -35,6 +35,14 @@ class _StartSessionButtonState extends State<StartSessionButton> {
       widget.viewModel ?? StartSessionViewModel();
 
   @override
+  void didUpdateWidget(covariant StartSessionButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routine != widget.routine && !widget.routine.isEmpty) {
+      _viewModel.clearError();
+    }
+  }
+
+  @override
   void dispose() {
     if (widget.viewModel == null) _viewModel.dispose();
     super.dispose();

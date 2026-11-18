@@ -4,6 +4,7 @@ import {
   assertValidGoals,
   assertValidPreferences,
   DEFAULT_SETTINGS,
+  settingsChanges,
 } from './domain/profile-rules';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { MeResponseDto, UserResponseDto } from './dto/user-response.dto';
@@ -54,6 +55,8 @@ export class UsersService {
   /**
    * Actualiza el perfil del usuario del JWT. Solo toca filas cuyo id o userId
    * es el del token: no existe forma de editar el perfil de otra persona.
+   * El nombre (User) y los ajustes (UserSettings) se escriben en una sola
+   * transacción: si falla uno, no queda guardado ninguno.
    */
   async updateMe(
     userId: string,
@@ -61,35 +64,37 @@ export class UsersService {
   ): Promise<UserResponseDto> {
     assertValidGoals(dto.goals);
     assertValidPreferences(dto.preferences);
+    const changes = settingsChanges(dto.goals, dto.preferences);
 
-    const current = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: PROFILE_SELECT,
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.user.findUnique({
+        where: { id: userId },
+        select: PROFILE_SELECT,
+      });
+      if (!current) {
+        throw new UnauthorizedException('Token invalido');
+      }
+
+      const user =
+        dto.displayName === undefined
+          ? current
+          : await tx.user.update({
+              where: { id: userId },
+              data: { displayName: dto.displayName },
+              select: PROFILE_SELECT,
+            });
+
+      const settings =
+        Object.keys(changes).length === 0
+          ? await tx.userSettings.findUnique({ where: { userId } })
+          : await tx.userSettings.upsert({
+              where: { userId },
+              create: { ...DEFAULT_SETTINGS, ...changes, userId },
+              update: changes,
+            });
+
+      return toResponse(user, settings ?? DEFAULT_SETTINGS);
     });
-    if (!current) {
-      throw new UnauthorizedException('Token invalido');
-    }
-
-    const user =
-      dto.displayName === undefined
-        ? current
-        : await this.prisma.user.update({
-            where: { id: userId },
-            data: { displayName: dto.displayName },
-            select: PROFILE_SELECT,
-          });
-
-    const changes = { ...dto.goals, ...dto.preferences };
-    const settings =
-      Object.keys(changes).length === 0
-        ? await this.prisma.userSettings.findUnique({ where: { userId } })
-        : await this.prisma.userSettings.upsert({
-            where: { userId },
-            create: { ...DEFAULT_SETTINGS, ...changes, userId },
-            update: changes,
-          });
-
-    return toResponse(user, settings ?? DEFAULT_SETTINGS);
   }
 }
 

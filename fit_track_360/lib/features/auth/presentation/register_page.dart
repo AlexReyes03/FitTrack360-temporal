@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/session_storage.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../data/auth_api.dart';
+import '../data/firebase_auth_service.dart';
 import '../domain/auth_validators.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -20,7 +20,7 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   static final _usernamePattern = RegExp(r'^[a-zA-Z0-9_]{3,30}$');
 
-  final SessionStorage _sessionStorage = SessionStorage();
+  final FirebaseAuthService _auth = FirebaseAuthService();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -124,17 +124,13 @@ class _RegisterPageState extends State<RegisterPage> {
 
     setState(() => _submitting = true);
     try {
-      final tokens = await register(
+      await _auth.register(
         username: username,
         email: email,
         password: password,
         displayName: displayName,
         privacyConsent: true,
-        privacyNoticeVersion: '1',
-      );
-      await _sessionStorage.saveTokens(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        privacyNoticeVersion: '2',
       );
       if (!mounted) return;
       context.go('/app');

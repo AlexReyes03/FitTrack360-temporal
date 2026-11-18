@@ -58,6 +58,27 @@ class RoutineDetail {
       exercises: List.unmodifiable(ordered),
     );
   }
+
+  /// Copia el detalle con los nombres resueltos desde el catálogo.
+  ///
+  /// La respuesta de rutinas solo trae `exerciseId`; el nombre se completa con
+  /// `GET /exercises/:id` cuando está disponible.
+  RoutineDetail withExerciseNames(Map<String, String> names) {
+    if (names.isEmpty) return this;
+    final resolved = <RoutineExerciseSummary>[];
+    for (final exercise in exercises) {
+      final name = exercise.exerciseName ?? names[exercise.exerciseId];
+      resolved.add(
+        name == null ? exercise : exercise.copyWith(exerciseName: name),
+      );
+    }
+    return RoutineDetail(
+      id: id,
+      name: name,
+      notes: notes,
+      exercises: List.unmodifiable(resolved),
+    );
+  }
 }
 
 /// Ejercicio dentro del detalle, con sus objetivos opcionales.
@@ -91,6 +112,16 @@ class RoutineExerciseSummary {
   }
 
   String get displayName => exerciseName ?? 'Ejercicio';
+
+  RoutineExerciseSummary copyWith({String? exerciseName}) {
+    return RoutineExerciseSummary(
+      exerciseId: exerciseId,
+      exerciseName: exerciseName ?? this.exerciseName,
+      position: position,
+      targetSets: targetSets,
+      targetReps: targetReps,
+    );
+  }
 
   /// Objetivo legible solo con los datos presentes.
   String? get targetLabel {

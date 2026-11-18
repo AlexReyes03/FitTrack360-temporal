@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import '../../features/auth/data/auth_api.dart';
 import '../session_storage.dart';
 
-/// La sesion ya no se puede renovar: el refresh fallo y los tokens se limpiaron.
+/// La sesion ya no se puede renovar: el refresh del ID token fallo.
 class SessionExpiredException implements Exception {
   const SessionExpiredException();
 
@@ -14,15 +14,14 @@ class SessionExpiredException implements Exception {
   String toString() => 'Sesion expirada';
 }
 
-/// Cliente HTTP con Bearer token. Ante un 401 intenta un solo refresh y un
-/// reintento; si el refresh falla, limpia la sesion y lanza
-/// SessionExpiredException para que la navegacion mande a login.
+/// Cliente HTTP con Bearer (ID token Firebase). Ante 401 fuerza un refresh
+/// del ID token y reintenta una vez.
 class ApiClient {
   final SessionStorage _storage;
   final http.Client _http;
 
   ApiClient({SessionStorage? storage, http.Client? httpClient})
-    : _storage = storage ?? SessionStorage(),
+    : _storage = storage ?? appSessionStorage,
       _http = httpClient ?? http.Client();
 
   Future<UserProfile> me() async {
@@ -40,8 +39,9 @@ class ApiClient {
   Future<http.Response> post(String path, {Object? body}) =>
       _send('POST', path, body: body);
 
-  /// Sube un archivo multipart (campo `file`) con Bearer. No fija
-  /// Content-Type JSON. Ante un 401 refresca una vez y reintenta.
+  Future<http.Response> patch(String path, {Object? body}) =>
+      _send('PATCH', path, body: body);
+
   Future<http.Response> uploadFile(String path, File file) async {
     final accessToken = await _storage.readAccessToken();
     var response = await _upload(path, file, accessToken);
@@ -54,7 +54,12 @@ class ApiClient {
     }
 
     final renewedToken = await _storage.readAccessToken();
-    return _upload(path, file, renewedToken);
+    response = await _upload(path, file, renewedToken);
+    if (response.statusCode == 401) {
+      await _storage.clear();
+      throw const SessionExpiredException();
+    }
+    return response;
   }
 
   Future<http.Response> _send(
@@ -84,6 +89,10 @@ class ApiClient {
       body: body,
       accessToken: renewedToken,
     );
+    if (response.statusCode == 401) {
+      await _storage.clear();
+      throw const SessionExpiredException();
+    }
     return response;
   }
 
@@ -101,6 +110,13 @@ class ApiClient {
 
     if (method == 'GET') {
       return _http.get(uri, headers: headers);
+    }
+    if (method == 'PATCH') {
+      return _http.patch(
+        uri,
+        headers: headers,
+        body: body == null ? null : jsonEncode(body),
+      );
     }
     return _http.post(
       uri,
@@ -127,16 +143,9 @@ class ApiClient {
   }
 
   Future<bool> _tryRefresh() async {
-    final refreshToken = await _storage.readRefreshToken();
-    if (refreshToken == null) return false;
-
     try {
-      final tokens = await refreshTokens(refreshToken: refreshToken);
-      await _storage.saveTokens(
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-      );
-      return true;
+      final renewed = await _storage.readAccessToken(forceRefresh: true);
+      return renewed != null && renewed.isNotEmpty;
     } catch (_) {
       return false;
     }

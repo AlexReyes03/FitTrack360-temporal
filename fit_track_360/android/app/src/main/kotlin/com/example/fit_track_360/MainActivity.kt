@@ -1,5 +1,6 @@
 package com.example.fit_track_360
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// local_auth (O1) requiere FragmentActivity para el diálogo biométrico.
+class MainActivity : FlutterFragmentActivity()

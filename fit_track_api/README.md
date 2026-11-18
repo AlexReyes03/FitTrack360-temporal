@@ -35,7 +35,7 @@ $ pnpm run prisma:migrate
 $ pnpm run prisma:seed
 ```
 
-> **Nota (W9-12):** El script `prisma/seed.ts` carga una muestra inicial de 5 ejercicios para validación técnica de forma idempotente. La carga del catálogo completo (1324 ejercicios) está fuera del alcance de este PR y se ejecutará posteriormente.
+> **Nota (W11-02):** El script `prisma/seed.ts` carga de forma idempotente el catálogo completo de `seed/exercises.es.json` (1 324 ejercicios). La media se sirve en `/static/exercises/images` y `/static/exercises/videos`.
 
 ## Project setup
 
@@ -133,28 +133,26 @@ Desde `fit_track_api/`, un solo compose levanta Postgres, el API y Mailpit:
 docker compose up -d
 ```
 
-| Servicio | Puerto en el host | Uso |
-| --- | --- | --- |
-| API | `3000` | HTTP |
-| Postgres | `5432` | Base de datos |
-| Mailpit SMTP | `1025` | Correo local, sin TLS |
-| Mailpit UI | `8025` | http://localhost:8025 |
+| Servicio     | Puerto en el host | Uso                   |
+| ------------ | ----------------- | --------------------- |
+| API          | `3000`            | HTTP                  |
+| Postgres     | `5432`            | Base de datos         |
+| Mailpit SMTP | `1025`            | Correo local, sin TLS |
+| Mailpit UI   | `8025`            | http://localhost:8025 |
 
 El servicio `api` habla con Postgres por el hostname `postgres` y con Mailpit por `mailpit`. Esas direcciones solo existen dentro de la red del compose.
 
-## Auth, correo local y archivos
+## Auth (Firebase), correo local y archivos
 
-Endpoints nuevos bajo el prefijo `api/v1`:
+Identidad con **Firebase Auth**; dominio en PostgreSQL. Prefijo `api/v1`:
 
-- `POST /auth/refresh` y `POST /auth/logout`.
-- `GET /users/me` con Bearer access token.
-- `POST /auth/password/forgot` y `POST /auth/password/reset`.
-- `POST /storage/files`, `GET /storage/files/:id` y `DELETE /storage/files/:id` con Bearer access token.
+- `POST /auth/register` y `POST /auth/session` con Bearer = ID token de Firebase.
+- `POST /auth/logout` revoca refresh tokens en Firebase Admin (opcional si hay red).
+- `GET /users/me` y storage con el mismo Bearer.
+- Variables: `FIREBASE_AUTH_MODE`, `FIREBASE_PROJECT_ID`, credenciales de service account (ver `.env.example` y `docs/task-planning/firebase-auth-manual-checklist.md`).
+- Tests/CI: `FIREBASE_AUTH_MODE=mock` y tokens `mock:<uid>:<email>`.
 
-El correo de recuperacion usa SMTP hacia Mailpit (`SMTP_PORT=1025`, sin TLS).
-Dentro del compose el host es el servicio `mailpit`. Si el API corre en el host,
-usa `127.0.0.1` y la interfaz en http://localhost:8025. Si SMTP no responde,
-`password/forgot` responde 200 sin enviar correo.
+Mailpit sigue disponible para SMTP local; el reset de contraseña lo envía Firebase.
 
 Los archivos se guardan en `UPLOAD_DIR` (por defecto `./uploads`, ignorado por git).
 Cada usuario solo puede leer o borrar sus propios archivos; un id ajeno responde 404.
@@ -165,11 +163,11 @@ El API usa un solo puerto de desarrollo: `PORT=3000` (ver `.env.example`). `src/
 lo valida al arrancar: si `PORT` no es un entero entre 1 y 65535, el proceso termina con un
 mensaje en vez de quedar escuchando en otro lado.
 
-| Cómo corre el API | URL desde la Mac/PC | URL desde la app |
-| --- | --- | --- |
-| `pnpm start:dev` | `http://localhost:3000` | Emulador Android: `http://10.0.2.2:3000` (default de Flutter) |
+| Cómo corre el API                        | URL desde la Mac/PC     | URL desde la app                                                                      |
+| ---------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------- |
+| `pnpm start:dev`                         | `http://localhost:3000` | Emulador Android: `http://10.0.2.2:3000` (default de Flutter)                         |
 | Docker desde `pnpm dev` (`-p PORT:PORT`) | `http://localhost:3000` | Teléfono físico: el panel aplica `adb reverse tcp:3000` y usa `http://localhost:3000` |
-| `docker compose up -d` (`3000:3000`) | `http://localhost:3000` | Igual que arriba: emulador `10.0.2.2:3000`, teléfono con `adb reverse tcp:3000` |
+| `docker compose up -d` (`3000:3000`)     | `http://localhost:3000` | Igual que arriba: emulador `10.0.2.2:3000`, teléfono con `adb reverse tcp:3000`       |
 
 El compose publica `3000:3000` fijo y pasa `PORT` al contenedor, así que con el compose deja
 `PORT=3000`: otro valor haría que el API escuche en un puerto que el compose no publica. El panel

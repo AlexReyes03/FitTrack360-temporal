@@ -2,7 +2,6 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   Equals,
   IsBoolean,
-  IsEmail,
   IsNotEmpty,
   IsString,
   Matches,
@@ -10,6 +9,10 @@ import {
   MinLength,
 } from 'class-validator';
 
+/**
+ * Registro de perfil en PostgreSQL tras crear la cuenta en Firebase Auth.
+ * El correo y el uid salen del ID token (Bearer), no del body.
+ */
 export class RegisterDto {
   @ApiProperty({ example: 'ana_torres', minLength: 3, maxLength: 30 })
   @IsString()
@@ -17,15 +20,6 @@ export class RegisterDto {
   @MaxLength(30)
   @Matches(/^[a-zA-Z0-9_]+$/)
   username!: string;
-
-  @ApiProperty({ example: 'ana@example.com' })
-  @IsEmail()
-  email!: string;
-
-  @ApiProperty({ example: 'S3gura123', minLength: 8 })
-  @IsString()
-  @MinLength(8)
-  password!: string;
 
   @ApiProperty({ example: 'Ana Torres', minLength: 1, maxLength: 80 })
   @IsString()
@@ -38,8 +32,9 @@ export class RegisterDto {
   @Equals(true)
   privacyConsent!: boolean;
 
-  @ApiProperty({ example: '1' })
+  @ApiProperty({ example: '2' })
   @IsString()
   @IsNotEmpty()
+  @Equals('2')
   privacyNoticeVersion!: string;
 }

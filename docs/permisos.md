@@ -23,7 +23,7 @@ Las optativas se pueden cambiar solo hasta H3 y avisándolo en el PR de este doc
 | **O1** Biometría | `USE_BIOMETRIC` (instalación) | `NSFaceIDUsageDescription` | Como usuario quiero desbloquear mi sesión o confirmar una acción sensible (por ejemplo, borrar mi cuenta) con mi huella o rostro para proteger mis datos. | Al activar «Desbloqueo con biometría» en Ajustes o al confirmar la acción sensible. | Usa su contraseña como alternativa. Si el dispositivo no tiene biometría, la opción se oculta. | Ningún dato biométrico sale del dispositivo; la app solo recibe éxito o fallo del sistema. Se guarda la preferencia activado/desactivado hasta que el usuario la cambie. | Pendiente |
 | **O5** Pasos del día | `ACTIVITY_RECOGNITION` (ejecución) | `NSMotionUsageDescription` | Como usuario quiero ver mis pasos del día en el resumen del Home junto con mi entrenamiento y mis macros. | Al tocar «Mostrar mis pasos» en el Home, con explicación previa. | El resumen del Home se muestra sin la tarjeta de pasos; se puede activar después desde Ajustes. | Conteo de pasos del día; mostrarlo en el resumen diario. Si se sube a la nube y cuánto se conserva: **por definir con el equipo**. | Pendiente |
 | **O7** Contacto y mensaje | Sin permiso: selector de contactos del sistema. **Sin** `READ_CONTACTS` ni `CALL_PHONE` | Sin clave (selector del sistema) | Como usuario quiero enviar mi progreso a un amigo o entrenador por WhatsApp o SMS para que me acompañe. | Al tocar «Enviar a un contacto» en Progreso o Home. | Puede escribir el número a mano o usar «Compartir» (O10). | El número elegido se usa solo para abrir `https://wa.me/` o `sms:`; no se guarda ni se sube. El usuario confirma el envío en la app del sistema. | Pendiente |
-| **O10** Compartir | Sin permisos | Sin clave | Como usuario quiero compartir el resumen de mi sesión o de mi día con la hoja de compartir del sistema. | Al tocar «Compartir resumen». | No aplica (no hay permiso que negar). | Texto o imagen del resumen generado en el momento; no se guarda una copia extra. | Pendiente |
+| **O10** Compartir | Sin permisos | Sin clave | Como usuario quiero compartir el resumen de mi sesión o de mi día con la hoja de compartir del sistema. | Al tocar «Compartir resumen» (pendiente) o «Exportar mis datos» en Perfil (integrado en W12-20). | No aplica (no hay permiso que negar). Si la hoja no abre, la exportación se muestra en un diálogo para copiarla. | Texto o imagen del resumen generado en el momento; no se guarda una copia extra. La exportación viaja como archivo JSON sin secretos, escrito por el plugin en la caché temporal de la app. | Sin permisos que capturar; evidencia en dispositivo: Pendiente |
 
 ## Permisos que no usamos (sección 4.4)
 
@@ -45,12 +45,16 @@ Las versiones se verifican en pub.dev **al integrar cada paquete** (versión vig
 | --- | --- | --- | --- | --- |
 | P1 | `image_picker` | 1.2.4 | Sí (flutter.dev) | Android / iOS |
 | P2 | `geolocator` | Pendiente | Pendiente | Pendiente |
-| P3 | `flutter_local_notifications` + `timezone` | Pendiente | Pendiente | Pendiente |
+| P3 | `flutter_local_notifications` + `timezone` + `flutter_timezone` | 23.0.0 + 0.11.2 + 5.1.1 | Sí (dexterx.dev, labs.dart.dev, wolverinebeach.net) | Android / iOS (evidencia en dispositivo: Pendiente) |
 | Tres estados | `permission_handler` | 13.0.2 | Sí (baseflow.com) | Android / iOS |
-| O1 | `local_auth` | Pendiente | Pendiente | Pendiente |
+| O1 | `local_auth` | 3.0.2 | Sí (flutter.dev) | Android / iOS (evidencia en dispositivo: Pendiente) |
 | O5 | `pedometer` | Pendiente | Pendiente | Pendiente |
 | O7 | `url_launcher` + selector de contacto del sistema | Pendiente | Pendiente | Pendiente |
-| O10 | `share_plus` | Pendiente | Pendiente | Pendiente |
+| O10 | `share_plus` | 12.0.2 | Sí (fluttercommunity.dev) | Android / iOS (evidencia en dispositivo: Pendiente) |
+
+Notas de P3 y O1: `timezone` no detecta la zona del dispositivo, por eso se usa `flutter_timezone` para programar el aviso diario en hora local. El aviso es inexacto (`inexactAllowWhileIdle`) y usa un único id. En iOS, la autorización se pide con `flutter_local_notifications`; una negativa se trata como denegada permanentemente, porque iOS ya no vuelve a mostrar el diálogo. `local_auth` exige `FlutterFragmentActivity` en `MainActivity`.
+
+Nota de O10: integrado en Perfil → «Exportar mis datos» (W12-20). El JSON de `GET /users/me/export` se comparte como archivo `fittrack360-export-AAAA-MM-DD.json` con `XFile.fromData`; el plugin lo escribe en la caché temporal de la app y Android lo expone con el `FileProvider` que declara el propio plugin, así que no hay cambios de manifiesto, `Info.plist` ni permisos. Se usa 12.0.2 y no la 13.x (vigente: 13.3.1) porque `share_plus` 13 exige `win32` 6 y choca con `flutter_secure_storage` 9 (que fija `win32` 5); subirlo queda fuera de este issue. Si el plugin falla, la app muestra el JSON en un diálogo para copiarlo. Requisitos verificados: iOS ≥ 12 (proyecto: 15), AGP ≥ 8.12.1 (proyecto: 9.5.0), Kotlin 2.2 (proyecto: 2.4.0).
 
 ## Pendientes antes de H6
 

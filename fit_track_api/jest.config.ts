@@ -20,7 +20,11 @@ const config: Config = {
   // NestJS 12 solo publica ESM: las pruebas corren en el modo ESM de Jest
   // (ver el script "test", que activa --experimental-vm-modules).
   extensionsToTreatAsEsm: ['.ts'],
-  moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
+  moduleNameMapper: {
+    ...pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
+    // firebase-admin arrastra `jose` (ESM puro); ver test/support/firebase-admin/app.ts.
+    '^firebase-admin/(app|auth)$': '<rootDir>/test/support/firebase-admin/$1.ts',
+  },
   collectCoverageFrom: [
     'src/**/*.(t|j)s',
     'libs/**/*.(t|j)s',

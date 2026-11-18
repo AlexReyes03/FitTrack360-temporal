@@ -614,16 +614,59 @@ async function runningAvds(sdk, avds) {
   return running;
 }
 
+function isMdnsAdbSerial(serial) {
+  return /_adb-tls-connect\._tcp$/i.test(serial);
+}
+
+function isIpPortSerial(serial) {
+  return /^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(serial);
+}
+
+function serialPreference(serial) {
+  if (isIpPortSerial(serial)) {
+    return 2;
+  }
+  if (isMdnsAdbSerial(serial)) {
+    return 0;
+  }
+  return 1;
+}
+
+function identityFromMdnsSerial(serial) {
+  const match = serial.match(/^adb-([^-]+)-/i);
+  return match?.[1] ?? null;
+}
+
+async function physicalDeviceIdentity(sdk, serial) {
+  const props = await runArgs(sdk.adb, ['-s', serial, 'shell', 'getprop', 'ro.serialno']);
+  const hardware = firstLine(props.stdout);
+  if (hardware) {
+    return hardware;
+  }
+  return identityFromMdnsSerial(serial) || serial;
+}
+
 async function physicalDevices(sdk) {
-  const devices = [];
+  const byIdentity = new Map();
   for (const serial of await adbSerials(sdk)) {
     if (serial.startsWith('emulator-')) {
       continue;
     }
-    const model = await runArgs(sdk.adb, ['-s', serial, 'shell', 'getprop', 'ro.product.model']);
-    devices.push({ serial, name: firstLine(model.stdout) || serial });
+    const [modelResult, identity] = await Promise.all([
+      runArgs(sdk.adb, ['-s', serial, 'shell', 'getprop', 'ro.product.model']),
+      physicalDeviceIdentity(sdk, serial),
+    ]);
+    const candidate = {
+      serial,
+      name: firstLine(modelResult.stdout) || serial,
+      identity,
+    };
+    const current = byIdentity.get(identity);
+    if (!current || serialPreference(candidate.serial) > serialPreference(current.serial)) {
+      byIdentity.set(identity, candidate);
+    }
   }
-  return devices;
+  return [...byIdentity.values()].map(({ serial, name }) => ({ serial, name }));
 }
 
 async function mdnsSupported(sdk) {
@@ -842,8 +885,13 @@ function draw() {
     });
   } else if (mode === 'pairing') {
     lines.push('Vinculación inalámbrica');
-    lines.push(`Endpoint: ${wirelessPairing ?? ''}`);
-    lines.push(`Código: ${wirelessCode || '______'}`);
+    lines.push('En el teléfono: Depuración inalámbrica > Vincular con código.');
+    lines.push(
+      wirelessPairing
+        ? `Endpoint: ${wirelessPairing}`
+        : 'Endpoint: buscando servicio de emparejamiento...',
+    );
+    lines.push(`Código: ${wirelessCode || '______'}  (pega 6 dígitos y Enter)`);
   } else if (mode === 'flutter-target') {
     lines.push('Iniciar Flutter en');
     flutterTargets.forEach((target, index) => {
@@ -1397,6 +1445,31 @@ async function actDevices() {
   draw();
 }
 
+async function waitForPairingEndpoint(sdk, attempts = 15, delayMs = 1000) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const found = await discoverWireless(sdk);
+    if (found.pairing.length > 0) {
+      return found.pairing[0];
+    }
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return null;
+}
+
+function enterPairingMode(endpoint = null) {
+  wirelessPairing = endpoint;
+  wirelessCode = '';
+  mode = 'pairing';
+  setMessage(
+    endpoint
+      ? 'Pega el código de 6 dígitos y pulsa Enter.'
+      : 'Abre Vincular con código en el teléfono, pega los 6 dígitos y Enter.',
+  );
+  draw();
+}
+
 async function actWireless() {
   const sdk = devicesState.sdk ?? resolveSdk();
   if (!sdk?.adb) {
@@ -1412,31 +1485,24 @@ async function actWireless() {
     draw();
     return;
   }
-  if (found.connect.length === 0 && found.pairing.length === 0) {
-    setMessage('No se detectaron dispositivos. Activa Depuración inalámbrica y comparte la misma red.');
-    draw();
-    return;
+
+  if (found.connect.length > 0) {
+    const connected = await connectWireless(sdk, found.connect);
+    if (connected.length > 0) {
+      await refreshRow('devices');
+      setMessage(`Conectados: ${connected.join(', ')}`);
+      draw();
+      return;
+    }
   }
-  const connected = await connectWireless(sdk, found.connect);
-  if (connected.length === 0 && found.pairing.length > 0) {
-    wirelessPairing = found.pairing[0];
-    wirelessCode = '';
-    mode = 'pairing';
-    draw();
-    return;
-  }
-  await refreshRow('devices');
-  setMessage(
-    connected.length > 0
-      ? `Conectados: ${connected.join(', ')}`
-      : 'Los dispositivos detectados no aceptaron la conexión. Vincula con el código del teléfono.',
-  );
-  draw();
+
+  // Connect falló o solo hace falta emparejar: pedir código al momento.
+  enterPairingMode(found.pairing[0] ?? null);
 }
 
 async function submitPairing() {
   const sdk = devicesState.sdk ?? resolveSdk();
-  if (!sdk?.adb || !wirelessPairing) {
+  if (!sdk?.adb) {
     mode = 'main';
     draw();
     return;
@@ -1446,23 +1512,40 @@ async function submitPairing() {
     draw();
     return;
   }
-  setMessage('Vinculando...');
+  const code = wirelessCode;
+  setMessage('Buscando endpoint de emparejamiento...');
   draw();
-  const endpoint = wirelessPairing;
-  const result = await runArgs(sdk.adb, ['pair', endpoint, wirelessCode], { timeout: 30000 });
+  let endpoint = wirelessPairing;
+  if (!endpoint) {
+    endpoint = await waitForPairingEndpoint(sdk);
+    wirelessPairing = endpoint;
+    draw();
+  }
+  if (!endpoint) {
+    setMessage(
+      'No aparece el servicio de pair. Deja abierta la pantalla del código en el teléfono y reintenta Enter.',
+    );
+    draw();
+    return;
+  }
+
+  setMessage(`Vinculando ${endpoint}...`);
+  draw();
+  const result = await runArgs(sdk.adb, ['pair', endpoint, code], { timeout: 30000 });
   const output = `${result.stdout}\n${result.stderr}`.trim();
   wirelessCode = '';
   wirelessPairing = null;
-  mode = 'main';
   if (!/successfully paired/i.test(output)) {
+    mode = 'main';
     setMessage(firstLine(output) || 'No se pudo vincular el dispositivo.');
     draw();
     return;
   }
   setMessage('Vinculado. Conectando...');
+  mode = 'main';
   draw();
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
     const found = await discoverWireless(sdk);
     const connected = await connectWireless(sdk, found.connect);
     if (connected.length > 0) {
@@ -1473,7 +1556,7 @@ async function submitPairing() {
     }
   }
   await refreshRow('devices');
-  setMessage('Vinculado, pero no se pudo conectar. Revisa la red y vuelve a intentar con W.');
+  setMessage('Vinculado, pero no se pudo conectar. Revisa la red y pulsa W otra vez.');
   draw();
 }
 
@@ -1836,8 +1919,10 @@ function onKeypress(_str, key) {
       draw();
       return;
     }
-    if (/^\d$/.test(key.sequence ?? '')) {
-      wirelessCode = `${wirelessCode}${key.sequence}`.slice(0, 6);
+    // Acepta dígito a dígito o pegar los 6 de golpe.
+    const digits = (key.sequence ?? '').replace(/\D/g, '');
+    if (digits.length > 0) {
+      wirelessCode = `${wirelessCode}${digits}`.slice(0, 6);
       draw();
     }
     return;

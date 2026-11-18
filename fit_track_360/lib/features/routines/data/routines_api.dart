@@ -6,9 +6,10 @@ import 'routines_reader.dart';
 
 /// Lectura de rutinas por HTTP.
 ///
-/// El módulo `routines` todavía no existe en el API; las rutas y la forma de
-/// la respuesta siguen el plan del proyecto y quedan pendientes de confirmar
-/// con backend. Todo el acoplamiento a ese contrato vive en este archivo.
+/// Usa `GET /api/v1/routines` y `GET /api/v1/routines/:id`; ambas respuestas
+/// son objetos/arreglos planos de Prisma. Como el detalle solo incluye
+/// `exerciseId`, el nombre del ejercicio se completa desde el catálogo
+/// (`/api/v1/exercises/:id`) y se degrada a «Ejercicio» si no se puede leer.
 class RoutinesApi implements RoutinesReader {
   final ApiClient _client;
 
@@ -40,7 +41,46 @@ class RoutinesApi implements RoutinesReader {
     if (body is! Map<String, dynamic>) {
       throw const AuthApiException('No se pudo conectar');
     }
-    return RoutineDetail.fromJson(body);
+    final detail = RoutineDetail.fromJson(body);
+    return detail.withExerciseNames(await _exerciseNames(detail.exercises));
+  }
+
+  /// Nombres del catálogo para los ejercicios que no los traen en la rutina.
+  /// Solo consulta los ids únicos y no falla si un nombre no está disponible.
+  Future<Map<String, String>> _exerciseNames(
+    List<RoutineExerciseSummary> exercises,
+  ) async {
+    final pending = <String>{};
+    for (final exercise in exercises) {
+      final id = exercise.exerciseId;
+      if (exercise.exerciseName == null && id != null) pending.add(id);
+    }
+    if (pending.isEmpty) return const {};
+
+    final entries = await Future.wait(pending.map(_exerciseName));
+    return {
+      for (final entry in entries)
+        if (entry.value != null) entry.key: entry.value!,
+    };
+  }
+
+  Future<MapEntry<String, String?>> _exerciseName(String id) async {
+    try {
+      final response = await _client.get(
+        '/api/v1/exercises/${Uri.encodeComponent(id)}',
+      );
+      if (response.statusCode != 200) return MapEntry(id, null);
+      final body = jsonDecode(utf8.decode(response.bodyBytes));
+      if (body is! Map<String, dynamic>) return MapEntry(id, null);
+      return MapEntry(
+        id,
+        _optionalText(body['nameEs']) ?? _optionalText(body['name']),
+      );
+    } on SessionExpiredException {
+      rethrow;
+    } catch (_) {
+      return MapEntry(id, null);
+    }
   }
 
   /// Acepta una lista directa o un sobre `{items: [...]}` mientras el
@@ -56,4 +96,10 @@ class RoutinesApi implements RoutinesReader {
     }
     throw const AuthApiException('No se pudo conectar');
   }
+}
+
+String? _optionalText(Object? value) {
+  if (value is! String) return null;
+  final text = value.trim();
+  return text.isEmpty ? null : text;
 }

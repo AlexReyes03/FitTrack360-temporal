@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -20,6 +21,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -28,6 +30,10 @@ import {
   type AuthenticatedRequest,
 } from '../auth/jwt-auth.guard';
 import { CreateMealDto } from './dto/create-meal.dto';
+import {
+  DailyNutritionSummaryDto,
+  DailySummaryQueryDto,
+} from './dto/daily-nutrition-summary.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealResponseDto } from './dto/meal-response.dto';
 import { MealsService } from './meals.service';
@@ -41,14 +47,17 @@ export class MealsController {
 
   @Post()
   @ApiOperation({
-    summary: 'Crea un nuevo registro de comida para el usuario autenticado',
+    summary:
+      'Crea un nuevo registro de comida con alimentos anidados y macros congelados',
   })
   @ApiCreatedResponse({
-    description: 'Comida registrada exitosamente',
+    description:
+      'Comida registrada exitosamente con sus alimentos y totales calculados',
     type: MealResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Datos inválidos o mealType incorrecto (400)',
+    description:
+      'Datos inválidos, mealType incorrecto o macros negativos (400)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',
@@ -77,9 +86,37 @@ export class MealsController {
     return this.mealsService.findAll(userId);
   }
 
+  @Get('summary')
+  @ApiOperation({
+    summary:
+      'Obtiene el resumen diario o por rango de fechas de calorías y macronutrientes desglosado por tipo de comida',
+  })
+  @ApiOkResponse({
+    description: 'Resumen nutricional del usuario autenticado',
+    type: DailyNutritionSummaryDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Parámetros de fecha inválidos (400)',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Token no proporcionado o inválido (401)',
+  })
+  getDailySummary(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: DailySummaryQueryDto,
+  ): Promise<DailyNutritionSummaryDto> {
+    const userId = this.getUserId(req);
+    return this.mealsService.getDailySummary(userId, query);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Obtiene el detalle de un registro de comida por ID',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID del registro de comida',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @ApiOkResponse({
     description: 'Registro de comida encontrado',
@@ -87,7 +124,7 @@ export class MealsController {
   })
   @ApiNotFoundResponse({
     description:
-      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+      'Comida no encontrada o no pertenece al usuario autenticado (Regla S4: 404)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',
@@ -105,6 +142,11 @@ export class MealsController {
     summary:
       'Actualiza un registro de comida perteneciente al usuario autenticado',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID del registro de comida',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiOkResponse({
     description: 'Comida actualizada exitosamente',
     type: MealResponseDto,
@@ -114,7 +156,7 @@ export class MealsController {
   })
   @ApiNotFoundResponse({
     description:
-      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+      'Comida no encontrada o no pertenece al usuario autenticado (Regla S4: 404)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',
@@ -134,10 +176,15 @@ export class MealsController {
     summary:
       'Elimina un registro de comida perteneciente al usuario autenticado',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID del registro de comida',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiNoContentResponse({ description: 'Comida eliminada exitosamente' })
   @ApiNotFoundResponse({
     description:
-      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+      'Comida no encontrada o no pertenece al usuario autenticado (Regla S4: 404)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',

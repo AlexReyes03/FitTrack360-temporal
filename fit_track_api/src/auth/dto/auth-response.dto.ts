@@ -1,12 +1,19 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class AuthResponseDto {
+/** Perfil sincronizado tras register/session (sin tokens: el Bearer es Firebase). */
+export class AuthUserDto {
   @ApiProperty()
-  accessToken!: string;
+  id!: string;
 
   @ApiProperty()
-  refreshToken!: string;
+  email!: string;
 
-  @ApiProperty({ example: 900 })
-  expiresIn!: number;
+  @ApiProperty()
+  username!: string;
+
+  @ApiProperty()
+  displayName!: string;
+
+  @ApiProperty({ description: 'UID de Firebase Auth' })
+  firebaseUid!: string;
 }

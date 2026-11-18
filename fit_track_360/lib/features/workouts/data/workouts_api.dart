@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_api.dart';
+import '../domain/workout_session_draft.dart';
 import 'workout_session.dart';
 
 class WorkoutsApi {
@@ -23,14 +24,21 @@ class WorkoutsApi {
         .toList();
   }
 
-  Future<WorkoutSession> create({
-    required DateTime startedAt,
-    String? notes,
-  }) async {
-    final payload = <String, dynamic>{
-      'startedAt': startedAt.toUtc().toIso8601String(),
-      if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
-    };
+  Future<WorkoutSession> getById(String id) async {
+    final response = await _client.get(
+      '/api/v1/workouts/${Uri.encodeComponent(id)}',
+    );
+    if (response.statusCode != 200) {
+      throw AuthApiException(apiErrorMessage(response));
+    }
+    return WorkoutSession.fromJson(
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  /// Persiste el borrador; el mapeo al cuerpo vive en el dominio.
+  Future<WorkoutSession> create(WorkoutSessionDraft draft) async {
+    final payload = draft.toCreateWorkoutPayload();
     final response = await _client.post('/api/v1/workouts', body: payload);
     if (response.statusCode != 201) {
       throw AuthApiException(apiErrorMessage(response));

@@ -10,13 +10,11 @@ class ExportUnavailableException implements Exception {
 
 /// Acceso al perfil del usuario autenticado.
 abstract class ProfileRepository {
-  /// Devuelve null si el API no tiene perfil que mostrar.
+  /// Devuelve null si el API no tiene perfil que mostrar. El resumen
+  /// histórico llega en [UserProfile.workoutCount], sin listar sesiones.
   Future<UserProfile?> fetchProfile();
 
   Future<UserProfile> updateProfile(ProfileUpdate update);
-
-  /// Número de sesiones de entrenamiento registradas (resumen histórico).
-  Future<int> countWorkouts();
 
   /// JSON con los datos del usuario. Lanza [ExportUnavailableException].
   Future<String> exportData();

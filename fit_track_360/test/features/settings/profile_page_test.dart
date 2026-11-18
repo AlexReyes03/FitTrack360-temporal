@@ -18,9 +18,11 @@ class _Deps {
     FakeProfileRepository? repository,
     FakeReminderService? reminders,
     FakeBiometricService? biometrics,
+    FakeExportSharer? sharer,
     bool online = true,
     this.revokeFails = false,
   }) : repository = repository ?? FakeProfileRepository(),
+       sharer = sharer ?? FakeExportSharer(),
        reminders = reminders ?? FakeReminderService(),
        biometrics = biometrics ?? FakeBiometricService(),
        connectivity = FakeConnectivityService(online: online);
@@ -28,6 +30,7 @@ class _Deps {
   final FakeProfileRepository repository;
   final FakeReminderService reminders;
   final FakeBiometricService biometrics;
+  final FakeExportSharer sharer;
   final FakeConnectivityService connectivity;
   final storage = FakeSessionStorage();
   final bool revokeFails;
@@ -46,6 +49,7 @@ Future<void> _pump(WidgetTester tester, _Deps deps) async {
           repository: deps.repository,
           reminderService: deps.reminders,
           biometricService: deps.biometrics,
+          exportSharer: deps.sharer,
           connectivityService: deps.connectivity,
           logoutService: LogoutService(
             storage: deps.storage,
@@ -89,6 +93,7 @@ void main() {
               repository: gated,
               reminderService: deps.reminders,
               biometricService: deps.biometrics,
+              exportSharer: deps.sharer,
               connectivityService: deps.connectivity,
             ),
           ),
@@ -142,6 +147,20 @@ void main() {
       expect(find.text('Reintentar'), findsOneWidget);
     });
 
+    testWidgets('API sin workoutCount: el resumen se degrada con aviso', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        _Deps(repository: FakeProfileRepository()..workouts = null),
+      );
+      expect(find.byKey(const Key('profile-workout-count')), findsNothing);
+      expect(
+        find.text('El resumen histórico no está disponible por ahora.'),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('sin red muestra el OfflineBanner', (tester) async {
       await _pump(tester, _Deps(online: false));
       expect(find.text('Sin conexión'), findsOneWidget);
@@ -162,6 +181,11 @@ void main() {
       expect(deps.repository.updates, hasLength(1));
       expect(deps.repository.updates.single.displayName, 'Bea');
       expect(find.text('Cambios guardados.'), findsOneWidget);
+      // El PATCH no trae workoutCount: el resumen del GET se conserva.
+      expect(
+        find.text('Sesiones de entrenamiento registradas: 3'),
+        findsOneWidget,
+      );
 
       // Se vuelve a abrir la vista: el GET trae lo guardado.
       await tester.pumpWidget(const SizedBox());
@@ -293,16 +317,41 @@ void main() {
         findsOneWidget,
       );
       expect(find.byKey(const Key('profile-name')), findsOneWidget);
+      expect(deps.sharer.shared, isEmpty);
     });
 
-    testWidgets('exportación disponible muestra el JSON', (tester) async {
+    testWidgets('exportación disponible se comparte como archivo JSON', (
+      tester,
+    ) async {
       final deps = _Deps();
+      deps.repository.exportJson = '{"profile":{"displayName":"Ana"}}';
+      await _pump(tester, deps);
+      await tester.tap(find.text('Exportar mis datos'));
+      await tester.pumpAndSettle();
+
+      final shared = deps.sharer.shared.single;
+      expect(shared.json, '{"profile":{"displayName":"Ana"}}');
+      expect(
+        shared.fileName,
+        matches(RegExp(r'^fittrack360-export-\d{4}-\d{2}-\d{2}\.json$')),
+      );
+      // iPad exige un origen para anclar la hoja de compartir.
+      expect(shared.origin, isNotNull);
+      expect(shared.origin!.isEmpty, isFalse);
+      expect(find.text('Tus datos exportados'), findsNothing);
+    });
+
+    testWidgets('si compartir falla, muestra el JSON en el diálogo', (
+      tester,
+    ) async {
+      final deps = _Deps(sharer: FakeExportSharer(error: Exception('plugin')));
       deps.repository.exportJson = '{"profile":{"displayName":"Ana"}}';
       await _pump(tester, deps);
       await tester.tap(find.text('Exportar mis datos'));
       await tester.pumpAndSettle();
       expect(find.text('Tus datos exportados'), findsOneWidget);
       expect(find.textContaining('"displayName":"Ana"'), findsOneWidget);
+      expect(find.text(exportShareFailedMessage), findsOneWidget);
     });
 
     testWidgets('aviso de privacidad abre el texto del aviso', (tester) async {

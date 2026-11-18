@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:ui' show Rect;
 
 import 'package:fit_track_360/core/network/connectivity_service.dart';
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
 import 'package:fit_track_360/core/security/biometric_service.dart';
 import 'package:fit_track_360/core/session_storage.dart';
+import 'package:fit_track_360/features/settings/domain/export_sharer.dart';
 import 'package:fit_track_360/features/settings/domain/profile_repository.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
 
@@ -38,15 +40,17 @@ Map<String, dynamic> sampleProfileJson() => {
   'displayName': 'Ana',
   'goals': sampleGoals.toJson(),
   'preferences': samplePreferences.toJson(),
+  'workoutCount': 3,
 };
 
 /// Repositorio en memoria: aplica el PATCH y lo devuelve en el siguiente GET.
+/// Como el API, `workoutCount` solo viaja en el GET (null = API sin el campo).
 class FakeProfileRepository implements ProfileRepository {
   FakeProfileRepository({UserProfile? profile, this.workouts = 3})
     : profile = profile ?? sampleProfile;
 
   UserProfile? profile;
-  int workouts;
+  int? workouts;
   Object? fetchError;
   Object? updateError;
   String? exportJson;
@@ -57,7 +61,17 @@ class FakeProfileRepository implements ProfileRepository {
   Future<UserProfile?> fetchProfile() async {
     fetchCalls++;
     if (fetchError != null) throw fetchError!;
-    return profile;
+    final current = profile;
+    if (current == null) return null;
+    return UserProfile(
+      id: current.id,
+      email: current.email,
+      username: current.username,
+      displayName: current.displayName,
+      goals: current.goals,
+      preferences: current.preferences,
+      workoutCount: workouts,
+    );
   }
 
   @override
@@ -77,12 +91,27 @@ class FakeProfileRepository implements ProfileRepository {
   }
 
   @override
-  Future<int> countWorkouts() async => workouts;
-
-  @override
   Future<String> exportData() async {
     if (exportJson == null) throw const ExportUnavailableException();
     return exportJson!;
+  }
+}
+
+/// Hoja de compartir simulada: registra lo compartido o falla a voluntad.
+class FakeExportSharer implements ExportSharer {
+  FakeExportSharer({this.error});
+
+  Object? error;
+  final shared = <({String json, String fileName, Rect? origin})>[];
+
+  @override
+  Future<void> shareJson({
+    required String json,
+    required String fileName,
+    Rect? origin,
+  }) async {
+    if (error != null) throw error!;
+    shared.add((json: json, fileName: fileName, origin: origin));
   }
 }
 

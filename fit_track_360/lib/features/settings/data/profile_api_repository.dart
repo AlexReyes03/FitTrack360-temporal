@@ -33,17 +33,6 @@ class ProfileApiRepository implements ProfileRepository {
   }
 
   @override
-  Future<int> countWorkouts() async {
-    final response = await _client.get('/api/v1/workouts');
-    if (response.statusCode != 200) {
-      throw AuthApiException(apiErrorMessage(response));
-    }
-    final body = jsonDecode(utf8.decode(response.bodyBytes));
-    if (body is! List) throw const AuthApiException('No se pudo conectar');
-    return body.length;
-  }
-
-  @override
   Future<String> exportData() async {
     try {
       final response = await _client.get('$_mePath/export');

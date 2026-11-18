@@ -1,18 +1,17 @@
 import '../domain/macros.dart';
 
-/// Puente temporal: el modelo MealLog del API aún no tiene MealItem
-/// (plan §MealItem). Mientras tanto, nombre, porción y macros viajan en
-/// `notes` con un formato legible y reversible:
+/// Lectura de registros legacy, SOLO lectura.
+///
+/// Antes de MealItem (M-02), la app guardaba nombre, porción y macros en
+/// `MealLog.notes` con este formato:
 /// `Avena · 50 g · 190 kcal · P 6.5 g · C 34 g · G 3.5 g`.
+/// Esos registros llegan del API con `items` vacío; [MealsApiRepository] los
+/// decodifica aquí para no perder el historial. La escritura nueva va siempre
+/// por `items`: no hay `encode` a propósito.
 class MealNotesCodec {
   static final _pattern = RegExp(
     r'^(.*) · ([\d.]+) g · ([\d.]+) kcal · P ([\d.]+) g · C ([\d.]+) g · G ([\d.]+) g$',
   );
-
-  static String encode(String name, double portionG, Macros macros) =>
-      '${name.trim()} · ${_n(portionG)} g · ${_n(macros.kcal)} kcal · '
-      'P ${_n(macros.proteinG)} g · C ${_n(macros.carbsG)} g · '
-      'G ${_n(macros.fatG)} g';
 
   static ({String name, double portionG, Macros macros}) decode(String? notes) {
     final text = notes?.trim() ?? '';
@@ -30,13 +29,5 @@ class MealNotesCodec {
       portionG: g(2),
       macros: Macros(kcal: g(3), proteinG: g(4), carbsG: g(5), fatG: g(6)),
     );
-  }
-
-  /// Hasta una décima, sin ceros sobrantes.
-  static String _n(double value) {
-    final rounded = (value * 10).round() / 10;
-    return rounded == rounded.roundToDouble()
-        ? rounded.toInt().toString()
-        : rounded.toString();
   }
 }

@@ -68,6 +68,18 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
     super.dispose();
   }
 
+  /// La vista se abre con `Navigator.push` desde Comidas (que vive en
+  /// GoRouter): si hay ruta previa se cierra sin resultado; si se llegó sin
+  /// historial, vuelve a `/app/comidas`.
+  void _back() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      context.go('/app/comidas');
+    }
+  }
+
   double? _parse(TextEditingController controller) =>
       double.tryParse(controller.text.trim().replaceAll(',', '.'));
 
@@ -111,7 +123,24 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
           builder: (context, _) => ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              Text('Agregar alimento', style: AppTypography.pageTitle),
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Volver',
+                    onPressed: _back,
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Agregar alimento',
+                      style: AppTypography.pageTitle,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.sm),
               Text('Comida de destino', style: AppTypography.body),
               const SizedBox(height: AppSpacing.xs),

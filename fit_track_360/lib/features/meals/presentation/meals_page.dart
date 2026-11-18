@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
@@ -43,27 +42,26 @@ class _MealsPageState extends State<MealsPage> {
     super.initState();
     _viewModel = MealsViewModel(
       widget.mealsRepository ?? MealsApiRepository.fromClient(_api),
-    );
+    )..addListener(_onChange);
     _foods = widget.foodsRepository ?? FoodsApiRepository.fromClient(_api);
     _load();
   }
 
   @override
   void dispose() {
-    _viewModel.dispose();
+    _viewModel
+      ..removeListener(_onChange)
+      ..dispose();
     _client?.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    await _viewModel.load();
-    final state = _viewModel.state;
-    if (state is AsyncError<DailySummary> &&
-        state.error is SessionExpiredException &&
-        mounted) {
-      context.go('/login');
-    }
+  /// Sesión expirada al cargar o al agregar: a `/login`, como en Perfil.
+  void _onChange() {
+    if (_viewModel.sessionExpired && mounted) context.go('/login');
   }
+
+  Future<void> _load() => _viewModel.load();
 
   Future<void> _openSearch() async {
     final entry = await Navigator.of(context).push<NewMealEntry>(
@@ -71,7 +69,7 @@ class _MealsPageState extends State<MealsPage> {
     );
     if (entry == null || !mounted) return;
     final ok = await _viewModel.add(entry);
-    if (!ok && mounted) {
+    if (!ok && mounted && !_viewModel.sessionExpired) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo agregar el alimento')),
       );
@@ -183,14 +181,15 @@ class _SummaryView extends StatelessWidget {
                   Text('Sin alimentos', style: secondary)
                 else
                   for (final entry in section.entries)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                      child: Text(
-                        '${entry.name} · ${formatAmount(entry.portionG)} g\n'
-                        '${formatMacros(entry.macros)}',
-                        style: secondary,
+                    for (final item in entry.items)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                        child: Text(
+                          '${item.name} · ${formatAmount(item.servingG)} g\n'
+                          '${formatMacros(item.macros)}',
+                          style: secondary,
+                        ),
                       ),
-                    ),
               ],
             ),
           ),

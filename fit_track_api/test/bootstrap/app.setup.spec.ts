@@ -3,7 +3,11 @@ import { Test } from '@nestjs/testing';
 import { IsInt, IsString, Min } from 'class-validator';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { API_DOCS_PATH, configureApp } from '../../src/app.setup';
+import {
+  API_DOCS_PATH,
+  APP_HTTP_OPTIONS,
+  configureApp,
+} from '../../src/app.setup';
 
 class CreateProbeDto {
   @IsString()
@@ -32,7 +36,9 @@ async function bootstrapProbeApp(): Promise<INestApplication<App>> {
   const moduleRef = await Test.createTestingModule({
     controllers: [ProbeController],
   }).compile();
-  const app = moduleRef.createNestApplication<INestApplication<App>>();
+  const app = moduleRef.createNestApplication<INestApplication<App>>(
+    APP_HTTP_OPTIONS,
+  );
   configureApp(app);
   await app.init();
   return app;

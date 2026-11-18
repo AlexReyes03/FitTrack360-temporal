@@ -13,6 +13,7 @@ import {
   ProgressSeriesResponseDto,
 } from './dto/progress-series-response.dto';
 import { UpdateBodyMetricDto } from './dto/update-body-metric.dto';
+import { isFutureDate } from './validators/not-future-date.validator';
 
 interface ResolvedDateRange {
   from?: Date;
@@ -27,10 +28,17 @@ export class ProgressService {
     userId: string,
     dto: CreateBodyMetricDto,
   ): Promise<BodyMetricResponseDto> {
+    const measuredAt = this.parseAndValidateMeasuredAt(dto.measuredAt);
+    this.validateBiometricValues({
+      weightKg: dto.weightKg,
+      bodyFatPercent: dto.bodyFatPercent,
+      waistCm: dto.waistCm,
+    });
+
     const metric = await this.prisma.bodyMetric.create({
       data: {
         userId,
-        measuredAt: new Date(dto.measuredAt),
+        measuredAt,
         weightKg: dto.weightKg,
         bodyFatPercent: dto.bodyFatPercent ?? null,
         waistCm: dto.waistCm ?? null,
@@ -113,6 +121,17 @@ export class ProgressService {
     id: string,
     dto: UpdateBodyMetricDto,
   ): Promise<BodyMetricResponseDto> {
+    const measuredAt =
+      dto.measuredAt !== undefined
+        ? this.parseAndValidateMeasuredAt(dto.measuredAt)
+        : undefined;
+
+    this.validateBiometricValues({
+      weightKg: dto.weightKg,
+      bodyFatPercent: dto.bodyFatPercent,
+      waistCm: dto.waistCm,
+    });
+
     const existing = await this.prisma.bodyMetric.findFirst({
       where: { id, userId },
     });
@@ -124,8 +143,7 @@ export class ProgressService {
     const updated = await this.prisma.bodyMetric.update({
       where: { id },
       data: {
-        measuredAt:
-          dto.measuredAt !== undefined ? new Date(dto.measuredAt) : undefined,
+        measuredAt,
         weightKg: dto.weightKg !== undefined ? dto.weightKg : undefined,
         bodyFatPercent:
           dto.bodyFatPercent !== undefined ? dto.bodyFatPercent : undefined,
@@ -148,6 +166,57 @@ export class ProgressService {
     await this.prisma.bodyMetric.delete({
       where: { id },
     });
+  }
+
+  private parseAndValidateMeasuredAt(rawDate: string): Date {
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(
+        'measuredAt debe ser una fecha ISO 8601 válida',
+      );
+    }
+    if (isFutureDate(parsed)) {
+      throw new BadRequestException('measuredAt no puede ser una fecha futura');
+    }
+    return parsed;
+  }
+
+  private validateBiometricValues(values: {
+    weightKg?: number;
+    bodyFatPercent?: number | null;
+    waistCm?: number | null;
+  }): void {
+    if (
+      values.weightKg !== undefined &&
+      (typeof values.weightKg !== 'number' ||
+        !Number.isFinite(values.weightKg) ||
+        values.weightKg <= 0)
+    ) {
+      throw new BadRequestException(
+        'weightKg debe ser estrictamente mayor a 0',
+      );
+    }
+
+    if (
+      values.bodyFatPercent !== undefined &&
+      values.bodyFatPercent !== null &&
+      (typeof values.bodyFatPercent !== 'number' ||
+        !Number.isFinite(values.bodyFatPercent) ||
+        values.bodyFatPercent < 0 ||
+        values.bodyFatPercent > 100)
+    ) {
+      throw new BadRequestException('bodyFatPercent debe estar entre 0 y 100');
+    }
+
+    if (
+      values.waistCm !== undefined &&
+      values.waistCm !== null &&
+      (typeof values.waistCm !== 'number' ||
+        !Number.isFinite(values.waistCm) ||
+        values.waistCm < 0)
+    ) {
+      throw new BadRequestException('waistCm debe ser mayor o igual a 0');
+    }
   }
 
   private resolveDateRange(query: ProgressRangeQueryDto): ResolvedDateRange {

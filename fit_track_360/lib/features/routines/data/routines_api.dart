@@ -4,12 +4,10 @@ import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_api.dart';
 import 'routines_reader.dart';
 
-/// Lectura de rutinas por HTTP.
+/// Cliente HTTP de rutinas (`/api/v1/routines`).
 ///
-/// Usa `GET /api/v1/routines` y `GET /api/v1/routines/:id`; ambas respuestas
-/// son objetos/arreglos planos de Prisma. Como el detalle solo incluye
-/// `exerciseId`, el nombre del ejercicio se completa desde el catálogo
-/// (`/api/v1/exercises/:id`) y se degrada a «Ejercicio» si no se puede leer.
+/// El detalle solo trae `exerciseId`, así que el nombre se resuelve contra el
+/// catálogo (`/api/v1/exercises/:id`) y se degrada a «Ejercicio» si falla.
 class RoutinesApi implements RoutinesReader {
   final ApiClient _client;
 
@@ -45,8 +43,7 @@ class RoutinesApi implements RoutinesReader {
     return detail.withExerciseNames(await _exerciseNames(detail.exercises));
   }
 
-  /// Nombres del catálogo para los ejercicios que no los traen en la rutina.
-  /// Solo consulta los ids únicos y no falla si un nombre no está disponible.
+  /// Nombres del catálogo para los ejercicios que la rutina no incluye.
   Future<Map<String, String>> _exerciseNames(
     List<RoutineExerciseSummary> exercises,
   ) async {
@@ -83,8 +80,7 @@ class RoutinesApi implements RoutinesReader {
     }
   }
 
-  /// Acepta una lista directa o un sobre `{items: [...]}` mientras el
-  /// contrato de listado no esté confirmado.
+  /// Acepta un arreglo directo o un sobre `{items: [...]}`.
   List<Map<String, dynamic>> _items(Object? body) {
     if (body is List) {
       return body.whereType<Map<String, dynamic>>().toList(growable: false);

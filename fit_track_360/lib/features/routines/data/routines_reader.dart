@@ -60,9 +60,6 @@ class RoutineDetail {
   }
 
   /// Copia el detalle con los nombres resueltos desde el catálogo.
-  ///
-  /// La respuesta de rutinas solo trae `exerciseId`; el nombre se completa con
-  /// `GET /exercises/:id` cuando está disponible.
   RoutineDetail withExerciseNames(Map<String, String> names) {
     if (names.isEmpty) return this;
     final resolved = <RoutineExerciseSummary>[];
@@ -123,7 +120,6 @@ class RoutineExerciseSummary {
     );
   }
 
-  /// Objetivo legible solo con los datos presentes.
   String? get targetLabel {
     final sets = targetSets;
     final reps = targetReps;
@@ -139,7 +135,6 @@ class RoutineExerciseSummary {
   }
 }
 
-/// Lectura de rutinas. La implementación real puede cambiar sin tocar la UI.
 abstract interface class RoutinesReader {
   Future<List<RoutineSummary>> list();
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/design_system/widgets/ds_text_field.dart';
@@ -19,10 +20,12 @@ class _Deps {
     FakeReminderService? reminders,
     FakeBiometricService? biometrics,
     FakeExportSharer? sharer,
+    FakePrivacyRepository? privacy,
     bool online = true,
     this.revokeFails = false,
   }) : repository = repository ?? FakeProfileRepository(),
        sharer = sharer ?? FakeExportSharer(),
+       privacy = privacy ?? FakePrivacyRepository(),
        reminders = reminders ?? FakeReminderService(),
        biometrics = biometrics ?? FakeBiometricService(),
        connectivity = FakeConnectivityService(online: online);
@@ -31,6 +34,7 @@ class _Deps {
   final FakeReminderService reminders;
   final FakeBiometricService biometrics;
   final FakeExportSharer sharer;
+  final FakePrivacyRepository privacy;
   final FakeConnectivityService connectivity;
   final storage = FakeSessionStorage();
   final bool revokeFails;
@@ -50,6 +54,7 @@ Future<void> _pump(WidgetTester tester, _Deps deps) async {
           reminderService: deps.reminders,
           biometricService: deps.biometrics,
           exportSharer: deps.sharer,
+          privacyRepository: deps.privacy,
           connectivityService: deps.connectivity,
           logoutService: LogoutService(
             storage: deps.storage,
@@ -354,12 +359,142 @@ void main() {
       expect(find.text(exportShareFailedMessage), findsOneWidget);
     });
 
-    testWidgets('aviso de privacidad abre el texto del aviso', (tester) async {
-      await _pump(tester, _Deps());
+    testWidgets('exportación con sesión expirada pide iniciar sesión', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      deps.repository.exportError = const SessionExpiredException();
+      await _pump(tester, deps);
+      await tester.tap(find.text('Exportar mis datos'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sesión expirada'), findsOneWidget);
+      expect(find.text(exportUnavailableMessage), findsNothing);
+      expect(deps.sharer.shared, isEmpty);
+
+      await tester.tap(find.text('Iniciar sesión'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
+    });
+
+    testWidgets('aviso de privacidad abre la versión vigente del API', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
       await tester.tap(find.text('Aviso de privacidad'));
       await tester.pumpAndSettle();
-      expect(find.text('Datos de la cuenta'), findsOneWidget);
+      expect(find.text('Versión 2 · 16 de noviembre de 2026'), findsOneWidget);
+      expect(find.text('Cuenta'), findsOneWidget);
       expect(find.textContaining('[NOMBRE'), findsNothing);
+      expect(deps.privacy.noticeCalls, 1);
+    });
+
+    testWidgets('eliminar cuenta: cancelar no llama al API', (tester) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Esta acción no se puede deshacer'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(deps.repository.deleteCalls, 0);
+      expect(deps.storage.accessToken, 'access');
+      expect(find.byKey(const Key('profile-name')), findsOneWidget);
+      expect(find.text('Cuenta eliminada'), findsNothing);
+    });
+
+    testWidgets('eliminar cuenta confirmada: confirma y cierra sesión', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar'));
+      await tester.pumpAndSettle();
+
+      expect(deps.repository.deleteCalls, 1);
+      expect(find.text('Cuenta eliminada'), findsOneWidget);
+      expect(
+        find.textContaining('El servidor confirmó la eliminación'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Entendido'));
+      await tester.pumpAndSettle();
+
+      expect(deps.storage.accessToken, isNull);
+      expect(find.text('login'), findsOneWidget);
+    });
+
+    testWidgets('eliminar cuenta con error HTTP no informa éxito', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      deps.repository.deleteError = Exception('500');
+      await _pump(tester, deps);
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text(deleteAccountFailedMessage), findsOneWidget);
+      expect(find.text('Cuenta eliminada'), findsNothing);
+      expect(deps.storage.accessToken, 'access');
+      expect(find.byKey(const Key('profile-name')), findsOneWidget);
+      expect(find.text('login'), findsNothing);
+    });
+
+    testWidgets('eliminar cuenta con sesión expirada ofrece iniciar sesión', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      deps.repository.deleteError = const SessionExpiredException();
+      await _pump(tester, deps);
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Cuenta eliminada'), findsNothing);
+      expect(find.text('Sesión expirada'), findsOneWidget);
+      expect(deps.storage.accessToken, 'access');
+      expect(find.text('login'), findsNothing);
+
+      await tester.tap(find.text('Iniciar sesión'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
+    });
+
+    testWidgets('eliminar cuenta muestra progreso y evita duplicados', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      final gate = Completer<void>();
+      deps.repository.deleteGate = gate.future;
+      await _pump(tester, deps);
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Eliminar'));
+      await tester.pump();
+
+      expect(find.text('Eliminando cuenta...'), findsOneWidget);
+      await tester.tap(find.text('Eliminando cuenta...'));
+      await tester.pump();
+      expect(deps.repository.deleteCalls, 1);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(deps.repository.deleteCalls, 1);
+      expect(find.text('Cuenta eliminada'), findsOneWidget);
     });
 
     testWidgets('cerrar sesión limpia la sesión aunque el API falle', (

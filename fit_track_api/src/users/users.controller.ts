@@ -13,6 +13,7 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import {
   JwtAuthGuard,
@@ -35,6 +36,7 @@ export class UsersController {
       'Devuelve el perfil del usuario autenticado con su número de entrenamientos',
   })
   @ApiOkResponse({ type: MeResponseDto })
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido (401)' })
   me(@Req() request: AuthenticatedRequest): Promise<MeResponseDto> {
     const userId = request.user?.sub;
     if (!userId) {
@@ -53,6 +55,7 @@ export class UsersController {
     description:
       'Meta no positiva, macro negativo, unidad inválida o campo no permitido',
   })
+  @ApiUnauthorizedResponse({ description: 'Token ausente o inválido (401)' })
   updateMe(
     @Req() request: AuthenticatedRequest,
     @Body() dto: UpdateProfileDto,

@@ -70,8 +70,13 @@ void main() {
       final draft = useCase(_routine(exercises: const [_sentadilla]));
 
       expect(draft.toCreateWorkoutPayload(), {
+        'routineId': 'rutina-1',
         'startedAt': '2026-11-10T18:00:00.000Z',
         'notes': 'Calentar antes',
+        'sets': [
+          for (var order = 1; order <= 4; order++)
+            {'exerciseId': 'ej-a', 'order': order, 'weight': 0, 'reps': 8},
+        ],
       });
     });
 
@@ -117,6 +122,46 @@ void main() {
       expect(routine.exercises.single.exerciseName, 'Sentadilla');
       expect(routine.exercises.single.targetSets, 4);
       expect(StartSessionFromRoutine.canStart(routine), isTrue);
+    });
+
+    test('lee exerciseId plano como lo devuelve el API actual', () {
+      final exercise = RoutineExercise.fromJson({
+        'id': 're-1',
+        'routineId': 'rutina-1',
+        'exerciseId': '0001',
+        'position': 1,
+        'targetSets': 3,
+        'targetReps': 10,
+      });
+
+      expect(exercise.exerciseId, '0001');
+      expect(exercise.exerciseName, '');
+      expect(exercise.position, 1);
+    });
+
+    test('lee exercise: {id, name} sin exerciseId plano', () {
+      final exercise = RoutineExercise.fromJson({
+        'position': 2,
+        'targetSets': 4,
+        'targetReps': 6,
+        'exercise': {'id': '0042', 'name': 'Press banca'},
+      });
+
+      expect(exercise.exerciseId, '0042');
+      expect(exercise.exerciseName, 'Press banca');
+      expect(exercise.targetSets, 4);
+    });
+
+    test('sin ningún id lanza FormatException, no TypeError', () {
+      expect(
+        () => RoutineExercise.fromJson({
+          'position': 1,
+          'targetSets': 3,
+          'targetReps': 10,
+          'exercise': {'name': 'Sin id'},
+        }),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

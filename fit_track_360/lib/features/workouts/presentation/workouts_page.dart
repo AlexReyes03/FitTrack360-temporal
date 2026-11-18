@@ -13,9 +13,17 @@ import '../data/workouts_api.dart';
 import '../domain/workout_session_draft.dart';
 
 class WorkoutsPage extends StatefulWidget {
-  const WorkoutsPage({super.key, this.api, this.draft});
+  const WorkoutsPage({
+    super.key,
+    this.api,
+    this.draft,
+    this.apiClientFactory = ApiClient.new,
+  });
 
   final WorkoutsApi? api;
+
+  /// Crea el cliente HTTP propio solo cuando no se inyecta [api].
+  final ApiClient Function() apiClientFactory;
 
   /// Borrador precargado al iniciar desde una rutina; opcional.
   final WorkoutSessionDraft? draft;
@@ -25,16 +33,21 @@ class WorkoutsPage extends StatefulWidget {
 }
 
 class _WorkoutsPageState extends State<WorkoutsPage> {
-  late final ApiClient _client = ApiClient();
-  late final WorkoutsApi _api = widget.api ?? WorkoutsApi(_client);
+  ApiClient? _ownClient;
+  late final WorkoutsApi _api =
+      widget.api ?? WorkoutsApi(_ownClient = widget.apiClientFactory());
   late final TextEditingController _notesController = TextEditingController(
     text: widget.draft?.notes,
   );
+
+  /// Borrador pendiente de guardar; se descarta al crear la sesión.
+  late WorkoutSessionDraft? _draft = widget.draft;
 
   AsyncState<List<WorkoutSession>> _state = const AsyncLoading();
   late DateTime _startedAt =
       widget.draft?.startedAt.toLocal() ?? DateTime.now();
   bool _creating = false;
+  bool _saved = false;
   String? _formError;
 
   @override
@@ -46,7 +59,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   @override
   void dispose() {
     _notesController.dispose();
-    _client.dispose();
+    _ownClient?.dispose();
     super.dispose();
   }
 
@@ -91,13 +104,22 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   Future<void> _create() async {
     setState(() {
       _creating = true;
+      _saved = false;
       _formError = null;
     });
+    final base =
+        _draft ?? WorkoutSessionDraft(startedAt: _startedAt, exercises: []);
     try {
-      await _api.create(startedAt: _startedAt, notes: _notesController.text);
+      await _api.create(
+        base.edited(startedAt: _startedAt, notes: _notesController.text),
+      );
       if (!mounted) return;
       _notesController.clear();
-      setState(() => _startedAt = DateTime.now());
+      setState(() {
+        _draft = null;
+        _saved = true;
+        _startedAt = DateTime.now();
+      });
       await _load();
     } on SessionExpiredException {
       if (mounted) context.go('/login');
@@ -132,7 +154,12 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
         child: Row(
           children: [
             Expanded(
-              child: Text(exercise.exerciseName, style: AppTypography.body),
+              child: Text(
+                exercise.exerciseName.isEmpty
+                    ? 'Ejercicio ${exercise.exerciseId}'
+                    : exercise.exerciseName,
+                style: AppTypography.body,
+              ),
             ),
             Text(
               '${exercise.targetSets} series × ${exercise.targetReps} reps',
@@ -153,9 +180,22 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            Text('Entrenamientos', style: AppTypography.pageTitle),
+            Row(
+              children: [
+                if (Navigator.of(context).canPop())
+                  IconButton(
+                    tooltip: 'Volver',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                Text('Entrenamientos', style: AppTypography.pageTitle),
+              ],
+            ),
             const SizedBox(height: 16),
-            if (widget.draft case final draft?) ..._draftSection(draft),
+            if (_draft case final draft?) ..._draftSection(draft),
             Text('Notas', style: AppTypography.body),
             const SizedBox(height: 8),
             TextField(
@@ -180,6 +220,15 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                 ),
               ),
             ),
+            if (_saved) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Sesión guardada',
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
             if (_formError != null) ...[
               const SizedBox(height: 8),
               Text(

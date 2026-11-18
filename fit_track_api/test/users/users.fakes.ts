@@ -23,16 +23,15 @@ export interface StoredWorkoutSession {
   userId: string;
 }
 
-export function createUsersStore(
-  users: StoredUser[],
-  workoutSessions: StoredWorkoutSession[] = [],
-) {
 export interface StoreFaults {
   /** Si se define, `userSettings.upsert` rechaza con este error. */
   settingsUpsert?: Error;
 }
 
-export function createUsersStore(users: StoredUser[]) {
+export function createUsersStore(
+  users: StoredUser[],
+  workoutSessions: StoredWorkoutSession[] = [],
+) {
   const settings: StoredSettings[] = [];
   const faults: StoreFaults = {};
   const transactions = { started: 0, rolledBack: 0 };

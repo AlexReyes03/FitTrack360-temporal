@@ -19,7 +19,7 @@ import {
   type AuthenticatedRequest,
 } from '../auth/jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UserResponseDto } from './dto/user-response.dto';
+import { MeResponseDto, UserResponseDto } from './dto/user-response.dto';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
@@ -30,9 +30,12 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  @ApiOperation({ summary: 'Devuelve el perfil del usuario autenticado' })
-  @ApiOkResponse({ type: UserResponseDto })
-  me(@Req() request: AuthenticatedRequest): Promise<UserResponseDto> {
+  @ApiOperation({
+    summary:
+      'Devuelve el perfil del usuario autenticado con su número de entrenamientos',
+  })
+  @ApiOkResponse({ type: MeResponseDto })
+  me(@Req() request: AuthenticatedRequest): Promise<MeResponseDto> {
     const userId = request.user?.sub;
     if (!userId) {
       throw new UnauthorizedException('Token requerido');

@@ -18,7 +18,10 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
   let betoToken: string;
 
   beforeEach(async () => {
-    store = createUsersStore(sampleUsers());
+    store = createUsersStore(sampleUsers(), [
+      { id: 'w1', userId: 'user-ana' },
+      { id: 'w2', userId: 'user-ana' },
+    ]);
     anaToken = mockIdToken('firebase-ana', 'ana@test.com');
     betoToken = mockIdToken('firebase-beto', 'beto@test.com');
 
@@ -185,6 +188,35 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
       .expect(200);
     expect(beto.body.displayName).toBe('Beto');
     expect(beto.body.goals.dailyCalorieGoal).not.toBe(1500);
+  });
+
+  it('GET incluye workoutCount con solo las sesiones propias (W12-20)', async () => {
+    const ana = await request(server())
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${anaToken}`)
+      .expect(200);
+    expect(ana.body.workoutCount).toBe(2);
+
+    const beto = await request(server())
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${betoToken}`)
+      .expect(200);
+    expect(beto.body.workoutCount).toBe(0);
+  });
+
+  it('el contrato OpenAPI de GET /users/me declara workoutCount entero', async () => {
+    const response = await request(server()).get('/api/docs-json').expect(200);
+    const ref: string =
+      response.body.paths['/api/v1/users/me'].get.responses['200'].content[
+        'application/json'
+      ].schema.$ref;
+    const schema = response.body.components.schemas[ref.split('/').pop()!];
+
+    expect(schema.required).toContain('workoutCount');
+    expect(schema.properties.workoutCount).toMatchObject({
+      type: 'integer',
+      minimum: 0,
+    });
   });
 
   it('documenta GET y PATCH en OpenAPI con su DTO', async () => {

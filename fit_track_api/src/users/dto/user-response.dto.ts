@@ -57,3 +57,17 @@ export class UserResponseDto {
   @ApiProperty({ type: UserPreferencesDto })
   preferences!: UserPreferencesDto;
 }
+
+/**
+ * Respuesta de GET /users/me: el perfil más el resumen histórico. El conteo
+ * se calcula con COUNT en la base, sin transferir el historial (W12-20).
+ */
+export class MeResponseDto extends UserResponseDto {
+  @ApiProperty({
+    type: 'integer',
+    minimum: 0,
+    example: 12,
+    description: 'Sesiones de entrenamiento registradas por el usuario',
+  })
+  workoutCount!: number;
+}

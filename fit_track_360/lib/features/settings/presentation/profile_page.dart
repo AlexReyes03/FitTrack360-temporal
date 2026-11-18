@@ -16,6 +16,8 @@ import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/logout_service.dart';
 import '../data/profile_api_repository.dart';
+import '../data/share_plus_export_sharer.dart';
+import '../domain/export_sharer.dart';
 import '../domain/profile_repository.dart';
 import '../domain/profile_validation.dart';
 import '../domain/user_profile.dart';
@@ -44,6 +46,7 @@ class ProfilePage extends StatefulWidget {
     this.biometricService,
     this.logoutService,
     this.connectivityService,
+    this.exportSharer,
   });
 
   final ProfileRepository? repository;
@@ -51,6 +54,7 @@ class ProfilePage extends StatefulWidget {
   final BiometricService? biometricService;
   final LogoutService? logoutService;
   final ConnectivityService? connectivityService;
+  final ExportSharer? exportSharer;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -66,7 +70,9 @@ class _ProfilePageState extends State<ProfilePage> {
     reminderService: widget.reminderService ?? LocalReminderService(),
     biometricService: widget.biometricService ?? LocalBiometricService(),
     logoutService: widget.logoutService ?? LogoutService(),
+    exportSharer: widget.exportSharer ?? SharePlusExportSharer(),
   );
+  final _exportKey = GlobalKey();
 
   final _name = TextEditingController();
   final _calories = TextEditingController();
@@ -133,8 +139,9 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  /// Comparte el archivo; si el plugin falla, muestra el JSON para copiarlo.
   Future<void> _export() async {
-    final json = await _vm.exportData();
+    final json = await _vm.exportData(origin: _exportOrigin());
     if (json == null || !mounted) return;
     await showDialog<void>(
       context: context,
@@ -161,6 +168,13 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
     );
+  }
+
+  /// Rectángulo global de la fila «Exportar mis datos» (ancla en iPad).
+  Rect? _exportOrigin() {
+    final box = _exportKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
   }
 
   Future<void> _logout() async {
@@ -418,10 +432,13 @@ class _ProfilePageState extends State<ProfilePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text('Tus datos', style: _sectionTitle),
-              _LinkRow(
-                label: 'Exportar mis datos',
-                icon: Icons.download_outlined,
-                onTap: _export,
+              KeyedSubtree(
+                key: _exportKey,
+                child: _LinkRow(
+                  label: 'Exportar mis datos',
+                  icon: Icons.ios_share,
+                  onTap: _export,
+                ),
               ),
               _LinkRow(
                 label: 'Aviso de privacidad',

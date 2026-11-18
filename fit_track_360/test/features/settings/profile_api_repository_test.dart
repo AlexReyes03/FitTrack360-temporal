@@ -65,17 +65,35 @@ void main() {
       expect(again.goals.dailyCalorieGoal, 1800);
     });
 
-    test('countWorkouts cuenta las sesiones de /workouts', () async {
-      final client = MockClient(
-        (request) async => _json([
-          {'id': 'a'},
-          {'id': 'b'},
-        ]),
-      );
+    test(
+      'el contador viene en workoutCount de /users/me sin pedir /workouts',
+      () async {
+        final requests = <String>[];
+        final client = MockClient((request) async {
+          requests.add(request.url.path);
+          if (request.url.path.contains('/workouts')) {
+            fail('El contador no debe descargar el historial: ${request.url}');
+          }
+          return _json({...sampleProfileJson(), 'workoutCount': 2});
+        });
+        final repo = ProfileApiRepository(
+          ApiClient(storage: FakeSessionStorage(), httpClient: client),
+        );
+
+        final profile = await repo.fetchProfile();
+
+        expect(profile!.workoutCount, 2);
+        expect(requests, ['/api/v1/users/me']);
+      },
+    );
+
+    test('un /users/me sin workoutCount deja el contador en null', () async {
+      final json = sampleProfileJson()..remove('workoutCount');
+      final client = MockClient((_) async => _json(json));
       final repo = ProfileApiRepository(
         ApiClient(storage: FakeSessionStorage(), httpClient: client),
       );
-      expect(await repo.countWorkouts(), 2);
+      expect((await repo.fetchProfile())!.workoutCount, isNull);
     });
 
     test('exportData devuelve el JSON si el endpoint responde 200', () async {

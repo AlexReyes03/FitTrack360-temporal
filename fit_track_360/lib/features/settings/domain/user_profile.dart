@@ -120,6 +120,7 @@ class UserProfile {
     required this.displayName,
     required this.goals,
     required this.preferences,
+    this.workoutCount,
   });
 
   final String id;
@@ -128,6 +129,10 @@ class UserProfile {
   final String displayName;
   final NutritionGoals goals;
   final UserPreferences preferences;
+
+  /// Sesiones de entrenamiento registradas. Solo lo trae `GET /users/me`
+  /// (no el PATCH); null si el API no expone el campo.
+  final int? workoutCount;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) => UserProfile(
     id: json['id'] as String,
@@ -138,6 +143,7 @@ class UserProfile {
     preferences: UserPreferences.fromJson(
       json['preferences'] as Map<String, dynamic>,
     ),
+    workoutCount: (json['workoutCount'] as num?)?.toInt(),
   );
 }
 

@@ -7,7 +7,7 @@ import {
   settingsChanges,
 } from './domain/profile-rules';
 import { UpdateProfileDto } from './dto/update-profile.dto';
-import { UserResponseDto } from './dto/user-response.dto';
+import { MeResponseDto, UserResponseDto } from './dto/user-response.dto';
 
 /** Vista de los ajustes vigentes: fila guardada o valores por defecto. */
 interface Settings {
@@ -33,8 +33,11 @@ const PROFILE_SELECT = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Perfil del usuario del JWT con sus metas y preferencias vigentes. */
-  async findMe(userId: string): Promise<UserResponseDto> {
+  /**
+   * Perfil del usuario del JWT con sus metas, preferencias vigentes y el
+   * número de sesiones de entrenamiento propias (S4: filtro por userId).
+   */
+  async findMe(userId: string): Promise<MeResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: PROFILE_SELECT,
@@ -42,10 +45,11 @@ export class UsersService {
     if (!user) {
       throw new UnauthorizedException('Token invalido');
     }
-    const settings = await this.prisma.userSettings.findUnique({
-      where: { userId },
-    });
-    return toResponse(user, settings ?? DEFAULT_SETTINGS);
+    const [settings, workoutCount] = await Promise.all([
+      this.prisma.userSettings.findUnique({ where: { userId } }),
+      this.prisma.workoutSession.count({ where: { userId } }),
+    ]);
+    return { ...toResponse(user, settings ?? DEFAULT_SETTINGS), workoutCount };
   }
 
   /**

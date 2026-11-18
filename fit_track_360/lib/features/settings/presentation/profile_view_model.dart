@@ -1,9 +1,12 @@
+import 'dart:ui' show Rect;
+
 import 'package:flutter/foundation.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/notifications/reminder_service.dart';
 import '../../../core/security/biometric_service.dart';
 import '../../auth/data/logout_service.dart';
+import '../domain/export_sharer.dart';
 import '../domain/profile_repository.dart';
 import '../domain/profile_validation.dart';
 import '../domain/user_profile.dart';
@@ -20,6 +23,8 @@ const biometricFailedMessage =
     'desactivado; puedes usar tu contraseña.';
 const exportUnavailableMessage =
     'La exportación aún no está disponible. Intenta más tarde.';
+const exportShareFailedMessage =
+    'No se pudo abrir el menú para compartir. Copia tus datos desde aquí.';
 const saveFailedMessage =
     'No se pudieron guardar los cambios. Intenta de nuevo.';
 
@@ -33,17 +38,25 @@ class ProfileViewModel extends ChangeNotifier {
     required ReminderService reminderService,
     required BiometricService biometricService,
     required LogoutService logoutService,
+    required ExportSharer exportSharer,
+    DateTime Function()? clock,
   }) : _repository = profileRepository,
        _reminders = reminderService,
        _biometrics = biometricService,
-       _logout = logoutService;
+       _logout = logoutService,
+       _sharer = exportSharer,
+       _clock = clock ?? DateTime.now;
 
   final ProfileRepository _repository;
   final ReminderService _reminders;
   final BiometricService _biometrics;
   final LogoutService _logout;
+  final ExportSharer _sharer;
+  final DateTime Function() _clock;
 
   AsyncState<UserProfile> state = const AsyncLoading();
+
+  /// Resumen histórico del último GET; el PATCH no lo trae y no lo borra.
   int? workoutCount;
   bool reminderSupported = false;
   bool biometricAvailable = false;
@@ -66,16 +79,13 @@ class ProfileViewModel extends ChangeNotifier {
     try {
       final result = await _repository.fetchProfile();
       state = AsyncState.fromData(result);
+      workoutCount = result?.workoutCount;
     } catch (error, stackTrace) {
       state = AsyncError(error, stackTrace);
+      workoutCount = null; // El resumen se omite si el API no responde.
     }
     reminderSupported = await _safe(_reminders.isSupported);
     biometricAvailable = await _safe(_biometrics.isAvailable);
-    try {
-      workoutCount = await _repository.countWorkouts();
-    } catch (_) {
-      workoutCount = null; // El resumen se omite si el API no responde.
-    }
     _notify();
   }
 
@@ -204,15 +214,31 @@ class ProfileViewModel extends ChangeNotifier {
     _notify();
   }
 
-  /// Devuelve el JSON exportado, o null si la exportación no está disponible.
-  Future<String?> exportData() async {
+  /// Exporta y comparte el JSON como archivo (O10).
+  ///
+  /// Devuelve el JSON solo cuando la vista debe mostrarlo en el diálogo de
+  /// respaldo (el plugin falló); null si se compartió o si no hay exportación.
+  Future<String?> exportData({Rect? origin}) async {
     message = null;
+    final String json;
     try {
-      return await _repository.exportData();
+      json = await _repository.exportData();
     } catch (_) {
       message = exportUnavailableMessage;
       _notify();
       return null;
+    }
+    try {
+      await _sharer.shareJson(
+        json: json,
+        fileName: exportFileName(_clock()),
+        origin: origin,
+      );
+      return null;
+    } catch (_) {
+      message = exportShareFailedMessage;
+      _notify();
+      return json;
     }
   }
 

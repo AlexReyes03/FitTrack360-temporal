@@ -2,10 +2,14 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { DEFAULT_SETTINGS } from '../../src/users/domain/profile-rules';
 import { UsersService } from '../../src/users/users.service';
-import { createUsersStore, sampleUsers } from './users.fakes';
+import {
+  createUsersStore,
+  sampleUsers,
+  type StoredWorkoutSession,
+} from './users.fakes';
 
-function buildService() {
-  const store = createUsersStore(sampleUsers());
+function buildService(workoutSessions: StoredWorkoutSession[] = []) {
+  const store = createUsersStore(sampleUsers(), workoutSessions);
   const service = new UsersService(store as unknown as PrismaService);
   return { store, service };
 }
@@ -36,6 +40,7 @@ describe('UsersService: perfil, metas y preferencias (W12-05)', () => {
         notificationsEnabled: false,
         biometricEnabled: false,
       },
+      workoutCount: 0,
     });
     expect(profile).not.toHaveProperty('passwordHash');
   });
@@ -132,5 +137,42 @@ describe('UsersService: perfil, metas y preferencias (W12-05)', () => {
 
     expect(beto.displayName).toBe('Beto');
     expect(beto.goals.dailyCalorieGoal).toBe(DEFAULT_SETTINGS.dailyCalorieGoal);
+  });
+});
+
+describe('UsersService: resumen de entrenamientos en el perfil (W12-20)', () => {
+  const sessions: StoredWorkoutSession[] = [
+    { id: 'w1', userId: 'user-ana' },
+    { id: 'w2', userId: 'user-ana' },
+    { id: 'w3', userId: 'user-beto' },
+  ];
+
+  it('workoutCount cuenta solo las sesiones del usuario del token (S4)', async () => {
+    const { service } = buildService(sessions);
+
+    expect((await service.findMe('user-ana')).workoutCount).toBe(2);
+    expect((await service.findMe('user-beto')).workoutCount).toBe(1);
+  });
+
+  it('un usuario sin sesiones ve 0 aunque otros tengan', async () => {
+    const { service, store } = buildService(sessions);
+    store.users.push({
+      id: 'user-caro',
+      firebaseUid: 'firebase-caro',
+      email: 'caro@test.com',
+      username: 'caro',
+      displayName: 'Caro',
+      passwordHash: null,
+    });
+
+    expect((await service.findMe('user-caro')).workoutCount).toBe(0);
+  });
+
+  it('obtiene el entero con count filtrado por userId, sin listar sesiones', async () => {
+    const { service, store } = buildService(sessions);
+
+    await service.findMe('user-ana');
+
+    expect(store.countCalls).toEqual([{ where: { userId: 'user-ana' } }]);
   });
 });

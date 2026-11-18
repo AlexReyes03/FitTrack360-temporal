@@ -13,7 +13,16 @@ export interface StoredUser {
 
 export type StoredSettings = Record<string, unknown> & { userId: string };
 
-export function createUsersStore(users: StoredUser[]) {
+/** Sesión de entrenamiento mínima: solo importa a quién pertenece. */
+export interface StoredWorkoutSession {
+  id: string;
+  userId: string;
+}
+
+export function createUsersStore(
+  users: StoredUser[],
+  workoutSessions: StoredWorkoutSession[] = [],
+) {
   const settings: StoredSettings[] = [];
 
   const pick = (user: StoredUser) => ({
@@ -24,9 +33,12 @@ export function createUsersStore(users: StoredUser[]) {
     displayName: user.displayName,
   });
 
-  return {
+  const store = {
     users,
     settings,
+    workoutSessions,
+    /** Llamadas a workoutSession.count, para comprobar que no se lista. */
+    countCalls: [] as unknown[],
     user: {
       findUnique: ({
         where,
@@ -63,6 +75,18 @@ export function createUsersStore(users: StoredUser[]) {
         return Promise.resolve(pick(user));
       },
     },
+    workoutSession: {
+      // Igual que Prisma: sin `where` cuenta todas las filas de la tabla.
+      count(args?: { where?: { userId?: string } }) {
+        store.countCalls.push(args);
+        const userId = args?.where?.userId;
+        return Promise.resolve(
+          workoutSessions.filter(
+            (s) => userId === undefined || s.userId === userId,
+          ).length,
+        );
+      },
+    },
     userSettings: {
       findUnique: ({ where }: { where: { userId: string } }) =>
         Promise.resolve(
@@ -88,6 +112,7 @@ export function createUsersStore(users: StoredUser[]) {
       },
     },
   };
+  return store;
 }
 
 export function sampleUsers(): StoredUser[] {

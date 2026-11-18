@@ -97,6 +97,10 @@ model Exercise {
   attribution        String
   workoutSets        WorkoutSet[]
   routineExercises   RoutineExercise[]
+
+  @@index([bodyPart])
+  @@index([equipment])
+  @@index([target])
 }
 
 model Routine {
@@ -123,10 +127,6 @@ model RoutineExercise {
   targetReps Int
 
   @@unique([routineId, position])
-
-  @@index([bodyPart])
-  @@index([equipment])
-  @@index([target])
 }
 
 model WorkoutSession {

@@ -5,7 +5,7 @@ import '../data/workout_session.dart';
 class WorkoutSummary {
   final DateTime startedAt;
 
-  /// Null mientras la sesión no tiene hora de fin.
+  /// Null mientras la sesión no tiene hora de fin; nunca es negativa.
   final Duration? duration;
   final double volumeKg;
   final int setCount;
@@ -36,13 +36,21 @@ class WorkoutSummary {
     }
     return WorkoutSummary(
       startedAt: session.startedAt,
-      duration: session.endedAt?.difference(session.startedAt),
+      duration: _durationOf(session),
       volumeKg: volume,
       setCount: session.sets.length,
       exercises: List.unmodifiable(setsPerExercise.keys),
       setsPerExercise: Map.unmodifiable(setsPerExercise),
       notes: session.notes,
     );
+  }
+
+  /// Una duración nunca es negativa: si el fin quedó antes del inicio (dato
+  /// inconsistente), se acota a cero.
+  static Duration? _durationOf(WorkoutSession session) {
+    final elapsed = session.endedAt?.difference(session.startedAt);
+    if (elapsed == null) return null;
+    return elapsed.isNegative ? Duration.zero : elapsed;
   }
 }
 

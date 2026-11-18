@@ -18,6 +18,7 @@ class WorkoutDetailViewModel extends ChangeNotifier {
   AsyncState<WorkoutSummary> _summary = const AsyncLoading();
   AsyncState<WorkoutComparison> _comparison = const AsyncLoading();
   bool _sessionExpired = false;
+  bool _disposed = false;
 
   AsyncState<WorkoutSummary> get summary => _summary;
 
@@ -30,7 +31,7 @@ class WorkoutDetailViewModel extends ChangeNotifier {
   Future<void> load() async {
     _summary = const AsyncLoading();
     _comparison = const AsyncLoading();
-    notifyListeners();
+    _notify();
 
     final WorkoutSession session;
     try {
@@ -40,12 +41,12 @@ class WorkoutDetailViewModel extends ChangeNotifier {
       return;
     } catch (error, stackTrace) {
       _summary = AsyncError(error, stackTrace);
-      notifyListeners();
+      _notify();
       return;
     }
     final current = WorkoutSummary.of(session);
     _summary = AsyncData(current);
-    notifyListeners();
+    _notify();
 
     try {
       final previous = findPreviousSession(await _repository.list(), session);
@@ -60,11 +61,23 @@ class WorkoutDetailViewModel extends ChangeNotifier {
     } catch (error, stackTrace) {
       _comparison = AsyncError(error, stackTrace);
     }
-    notifyListeners();
+    _notify();
   }
 
   void _expire() {
     _sessionExpired = true;
-    notifyListeners();
+    _notify();
+  }
+
+  /// La vista puede desmontarse mientras hay una petición en curso; tras
+  /// `dispose` no se notifica.
+  void _notify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

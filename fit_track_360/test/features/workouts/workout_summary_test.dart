@@ -55,6 +55,33 @@ void main() {
       expect(summary.setCount, 0);
       expect(summary.exercises, isEmpty);
     });
+
+    test('si el fin es anterior al inicio la duración se acota a cero', () {
+      final summary = WorkoutSummary.of(
+        session(
+          startedAt: start,
+          endedAt: start.subtract(const Duration(minutes: 30)),
+        ),
+      );
+
+      expect(summary.duration, Duration.zero);
+    });
+
+    test('una serie sin peso (peso corporal) no suma volumen', () {
+      final summary = WorkoutSummary.of(
+        session(
+          startedAt: start,
+          sets: const [
+            WorkoutSet(exerciseName: 'Dominadas', weightKg: null, reps: 8),
+            WorkoutSet(exerciseName: 'Remo', weightKg: 40, reps: 10),
+          ],
+        ),
+      );
+
+      expect(summary.volumeKg, 400);
+      expect(summary.setCount, 2);
+      expect(summary.setsPerExercise['Dominadas'], 1);
+    });
   });
 
   group('findPreviousSession', () {

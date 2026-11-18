@@ -1,7 +1,9 @@
 /// Una serie registrada en una sesión: ejercicio, peso en kg y repeticiones.
 class WorkoutSet {
   final String exerciseName;
-  final double weightKg;
+
+  /// Peso en kg, o `null` si la serie no lo registra (peso corporal).
+  final double? weightKg;
   final int reps;
 
   const WorkoutSet({
@@ -10,6 +12,6 @@ class WorkoutSet {
     required this.reps,
   });
 
-  /// Volumen de la serie: peso × repeticiones.
-  double get volumeKg => weightKg * reps;
+  /// Volumen de la serie: peso × repeticiones. Sin peso no suma volumen.
+  double get volumeKg => (weightKg ?? 0) * reps;
 }

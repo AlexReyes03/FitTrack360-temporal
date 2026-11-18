@@ -68,6 +68,18 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
     super.dispose();
   }
 
+  /// La vista se abre con `Navigator.push` desde Comidas (que vive en
+  /// GoRouter): si hay ruta previa se cierra sin resultado; si se llegó sin
+  /// historial, vuelve a `/app/comidas`.
+  void _back() {
+    final navigator = Navigator.of(context);
+    if (navigator.canPop()) {
+      navigator.pop();
+    } else {
+      context.go('/app/comidas');
+    }
+  }
+
   double? _parse(TextEditingController controller) =>
       double.tryParse(controller.text.trim().replaceAll(',', '.'));
 
@@ -76,23 +88,30 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
     if (entry != null) Navigator.of(context).pop(entry);
   }
 
+  /// Macro opcional: vacío cuenta como 0, pero un texto que no es número es
+  /// inválido (devuelve null) para no guardarlo en silencio como 0.
+  double? _optionalMacro(TextEditingController controller) =>
+      controller.text.trim().isEmpty ? 0 : _parse(controller);
+
   void _addManual() {
     final kcal = _parse(_kcal);
-    final protein = _parse(_protein) ?? 0;
-    final carbs = _parse(_carbs) ?? 0;
-    final fat = _parse(_fat) ?? 0;
+    final protein = _optionalMacro(_protein);
+    final carbs = _optionalMacro(_carbs);
+    final fat = _optionalMacro(_fat);
+    final validMacros =
+        kcal != null && protein != null && carbs != null && fat != null;
     final entry = _viewModel.buildManualEntry(
       name: _name.text,
       portionG: _parse(_manualPortion),
-      macros: kcal == null
-          ? null
-          : Macros(kcal: kcal, proteinG: protein, carbsG: carbs, fatG: fat),
+      macros: validMacros
+          ? Macros(kcal: kcal, proteinG: protein, carbsG: carbs, fatG: fat)
+          : null,
       eatenAt: _now(),
     );
     if (entry == null) {
       setState(
         () => _manualError =
-            'Revisa nombre, porción y calorías (valores no negativos)',
+            'Revisa nombre, porción, calorías y macros (números no negativos)',
       );
       return;
     }
@@ -111,7 +130,24 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
           builder: (context, _) => ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              Text('Agregar alimento', style: AppTypography.pageTitle),
+              Row(
+                children: [
+                  IconButton(
+                    tooltip: 'Volver',
+                    onPressed: _back,
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const Expanded(
+                    child: Text(
+                      'Agregar alimento',
+                      style: AppTypography.pageTitle,
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: AppSpacing.sm),
               Text('Comida de destino', style: AppTypography.body),
               const SizedBox(height: AppSpacing.xs),
@@ -272,18 +308,25 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
       ),
       const SizedBox(height: AppSpacing.sm),
       DsTextField(
+        key: const Key('manual-protein'),
         controller: _protein,
         label: 'Proteína (g)',
         keyboardType: numeric,
       ),
       const SizedBox(height: AppSpacing.sm),
       DsTextField(
+        key: const Key('manual-carbs'),
         controller: _carbs,
         label: 'Carbohidratos (g)',
         keyboardType: numeric,
       ),
       const SizedBox(height: AppSpacing.sm),
-      DsTextField(controller: _fat, label: 'Grasa (g)', keyboardType: numeric),
+      DsTextField(
+        key: const Key('manual-fat'),
+        controller: _fat,
+        label: 'Grasa (g)',
+        keyboardType: numeric,
+      ),
       if (_manualError != null) ...[
         const SizedBox(height: AppSpacing.xs),
         Text(

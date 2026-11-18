@@ -72,6 +72,10 @@ export class DailyNutritionSummaryDto {
   @ApiProperty({
     description:
       'Desglose de macronutrientes agrupado por tipo de comida (BREAKFAST, LUNCH, DINNER, SNACK)',
+    type: 'object',
+    additionalProperties: {
+      $ref: '#/components/schemas/MealTypeMacroBreakdownDto',
+    },
   })
   byMealType!: Record<MealType, MealTypeMacroBreakdownDto>;
 }

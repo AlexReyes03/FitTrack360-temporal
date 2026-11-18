@@ -21,6 +21,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -112,13 +113,18 @@ export class MealsController {
   @ApiOperation({
     summary: 'Obtiene el detalle de un registro de comida por ID',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID del registro de comida',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiOkResponse({
     description: 'Registro de comida encontrado',
     type: MealResponseDto,
   })
   @ApiNotFoundResponse({
     description:
-      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+      'Comida no encontrada o no pertenece al usuario autenticado (Regla S4: 404)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',
@@ -136,6 +142,11 @@ export class MealsController {
     summary:
       'Actualiza un registro de comida perteneciente al usuario autenticado',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID del registro de comida',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiOkResponse({
     description: 'Comida actualizada exitosamente',
     type: MealResponseDto,
@@ -145,7 +156,7 @@ export class MealsController {
   })
   @ApiNotFoundResponse({
     description:
-      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+      'Comida no encontrada o no pertenece al usuario autenticado (Regla S4: 404)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',
@@ -165,10 +176,15 @@ export class MealsController {
     summary:
       'Elimina un registro de comida perteneciente al usuario autenticado',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID del registro de comida',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiNoContentResponse({ description: 'Comida eliminada exitosamente' })
   @ApiNotFoundResponse({
     description:
-      'Comida no encontrada o no pertenece al usuario autenticado (404)',
+      'Comida no encontrada o no pertenece al usuario autenticado (Regla S4: 404)',
   })
   @ApiUnauthorizedResponse({
     description: 'Token no proporcionado o inválido (401)',

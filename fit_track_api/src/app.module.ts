@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { validateEnv } from './config/env';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { FoodsModule } from './foods/foods.module';
 import { HealthModule } from './health/health.module';
@@ -19,7 +20,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     PrismaModule,
     HealthModule,
     AuthModule,

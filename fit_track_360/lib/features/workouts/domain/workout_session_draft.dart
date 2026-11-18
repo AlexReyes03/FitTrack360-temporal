@@ -16,12 +16,48 @@ class WorkoutSessionDraft {
     required List<PlannedExercise> exercises,
   }) : exercises = List.unmodifiable(exercises);
 
-  /// Cuerpo compatible con el `CreateWorkoutDto` actual de `POST /workouts`.
-  /// Cuando #121 agregue `routineId` y series, se extiende aquí.
-  Map<String, dynamic> toCreateWorkoutPayload() => {
-    'startedAt': startedAt.toUtc().toIso8601String(),
-    if (notes != null && notes!.trim().isNotEmpty) 'notes': notes!.trim(),
-  };
+  /// Copia con el inicio y las notas que la persona ajustó en el formulario.
+  WorkoutSessionDraft edited({
+    required DateTime startedAt,
+    required String notes,
+  }) => WorkoutSessionDraft(
+    routineId: routineId,
+    routineName: routineName,
+    startedAt: startedAt,
+    notes: notes,
+    exercises: exercises,
+  );
+
+  /// Cuerpo de `POST /workouts` según `CreateWorkoutDto` del API.
+  ///
+  /// Cada ejercicio planeado se expande en `targetSets` series con
+  /// `reps = targetReps` y `weight = 0` (sin carga registrada aún), en el
+  /// orden de la rutina y con `order` consecutivo desde 1, igual que
+  /// `POST /routines/:id/start`. El nombre del ejercicio no viaja: el API lo
+  /// resuelve por `exerciseId`.
+  Map<String, dynamic> toCreateWorkoutPayload() {
+    final ordered = [...exercises]
+      ..sort((a, b) => a.position.compareTo(b.position));
+    var order = 0;
+    final sets = [
+      for (final exercise in ordered)
+        for (var i = 0; i < exercise.targetSets; i++)
+          {
+            'exerciseId': exercise.exerciseId,
+            'order': ++order,
+            'weight': 0,
+            'reps': exercise.targetReps,
+          },
+    ];
+    final trimmedNotes = notes?.trim();
+    return {
+      if (routineId != null) 'routineId': routineId,
+      'startedAt': startedAt.toUtc().toIso8601String(),
+      if (trimmedNotes != null && trimmedNotes.isNotEmpty)
+        'notes': trimmedNotes,
+      if (sets.isNotEmpty) 'sets': sets,
+    };
+  }
 }
 
 /// Ejercicio precargado en el borrador con su objetivo de series y reps.

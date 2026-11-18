@@ -1,4 +1,4 @@
-/// Plantilla de entrenamiento del usuario (contrato asumido de #121).
+/// Plantilla de entrenamiento del usuario (`GET /routines/:id`).
 class Routine {
   final String id;
   final String name;
@@ -43,14 +43,22 @@ class RoutineExercise {
     required this.targetReps,
   });
 
+  /// Acepta `exerciseId` plano (forma actual de `GET /routines/:id`) y,
+  /// como respaldo, `exercise: {id, name}` cuando el API incluya la relación.
   factory RoutineExercise.fromJson(Map<String, dynamic> json) {
-    final exercise = json['exercise'] as Map<String, dynamic>?;
+    final exercise = json['exercise'];
+    final nested = exercise is Map<String, dynamic> ? exercise : null;
+    final exerciseId = json['exerciseId'] ?? nested?['id'];
+    if (exerciseId is! String || exerciseId.isEmpty) {
+      throw const FormatException('El ejercicio de la rutina no tiene id');
+    }
+    final name = nested?['name'] ?? json['exerciseName'];
     return RoutineExercise(
-      exerciseId: json['exerciseId'] as String,
-      exerciseName: (exercise?['name'] ?? json['exerciseName'] ?? '') as String,
-      position: json['position'] as int,
-      targetSets: json['targetSets'] as int,
-      targetReps: json['targetReps'] as int,
+      exerciseId: exerciseId,
+      exerciseName: name is String ? name : '',
+      position: (json['position'] as num).toInt(),
+      targetSets: (json['targetSets'] as num).toInt(),
+      targetReps: (json['targetReps'] as num).toInt(),
     );
   }
 }

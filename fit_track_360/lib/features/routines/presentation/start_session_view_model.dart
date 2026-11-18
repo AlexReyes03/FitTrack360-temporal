@@ -26,6 +26,9 @@ class StartSessionViewModel extends ChangeNotifier {
     }
   }
 
+  /// Descarta un error que ya no aplica (p. ej. la rutina cambió).
+  void clearError() => _setError(null);
+
   void _setError(String? value) {
     if (_errorMessage == value) return;
     _errorMessage = value;

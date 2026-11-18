@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -18,6 +19,11 @@ import {
 } from '../auth/jwt-auth.guard';
 import { BodyMetricResponseDto } from './dto/body-metric-response.dto';
 import { CreateBodyMetricDto } from './dto/create-body-metric.dto';
+import { ProgressRangeQueryDto } from './dto/progress-query.dto';
+import {
+  LatestBodyMetricResponseDto,
+  ProgressSeriesResponseDto,
+} from './dto/progress-series-response.dto';
 import { UpdateBodyMetricDto } from './dto/update-body-metric.dto';
 import { ProgressService } from './progress.service';
 
@@ -36,9 +42,29 @@ export class ProgressController {
   }
 
   @Get()
-  findAll(@Req() req: AuthenticatedRequest): Promise<BodyMetricResponseDto[]> {
+  findAll(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ProgressRangeQueryDto,
+  ): Promise<BodyMetricResponseDto[]> {
     const userId = this.getUserId(req);
-    return this.progressService.findAll(userId);
+    return this.progressService.findAll(userId, query);
+  }
+
+  @Get('latest')
+  findLatest(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<LatestBodyMetricResponseDto> {
+    const userId = this.getUserId(req);
+    return this.progressService.findLatest(userId);
+  }
+
+  @Get('series')
+  getSeries(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ProgressRangeQueryDto,
+  ): Promise<ProgressSeriesResponseDto> {
+    const userId = this.getUserId(req);
+    return this.progressService.getSeries(userId, query);
   }
 
   @Get(':id')

@@ -160,6 +160,50 @@ void main() {
     expect(find.text('Cena · 320 kcal'), findsOneWidget);
   });
 
+  testWidgets(
+    'captura manual rechaza un macro no numérico en vez de guardarlo en 0',
+    (tester) async {
+      // Regresión: «7avena» en Grasa se guardaba como 0 g (visto en simulador).
+      final meals = FakeMealsRepository();
+      final foods = FakeFoodSearchRepository()
+        ..error = const FoodSearchUnavailableException();
+      await _pumpPage(tester, meals, foods);
+
+      await tester.tap(find.text('Agregar alimento'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const Key('food-search')),
+          matching: find.byType(TextField),
+        ),
+        'oats',
+      );
+      await tester.pump(FoodSearchViewModel.debounceDuration);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('open-manual')));
+      await tester.pumpAndSettle();
+
+      Finder field(String key) => find.descendant(
+        of: find.byKey(Key(key)),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(field('manual-kcal'), '380');
+      await tester.enterText(field('manual-fat'), '7avena');
+      await tester.tap(find.text('Agregar a Desayuno'));
+      await tester.pumpAndSettle();
+
+      expect(meals.stored, isEmpty);
+      expect(find.textContaining('Revisa'), findsOneWidget);
+
+      // Vacío sí significa 0: corregido el valor, se agrega.
+      await tester.enterText(field('manual-fat'), '');
+      await tester.tap(find.text('Agregar a Desayuno'));
+      await tester.pumpAndSettle();
+
+      expect(meals.stored.single.items.single.macros.fatG, 0);
+    },
+  );
+
   testWidgets('búsqueda USDA → porción → agrega a la comida de destino', (
     tester,
   ) async {

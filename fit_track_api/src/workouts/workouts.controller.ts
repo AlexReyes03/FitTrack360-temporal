@@ -13,13 +13,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
-  ApiBearerAuth,
   ApiBadRequestResponse,
+  ApiBearerAuth,
   ApiCreatedResponse,
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -84,6 +85,11 @@ export class WorkoutsController {
   @ApiOperation({
     summary: 'Obtiene el detalle de una sesión de entrenamiento por ID',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID de la sesión de entrenamiento',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiOkResponse({
     description: 'Sesión de entrenamiento encontrada',
     type: WorkoutResponseDto,
@@ -108,9 +114,18 @@ export class WorkoutsController {
     summary:
       'Actualiza una sesión de entrenamiento perteneciente al usuario autenticado',
   })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID de la sesión de entrenamiento',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
   @ApiOkResponse({
     description: 'Sesión actualizada exitosamente',
     type: WorkoutResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Fechas inválidas, series mal formadas o ejercicio inexistente (400)',
   })
   @ApiNotFoundResponse({
     description:
@@ -133,6 +148,11 @@ export class WorkoutsController {
   @ApiOperation({
     summary:
       'Elimina una sesión de entrenamiento perteneciente al usuario autenticado',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Identificador UUID de la sesión de entrenamiento',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @ApiNoContentResponse({ description: 'Sesión eliminada exitosamente' })
   @ApiNotFoundResponse({

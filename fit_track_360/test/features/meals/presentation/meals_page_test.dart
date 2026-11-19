@@ -14,23 +14,7 @@ import 'package:go_router/go_router.dart';
 
 import '../fakes.dart';
 
-Future<void> _pumpPage(
-  WidgetTester tester,
-  FakeMealsRepository meals,
-  FakeFoodSearchRepository foods,
-) async {
-  tester.view.physicalSize = const Size(1080, 2400);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  await tester.pumpWidget(
-    MaterialApp(
-      home: MealsPage(mealsRepository: meals, foodsRepository: foods),
-    ),
-  );
-  await tester.pumpAndSettle();
-}
-
-/// MealsPage dentro de GoRouter, como en la app (`/app/comidas`).
+/// MealsPage dentro de GoRouter, como en la app (`/app/comidas` + buscar).
 Future<void> _pumpRouted(
   WidgetTester tester,
   FakeMealsRepository meals,
@@ -49,7 +33,7 @@ Future<void> _pumpRouted(
             MealsPage(mealsRepository: meals, foodsRepository: foods),
       ),
       GoRoute(
-        path: '/app/comidas/agregar',
+        path: '/app/comidas/buscar',
         builder: (context, state) => FoodSearchPage(repository: foods),
       ),
       GoRoute(path: '/login', builder: (context, state) => const Text('login')),
@@ -58,6 +42,12 @@ Future<void> _pumpRouted(
   await tester.pumpWidget(MaterialApp.router(routerConfig: router));
   await tester.pumpAndSettle();
 }
+
+Future<void> _pumpPage(
+  WidgetTester tester,
+  FakeMealsRepository meals,
+  FakeFoodSearchRepository foods,
+) => _pumpRouted(tester, meals, foods);
 
 Future<void> _addManually(WidgetTester tester, String name, String kcal) async {
   await tester.tap(find.text('Agregar alimento'));
@@ -273,7 +263,7 @@ void main() {
       tester,
       FakeMealsRepository(),
       FakeFoodSearchRepository(),
-      initialLocation: '/app/comidas/agregar',
+      initialLocation: '/app/comidas/buscar',
     );
 
     await tester.tap(find.byTooltip('Volver'));

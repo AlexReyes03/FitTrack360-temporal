@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/widgets/offline_banner.dart';
+import '../../../core/widgets/remote_state_views.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
@@ -18,6 +21,7 @@ class WorkoutsPage extends StatefulWidget {
     this.api,
     this.draft,
     this.apiClientFactory = ApiClient.new,
+    this.connectivityService,
   });
 
   final WorkoutsApi? api;
@@ -27,6 +31,7 @@ class WorkoutsPage extends StatefulWidget {
 
   /// Borrador precargado al iniciar desde una rutina; opcional.
   final WorkoutSessionDraft? draft;
+  final ConnectivityService? connectivityService;
 
   @override
   State<WorkoutsPage> createState() => _WorkoutsPageState();
@@ -36,6 +41,8 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   ApiClient? _ownClient;
   late final WorkoutsApi _api =
       widget.api ?? WorkoutsApi(_ownClient = widget.apiClientFactory());
+  late final ConnectivityService _connectivity =
+      widget.connectivityService ?? ConnectivityService();
   late final TextEditingController _notesController = TextEditingController(
     text: widget.draft?.notes,
   );
@@ -180,6 +187,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            OfflineBanner(service: _connectivity, onRetry: _load),
             Row(
               children: [
                 if (Navigator.of(context).canPop())
@@ -242,11 +250,20 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
               onPressed: _creating ? null : _create,
             ),
             const SizedBox(height: 32),
-            _state.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.accentWhite),
+            AsyncStateView<List<WorkoutSession>>(
+              state: _state,
+              onRetry: _load,
+              loadingMessage: 'Cargando sesiones...',
+              emptyTitle: 'Aún no tienes sesiones',
+              emptyMessage: 'Crea una sesión para empezar el historial.',
+              errorBuilder: (error, _) => RemoteErrorView(
+                title: 'No se pudo cargar',
+                message: error is AuthApiException
+                    ? error.message
+                    : 'No se pudo conectar',
+                onRetry: _load,
               ),
-              data: (sessions) => Column(
+              dataBuilder: (sessions) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   for (final session in sessions)
@@ -276,32 +293,6 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                       ),
                     ),
                 ],
-              ),
-              error: (error, _) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    error is AuthApiException
-                        ? error.message
-                        : 'No se pudo conectar',
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.dangerText,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _load,
-                    child: const Text(
-                      'Reintentar',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ),
-                ],
-              ),
-              empty: () => Text(
-                'Aún no tienes sesiones',
-                style: AppTypography.body.copyWith(
-                  color: AppColors.textSecondary,
-                ),
               ),
             ),
           ],

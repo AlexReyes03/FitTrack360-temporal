@@ -42,9 +42,16 @@ class ApiClient {
   Future<http.Response> patch(String path, {Object? body}) =>
       _send('PATCH', path, body: body);
 
-  Future<http.Response> uploadFile(String path, File file) async {
+  Future<http.Response> delete(String path) => _send('DELETE', path);
+
+  /// Multipart `file` (+ campos opcionales, p. ej. `metricId` / `mealId` en fotos).
+  Future<http.Response> uploadFile(
+    String path,
+    File file, {
+    Map<String, String>? fields,
+  }) async {
     final accessToken = await _storage.readAccessToken();
-    var response = await _upload(path, file, accessToken);
+    var response = await _upload(path, file, accessToken, fields: fields);
     if (response.statusCode != 401) return response;
 
     final refreshed = await _tryRefresh();
@@ -54,7 +61,7 @@ class ApiClient {
     }
 
     final renewedToken = await _storage.readAccessToken();
-    response = await _upload(path, file, renewedToken);
+    response = await _upload(path, file, renewedToken, fields: fields);
     if (response.statusCode == 401) {
       await _storage.clear();
       throw const SessionExpiredException();
@@ -118,6 +125,9 @@ class ApiClient {
         body: body == null ? null : jsonEncode(body),
       );
     }
+    if (method == 'DELETE') {
+      return _http.delete(uri, headers: headers);
+    }
     return _http.post(
       uri,
       headers: headers,
@@ -128,14 +138,18 @@ class ApiClient {
   Future<http.Response> _upload(
     String path,
     File file,
-    String? accessToken,
-  ) async {
+    String? accessToken, {
+    Map<String, String>? fields,
+  }) async {
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$apiBaseUrl$path'),
     );
     if (accessToken != null) {
       request.headers['Authorization'] = 'Bearer $accessToken';
+    }
+    if (fields != null && fields.isNotEmpty) {
+      request.fields.addAll(fields);
     }
     request.files.add(await http.MultipartFile.fromPath('file', file.path));
     final streamed = await _http.send(request);

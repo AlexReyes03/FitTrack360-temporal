@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/progress/data/progress_photos_api.dart';
@@ -122,5 +125,103 @@ void main() {
     );
 
     expect(() => api.load('photo-1'), throwsA(isA<SessionExpiredException>()));
+  });
+
+  test('sube a POST /api/v1/photos y parsea metadata', () async {
+    late http.BaseRequest captured;
+    final temp = File(
+      '${Directory.systemTemp.path}/ft360-photo-upload-test.jpg',
+    );
+    await temp.writeAsBytes(transparentImage);
+
+    final api = _api(
+      MockClient((request) async {
+        captured = request;
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/photos');
+        expect(
+          request.headers['content-type'] ?? '',
+          contains('multipart/form-data'),
+        );
+        return http.Response(
+          jsonEncode({
+            'id': 'ph-1',
+            'mimeType': 'image/jpeg',
+            'sizeBytes': 12,
+            'width': 1,
+            'height': 1,
+            'mealId': null,
+            'metricId': null,
+            'createdAt': '2026-11-19T12:00:00.000Z',
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    final meta = await api.upload(temp);
+
+    expect(captured.url.path, '/api/v1/photos');
+    expect(meta.id, 'ph-1');
+    expect(meta.mimeType, 'image/jpeg');
+
+    await temp.delete();
+  });
+
+  test('upload con metricId envía el campo multipart', () async {
+    String? bodyText;
+    final temp = File(
+      '${Directory.systemTemp.path}/ft360-photo-metric-test.jpg',
+    );
+    await temp.writeAsBytes(transparentImage);
+
+    final api = _api(
+      MockClient((request) async {
+        expect(request.url.path, '/api/v1/photos');
+        // MockClient materializa MultipartRequest como Request (bytes binarios).
+        bodyText = String.fromCharCodes(request.bodyBytes);
+        return http.Response(
+          jsonEncode({
+            'id': 'ph-2',
+            'mimeType': 'image/jpeg',
+            'sizeBytes': 12,
+            'width': 1,
+            'height': 1,
+            'mealId': null,
+            'metricId': 'metric-9',
+            'createdAt': '2026-11-19T12:00:00.000Z',
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+
+    await api.upload(temp, metricId: 'metric-9');
+
+    expect(bodyText, contains('metric-9'));
+    await temp.delete();
+  });
+
+  test('delete 404 se trata como foto no disponible', () async {
+    final api = _api(
+      MockClient((request) async {
+        expect(request.method, 'DELETE');
+        expect(request.url.path, '/api/v1/photos/ajena');
+        return http.Response('{"message":"Foto no encontrada"}', 404);
+      }),
+    );
+
+    expect(
+      () => api.delete('ajena'),
+      throwsA(isA<ProgressPhotoUnavailableException>()),
+    );
+  });
+
+  test('delete 204 completa sin error', () async {
+    final api = _api(MockClient((request) async => http.Response('', 204)));
+
+    await api.delete('ph-1');
   });
 }

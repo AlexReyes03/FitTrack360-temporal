@@ -47,8 +47,11 @@ class WorkoutSession {
   static WorkoutSet _setFromJson(Map<String, dynamic> item) {
     final weight = item['weight'] ?? item['weightKg'];
     final reps = item['reps'];
+    final order = item['order'];
     return WorkoutSet(
+      exerciseId: item['exerciseId'] as String?,
       exerciseName: item['exerciseName'] as String? ?? 'Ejercicio sin nombre',
+      order: order is num ? order.toInt() : null,
       weightKg: weight is num ? weight.toDouble() : null,
       reps: reps is num ? reps.toInt() : 0,
     );

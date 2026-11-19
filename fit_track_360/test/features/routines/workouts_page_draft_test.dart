@@ -82,6 +82,31 @@ final _draft = WorkoutSessionDraft(
   ],
 );
 
+final _repeatedDraft = WorkoutSessionDraft(
+  startedAt: DateTime.utc(2026, 11, 11, 19),
+  exercises: const [
+    PlannedExercise(
+      exerciseId: 'ej-a',
+      exerciseName: 'Sentadilla',
+      position: 0,
+      targetSets: 2,
+      targetReps: 5,
+    ),
+    PlannedExercise(
+      exerciseId: 'ej-b',
+      exerciseName: 'Press banca',
+      position: 1,
+      targetSets: 1,
+      targetReps: 10,
+    ),
+  ],
+  sets: const [
+    PlannedSet(exerciseId: 'ej-a', order: 1, weightKg: 100, reps: 5),
+    PlannedSet(exerciseId: 'ej-a', order: 2, weightKg: 110, reps: 3),
+    PlannedSet(exerciseId: 'ej-b', order: 3, weightKg: 60, reps: 10),
+  ],
+);
+
 const _createdJson = {
   'id': 'nueva',
   'userId': 'u1',
@@ -213,6 +238,40 @@ void main() {
     ]);
     expect(find.text('Rutina: Pierna'), findsNothing);
     expect(find.text('Hecha desde la rutina'), findsOneWidget);
+  });
+
+  testWidgets('un borrador repetido envía sus series exactas sin routineId', (
+    tester,
+  ) async {
+    final posted = <Map<String, dynamic>>[];
+    var created = false;
+    final client = MockClient((request) async {
+      if (request.method == 'POST') {
+        posted.add(jsonDecode(request.body) as Map<String, dynamic>);
+        created = true;
+        return _json(_createdJson, 201);
+      }
+      return _json(created ? [_createdJson] : <Object>[], 200);
+    });
+    final api = WorkoutsApi(ApiClient(storage: _Storage(), httpClient: client));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WorkoutsPage(api: api, draft: _repeatedDraft),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Crear sesión'));
+    await tester.pumpAndSettle();
+
+    final body = posted.single;
+    expect(body.containsKey('routineId'), isFalse);
+    expect(body['startedAt'], '2026-11-11T19:00:00.000Z');
+    expect(body['sets'], [
+      {'exerciseId': 'ej-a', 'order': 1, 'weight': 100, 'reps': 5},
+      {'exerciseId': 'ej-a', 'order': 2, 'weight': 110, 'reps': 3},
+      {'exerciseId': 'ej-b', 'order': 3, 'weight': 60, 'reps': 10},
+    ]);
   });
 
   testWidgets('abierta con push muestra «Volver» y regresa', (tester) async {

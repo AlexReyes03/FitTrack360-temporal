@@ -148,5 +148,28 @@ describe('AuthService (Firebase Auth)', () => {
         UnauthorizedException,
       );
     });
+
+    it('rechaza un Bearer invalido con 401', async () => {
+      await expect(service.session('token-basura')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    });
+
+    it('AUTH-02: mismo correo con otro firebaseUid no duplica User', async () => {
+      const googleSameEmail = 'mock:google-ana:ana@test.com:google.com';
+      await expect(service.session(googleSameEmail)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(store.accounts).toHaveLength(1);
+      expect(store.accounts[0].firebaseUid).toBe('firebase-ana');
+    });
+
+    it('AUTH-02: usuario Google nuevo sin fila Nest sigue 401 no sincronizado', async () => {
+      const googleNew = 'mock:google-nuevo:nuevo@test.com:google.com';
+      await expect(service.session(googleNew)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+      expect(store.accounts).toHaveLength(1);
+    });
   });
 });

@@ -2,6 +2,10 @@
 export interface VerifiedFirebaseToken {
   uid: string;
   email: string;
+  /** `password`, `google.com`, etc. (AUTH-02). */
+  signInProvider?: string;
+  /** Nombre del perfil (Google / displayName del token). */
+  name?: string;
 }
 
 /**
@@ -34,12 +38,22 @@ export class MockFirebaseTokenVerifier implements FirebaseTokenVerifier {
     if (sep <= 0 || sep === rest.length - 1) {
       throw new Error('Token mock invalido');
     }
-    const uid = rest.slice(0, sep);
-    const email = rest.slice(sep + 1);
+    // mock:<uid>:<email> o mock:<uid>:<email>:<provider>
+    const parts = rest.split(':');
+    if (parts.length < 2) {
+      throw new Error('Token mock invalido');
+    }
+    const uid = parts[0];
+    const email = parts[1];
+    const signInProvider = parts[2];
     if (!uid || !email.includes('@')) {
       throw new Error('Token mock invalido');
     }
-    return { uid, email };
+    return {
+      uid,
+      email,
+      signInProvider: signInProvider || undefined,
+    };
   }
 
   async deleteUser(_uid: string): Promise<void> {

@@ -8,10 +8,21 @@ import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../data/auth_api.dart';
 import '../data/firebase_auth_service.dart';
+import '../data/google_auth_gateway.dart';
 import '../domain/auth_validators.dart';
+import 'widgets/google_sign_in_section.dart';
 
 class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+  final VoidCallback? onGooglePressed;
+  final bool googleLoading;
+  final FirebaseAuthService? authService;
+
+  const RegisterPage({
+    super.key,
+    this.onGooglePressed,
+    this.googleLoading = false,
+    this.authService,
+  });
 
   @override
   State<RegisterPage> createState() => _RegisterPageState();
@@ -20,7 +31,8 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   static final _usernamePattern = RegExp(r'^[a-zA-Z0-9_]{3,30}$');
 
-  final FirebaseAuthService _auth = FirebaseAuthService();
+  late final FirebaseAuthService _auth =
+      widget.authService ?? FirebaseAuthService();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
@@ -32,9 +44,12 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _privacyConsent = false;
   bool _submitting = false;
+  bool _googleLoading = false;
   bool _emailTouched = false;
   bool _confirmPasswordTouched = false;
   String? _error;
+
+  bool get _anyGoogleLoading => widget.googleLoading || _googleLoading;
 
   @override
   void initState() {
@@ -91,7 +106,8 @@ class _RegisterPageState extends State<RegisterPage> {
       _confirmPasswordController.text.trim().isNotEmpty &&
       _displayNameController.text.trim().isNotEmpty;
 
-  bool get _canSubmit => _fieldsFilled && _privacyConsent && !_submitting;
+  bool get _canSubmit =>
+      _fieldsFilled && _privacyConsent && !_submitting && !_anyGoogleLoading;
 
   Future<void> _submit() async {
     final username = _usernameController.text.trim();
@@ -145,6 +161,46 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  Future<void> _submitGoogle() async {
+    if (widget.onGooglePressed != null) {
+      widget.onGooglePressed!();
+      return;
+    }
+    if (_submitting || _anyGoogleLoading) return;
+
+    if (!_privacyConsent) {
+      setState(
+        () =>
+            _error = 'Acepta el aviso de privacidad para continuar con Google',
+      );
+      return;
+    }
+
+    setState(() {
+      _error = null;
+      _googleLoading = true;
+    });
+    try {
+      await _auth.loginWithGoogle(
+        allowAutoRegister: true,
+        privacyConsent: true,
+        privacyNoticeVersion: '2',
+      );
+      if (!mounted) return;
+      context.go('/app');
+    } on GoogleSignInCancelledException {
+      // Cancelar deja el registro sin error fatal.
+    } on AuthApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo conectar');
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -184,7 +240,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         controller: _displayNameController,
                         label: 'Nombre',
                         hint: 'Tu nombre completo',
-                        enabled: !_submitting,
+                        enabled: !_submitting && !_anyGoogleLoading,
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 12),
@@ -192,7 +248,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         controller: _usernameController,
                         label: 'Usuario',
                         hint: 'Solo letras, numeros y guion bajo',
-                        enabled: !_submitting,
+                        enabled: !_submitting && !_anyGoogleLoading,
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 12),
@@ -203,7 +259,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         hint: 'ejemplo@correo.com',
                         keyboardType: TextInputType.emailAddress,
                         errorText: _emailError,
-                        enabled: !_submitting,
+                        enabled: !_submitting && !_anyGoogleLoading,
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 12),
@@ -212,7 +268,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         label: 'Contraseña',
                         hint: 'Minimo 8 caracteres',
                         obscureText: true,
-                        enabled: !_submitting,
+                        enabled: !_submitting && !_anyGoogleLoading,
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 12),
@@ -223,13 +279,13 @@ class _RegisterPageState extends State<RegisterPage> {
                         hint: 'Repite tu contraseña',
                         obscureText: true,
                         errorText: _confirmPasswordError,
-                        enabled: !_submitting,
+                        enabled: !_submitting && !_anyGoogleLoading,
                         onChanged: (_) => setState(() {}),
                       ),
                       const SizedBox(height: 10),
                       _PrivacyCheckbox(
                         value: _privacyConsent,
-                        onChanged: _submitting
+                        onChanged: (_submitting || _anyGoogleLoading)
                             ? null
                             : (value) =>
                                   setState(() => _privacyConsent = value),
@@ -238,6 +294,12 @@ class _RegisterPageState extends State<RegisterPage> {
                       PrimaryButton(
                         label: 'Crear cuenta',
                         onPressed: _canSubmit ? _submit : null,
+                      ),
+                      const SizedBox(height: 16),
+                      GoogleAuthSection(
+                        onGooglePressed: _submitGoogle,
+                        isLoading: _anyGoogleLoading,
+                        enabled: !_submitting,
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 12),

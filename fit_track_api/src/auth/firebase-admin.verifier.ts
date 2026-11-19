@@ -27,7 +27,7 @@ export class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
   async verifyIdToken(idToken: string): Promise<VerifiedFirebaseToken> {
     const auth = this.getAuthOrThrow();
     try {
-      const decoded = await auth.verifyIdToken(idToken);
+      const decoded = await auth.verifyIdToken(idToken, true);
       const email = decoded.email;
       if (!email) {
         throw new UnauthorizedException('Token sin correo');

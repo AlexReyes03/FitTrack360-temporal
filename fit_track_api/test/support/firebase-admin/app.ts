@@ -4,11 +4,21 @@
  * cualquier suite que importe AppModule falla al cargar. Las pruebas de auth
  * usan FIREBASE_AUTH_MODE=mock y nunca verifican tokens reales.
  */
-const notAvailable = (): never => {
-  throw new Error('firebase-admin no está disponible en pruebas');
+export type App = { name: string };
+
+let apps: App[] = [];
+
+export const getApps = (): App[] => apps;
+
+export const initializeApp = (_options?: unknown): App => {
+  const app = { name: '[DEFAULT]' };
+  apps = [app];
+  return app;
 };
 
-export type App = { name: string };
-export const getApps = (): App[] => [];
-export const initializeApp = notAvailable;
-export const cert = notAvailable;
+export const cert = <T>(creds: T): T => creds;
+
+/** Limpia el estado del stub entre pruebas del Admin verifier. */
+export function __resetFirebaseAdminApp(): void {
+  apps = [];
+}

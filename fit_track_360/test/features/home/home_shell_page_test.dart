@@ -4,12 +4,15 @@ import 'dart:convert';
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/network/connectivity_service.dart';
 import 'package:fit_track_360/core/session_storage.dart';
+import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
 import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+import 'fake_dashboard.dart';
 
 class FakeConnectivityService implements ConnectivityService {
   FakeConnectivityService({required this.online});
@@ -69,6 +72,42 @@ http.Response _profile() => http.Response.bytes(
   200,
 );
 
+http.Response _dashboardEmpty() => http.Response.bytes(
+  utf8.encode(
+    jsonEncode({
+      'date': '2026-11-19',
+      'utcOffsetMinutes': -360,
+      'nutrition': {
+        'mealsLogged': 0,
+        'consumed': {'calories': 0, 'proteinG': 0, 'carbsG': 0, 'fatG': 0},
+        'goals': {
+          'dailyCalorieGoal': 2000,
+          'proteinGoalG': 150,
+          'carbsGoalG': 200,
+          'fatGoalG': 60,
+        },
+        'remaining': {
+          'calories': 2000,
+          'proteinG': 150,
+          'carbsG': 200,
+          'fatG': 60,
+        },
+      },
+      'session': null,
+      'latestMetric': null,
+    }),
+  ),
+  200,
+  headers: {'content-type': 'application/json'},
+);
+
+Future<http.Response> _route(http.Request request) async {
+  final path = request.url.path;
+  if (path.endsWith('/users/me')) return _profile();
+  if (path.contains('/dashboard/today')) return _dashboardEmpty();
+  return http.Response('not found', 404);
+}
+
 Future<void> _pumpShell(
   WidgetTester tester, {
   required FakeConnectivityService connectivity,
@@ -84,6 +123,9 @@ Future<void> _pumpShell(
           apiClient: ApiClient(storage: storage, httpClient: client),
           sessionStorage: storage,
           connectivityService: connectivity,
+          stepsSensor: FakeStepsSensor(
+            snapshots: [StepsSnapshot.unavailableDevice],
+          ),
         ),
       ),
       GoRoute(
@@ -105,12 +147,13 @@ void main() {
       tester,
       connectivity: FakeConnectivityService(online: true),
       storage: storage,
-      client: MockClient((_) async => _profile()),
+      client: MockClient(_route),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Sin conexión'), findsNothing);
     expect(find.text('Hola, Ana'), findsOneWidget);
+    expect(find.text('Nutrición de hoy'), findsOneWidget);
   });
 
   testWidgets('sin red muestra el banner y conserva la sesion', (tester) async {
@@ -138,9 +181,9 @@ void main() {
       tester,
       connectivity: connectivity,
       storage: storage,
-      client: MockClient((_) async {
+      client: MockClient((request) async {
         if (offline) throw http.ClientException('sin red');
-        return _profile();
+        return _route(request);
       }),
     );
     await tester.pumpAndSettle();
@@ -169,35 +212,40 @@ void main() {
       }),
     );
     await tester.pumpAndSettle();
-    expect(requests, 1);
+    // Perfil + dashboard en el arranque.
+    expect(requests, 2);
 
-    await tester.tap(find.text('Reintentar'));
+    await tester.tap(find.text('Reintentar').first);
     await tester.pumpAndSettle();
 
-    expect(requests, 2);
+    // Reintento pide de nuevo perfil + dashboard.
+    expect(requests, 4);
     expect(find.text('Sin conexión'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('no lanza dos cargas de perfil simultaneas', (tester) async {
-    var requests = 0;
+    var profileRequests = 0;
     final pending = Completer<http.Response>();
     final connectivity = FakeConnectivityService(online: true);
     await _pumpShell(
       tester,
       connectivity: connectivity,
       storage: storage,
-      client: MockClient((_) {
-        requests++;
-        return pending.future;
+      client: MockClient((request) {
+        if (request.url.path.endsWith('/users/me')) {
+          profileRequests++;
+          return pending.future;
+        }
+        return Future.value(_dashboardEmpty());
       }),
     );
     await tester.pump();
-    expect(requests, 1);
+    expect(profileRequests, 1);
 
     connectivity.emit(true);
     await tester.pump();
-    expect(requests, 1);
+    expect(profileRequests, 1);
 
     pending.complete(_profile());
     await tester.pumpAndSettle();
@@ -234,5 +282,27 @@ void main() {
     expect(find.text('Pantalla login'), findsOneWidget);
     expect(storage.accessToken, isNull);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('muestra estados empty del dashboard con datos vacíos', (
+    tester,
+  ) async {
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient(_route),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Aún no registras comidas hoy'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Aún no tienes sesiones registradas'),
+      findsOneWidget,
+    );
+    expect(find.text('No disponible'), findsOneWidget);
   });
 }

@@ -68,13 +68,12 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
     super.dispose();
   }
 
-  /// La vista se abre con `Navigator.push` desde Comidas (que vive en
-  /// GoRouter): si hay ruta previa se cierra sin resultado; si se llegó sin
-  /// historial, vuelve a `/app/comidas`.
+  /// La vista se abre con `context.push('/app/comidas/buscar')` desde Comidas:
+  /// si hay ruta previa se cierra sin resultado; si se llego sin historial,
+  /// vuelve a `/app/comidas`.
   void _back() {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
+    if (context.canPop()) {
+      context.pop();
     } else {
       context.go('/app/comidas');
     }
@@ -85,7 +84,7 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
 
   void _addSelected() {
     final entry = _viewModel.buildEntry(_now());
-    if (entry != null) Navigator.of(context).pop(entry);
+    if (entry != null) context.pop(entry);
   }
 
   /// Macro opcional: vacío cuenta como 0, pero un texto que no es número es
@@ -115,7 +114,7 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
       );
       return;
     }
-    Navigator.of(context).pop(entry);
+    context.pop(entry);
   }
 
   @override

@@ -162,6 +162,13 @@ class _HomeShellPageState extends State<HomeShellPage> {
                     child: Wrap(
                       children: [
                         TextButton(
+                          onPressed: () => context.push('/app/progreso'),
+                          child: const Text(
+                            'Progreso',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                        TextButton(
                           onPressed: () => context.push('/app/foto'),
                           child: const Text(
                             'Agregar foto',

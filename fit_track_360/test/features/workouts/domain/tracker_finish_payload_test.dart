@@ -9,12 +9,7 @@ void main() {
       notes: ' Buena sesion ',
       location: ' Gimnasio Norte ',
       sets: const [
-        TrackerFinishSet(
-          exerciseId: '0001',
-          order: 1,
-          weightKg: 60,
-          reps: 10,
-        ),
+        TrackerFinishSet(exerciseId: '0001', order: 1, weightKg: 60, reps: 10),
         TrackerFinishSet(exerciseId: '0001', order: 2, weightKg: 0, reps: 12),
       ],
     );

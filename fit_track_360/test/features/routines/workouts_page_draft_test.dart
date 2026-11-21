@@ -37,7 +37,8 @@ class _FakeWorkoutsApi implements WorkoutsApi {
 
   @override
   Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
-    final startedAt = DateTime.tryParse('${payload['startedAt']}') ??
+    final startedAt =
+        DateTime.tryParse('${payload['startedAt']}') ??
         DateTime.utc(2026, 11, 10, 18);
     return WorkoutSession(
       id: 'nueva',

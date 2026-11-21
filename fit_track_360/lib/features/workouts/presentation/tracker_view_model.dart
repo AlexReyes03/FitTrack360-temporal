@@ -5,10 +5,10 @@ import 'package:flutter/foundation.dart';
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_api.dart';
-import '../data/workouts_api.dart';
 import '../domain/exercise_reference.dart';
 import '../domain/tracker_finish_payload.dart';
 import '../domain/tracker_location_provider.dart';
+import '../domain/workouts_repository.dart';
 import 'tracker_page.dart';
 import 'widgets/tracker_location_section.dart';
 import 'widgets/tracker_sets_section.dart';
@@ -50,19 +50,17 @@ class TrackerEditableSet {
 /// ViewModel del tracker live: timers locales, series, P2 y persistencia.
 class TrackerViewModel extends ChangeNotifier {
   TrackerViewModel({
-    required this._workoutsApi,
+    required this._repository,
+    required this._locationProvider,
     required this.exerciseId,
     required this.exerciseName,
     this.exerciseTags = const [],
     this.instructionsText,
-    TrackerLocationProvider? locationProvider,
     DateTime Function()? now,
     this.initialSetCount = 3,
     this.restPresetSeconds = const [60, 90, 120],
     this.autoStartSessionTimer = true,
-  }) : _locationProvider =
-           locationProvider ?? GeolocatorTrackerLocationProvider(),
-       _now = now ?? DateTime.now,
+  }) : _now = now ?? DateTime.now,
        startedAt = (now ?? DateTime.now)(),
        selectedRestSeconds = 90,
        restRemaining = const Duration(seconds: 90) {
@@ -76,7 +74,7 @@ class TrackerViewModel extends ChangeNotifier {
     unawaited(loadHistoryReferences());
   }
 
-  final WorkoutsApi _workoutsApi;
+  final WorkoutsRepository _repository;
   final TrackerLocationProvider _locationProvider;
   final DateTime Function() _now;
 
@@ -350,7 +348,7 @@ class TrackerViewModel extends ChangeNotifier {
 
   Future<void> loadHistoryReferences() async {
     try {
-      final sessions = await _workoutsApi.list();
+      final sessions = await _repository.list();
       _history = [
         for (final session in sessions)
           ExerciseHistorySession(
@@ -434,7 +432,7 @@ class TrackerViewModel extends ChangeNotifier {
     _finishState = const AsyncLoading();
     _notify();
     try {
-      final session = await _workoutsApi.createWithPayload(
+      final session = await _repository.createWithPayload(
         payload.toCreateWorkoutPayload(),
       );
       savedSessionId = session.id;

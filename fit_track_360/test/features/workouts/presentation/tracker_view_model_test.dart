@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/workouts/data/workouts_api.dart';
+import 'package:fit_track_360/features/workouts/data/workouts_repository_impl.dart';
 import 'package:fit_track_360/features/workouts/domain/exercise_reference.dart';
 import 'package:fit_track_360/features/workouts/domain/tracker_location_provider.dart';
 import 'package:fit_track_360/features/workouts/presentation/tracker_view_model.dart';
@@ -42,8 +43,12 @@ class _FakeLocation implements TrackerLocationProvider {
   Future<TrackerGpsFix?> getApproximateLocation() async => fix;
 }
 
-WorkoutsApi _api(MockClient client, {SessionStorage? storage}) =>
-    WorkoutsApi(ApiClient(storage: storage ?? _Storage(), httpClient: client));
+ApiWorkoutsRepository _api(MockClient client, {SessionStorage? storage}) =>
+    ApiWorkoutsRepository(
+      WorkoutsApi(
+        ApiClient(storage: storage ?? _Storage(), httpClient: client),
+      ),
+    );
 
 Map<String, dynamic> _sessionJson({
   String id = 's1',
@@ -75,7 +80,7 @@ Map<String, dynamic> _sessionJson({
 void main() {
   test('cronometro y descanso avanzan en estado local sin red', () {
     final vm = TrackerViewModel(
-      workoutsApi: _api(MockClient((_) async => http.Response('[]', 200))),
+      repository: _api(MockClient((_) async => http.Response('[]', 200))),
       exerciseId: '0001',
       exerciseName: 'Press',
       locationProvider: _FakeLocation(),
@@ -104,7 +109,7 @@ void main() {
 
   test('valida series: peso vacio ok, reps invalidas y negativos fallan', () {
     final vm = TrackerViewModel(
-      workoutsApi: _api(MockClient((_) async => http.Response('[]', 200))),
+      repository: _api(MockClient((_) async => http.Response('[]', 200))),
       exerciseId: '0001',
       exerciseName: 'Press',
       locationProvider: _FakeLocation(),
@@ -128,7 +133,7 @@ void main() {
     'referencia anterior se adjunta sin bloquear si no hay historial',
     () async {
       final vm = TrackerViewModel(
-        workoutsApi: _api(MockClient((_) async => http.Response('[]', 200))),
+        repository: _api(MockClient((_) async => http.Response('[]', 200))),
         exerciseId: '0001',
         exerciseName: 'Press',
         locationProvider: _FakeLocation(),
@@ -146,7 +151,7 @@ void main() {
     'referencia anterior aparece cuando hay historial equivalente',
     () async {
       final vm = TrackerViewModel(
-        workoutsApi: _api(
+        repository: _api(
           MockClient(
             (_) async => http.Response(jsonEncode([_sessionJson()]), 200),
           ),
@@ -170,7 +175,7 @@ void main() {
 
   test('P2 degrada a zona manual si GPS falla', () async {
     final vm = TrackerViewModel(
-      workoutsApi: _api(MockClient((_) async => http.Response('[]', 200))),
+      repository: _api(MockClient((_) async => http.Response('[]', 200))),
       exerciseId: '0001',
       exerciseName: 'Press',
       locationProvider: _FakeLocation(fix: null),
@@ -186,7 +191,7 @@ void main() {
   test('finalizar persiste series y devuelve el id de sesion', () async {
     Map<String, dynamic>? body;
     final vm = TrackerViewModel(
-      workoutsApi: _api(
+      repository: _api(
         MockClient((request) async {
           if (request.method == 'GET') {
             return http.Response('[]', 200);

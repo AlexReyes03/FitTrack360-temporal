@@ -6,8 +6,11 @@ import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../exercises/data/exercise.dart';
 import '../../exercises/data/exercises_api.dart';
+import '../data/geolocator_tracker_location_provider.dart';
 import '../data/workouts_api.dart';
+import '../data/workouts_repository_impl.dart';
 import '../domain/tracker_location_provider.dart';
+import '../domain/workouts_repository.dart';
 import 'tracker_page.dart';
 import 'tracker_view_model.dart';
 
@@ -23,14 +26,14 @@ class TrackerSessionPage extends StatefulWidget {
   const TrackerSessionPage({
     super.key,
     this.args,
-    this.workoutsApi,
+    this.workoutsRepository,
     this.exercisesApi,
     this.locationProvider,
     this.apiClient,
   });
 
   final TrackerSessionArgs? args;
-  final WorkoutsApi? workoutsApi;
+  final WorkoutsRepository? workoutsRepository;
   final ExercisesApi? exercisesApi;
   final TrackerLocationProvider? locationProvider;
   final ApiClient? apiClient;
@@ -57,7 +60,9 @@ class _TrackerSessionPageState extends State<TrackerSessionPage> {
   Future<void> _bootstrap() async {
     try {
       final client = widget.apiClient ?? (_ownedClient = ApiClient());
-      final workouts = widget.workoutsApi ?? WorkoutsApi(client);
+      final workouts =
+          widget.workoutsRepository ??
+          ApiWorkoutsRepository(WorkoutsApi(client));
       final exercise = widget.args?.exercise ?? await _resolveExercise(client);
       if (!mounted) return;
       if (exercise == null) {
@@ -70,7 +75,7 @@ class _TrackerSessionPageState extends State<TrackerSessionPage> {
       }
 
       final vm = TrackerViewModel(
-        workoutsApi: workouts,
+        repository: workouts,
         exerciseId: exercise.id,
         exerciseName: exercise.nameEs?.isNotEmpty == true
             ? exercise.nameEs!
@@ -81,7 +86,8 @@ class _TrackerSessionPageState extends State<TrackerSessionPage> {
           exercise.target,
         ].where((tag) => tag.trim().isNotEmpty).toList(),
         instructionsText: exercise.instructionsEs,
-        locationProvider: widget.locationProvider,
+        locationProvider:
+            widget.locationProvider ?? GeolocatorTrackerLocationProvider(),
       );
       vm.addListener(_onVm);
       setState(() {

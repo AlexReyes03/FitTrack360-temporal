@@ -70,12 +70,16 @@ class DashboardMetricCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      data.unit,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
+                    Flexible(
+                      child: Text(
+                        data.unit,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ],
@@ -92,19 +96,23 @@ class DashboardMetricCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadii.option),
-              color: Colors.white.withValues(alpha: 0.04),
-              border: Border.all(color: AppColors.glassBorder),
-            ),
-            child: Text(
-              data.recordedAtLabel,
-              style: const TextStyle(
-                color: AppColors.zinc200,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.option),
+                color: Colors.white.withValues(alpha: 0.04),
+                border: Border.all(color: AppColors.glassBorder),
+              ),
+              child: Text(
+                data.recordedAtLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.zinc200,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),

@@ -88,4 +88,71 @@ void main() {
     expect(mealTapped, isTrue);
     expect(photoTapped, isTrue);
   });
+
+  testWidgets('muestra el aviso médico aprobado', (tester) async {
+    await tester.pumpWidget(wrap(const HomeDashboardContent()));
+
+    expect(
+      find.text(
+        'Aviso médico: FitTrack360 es una herramienta de registro. '
+        'No ofrece diagnósticos ni sustituye la atención médica o '
+        'nutricional.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('no promete rutinas programadas', (tester) async {
+    await tester.pumpWidget(wrap(const HomeDashboardContent()));
+
+    expect(find.textContaining('programada'), findsNothing);
+    expect(find.text('Sesión de entrenamiento'), findsOneWidget);
+  });
+
+  testWidgets('los accesos siguen activos si fallan los bloques remotos', (
+    tester,
+  ) async {
+    var workoutTapped = false;
+    var mealTapped = false;
+    var photoTapped = false;
+
+    await tester.pumpWidget(
+      wrap(
+        HomeDashboardContent(
+          nutritionStatus: DashboardBlockStatus.error,
+          sessionStatus: DashboardBlockStatus.error,
+          metricStatus: DashboardBlockStatus.error,
+          onOpenWorkout: () => workoutTapped = true,
+          onOpenMeals: () => mealTapped = true,
+          onOpenPhoto: () => photoTapped = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Entrenamiento'));
+    await tester.tap(find.text('Comida'));
+    await tester.tap(find.text('Foto progreso'));
+
+    expect(workoutTapped, isTrue);
+    expect(mealTapped, isTrue);
+    expect(photoTapped, isTrue);
+  });
+
+  testWidgets('se adapta a una pantalla estrecha sin desbordarse', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(wrap(const HomeDashboardContent()));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Comida'), findsOneWidget);
+    expect(find.text('Foto progreso'), findsOneWidget);
+  });
 }

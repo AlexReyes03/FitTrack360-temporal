@@ -77,6 +77,7 @@ class _QuickActionTileState extends State<_QuickActionTile> {
     return Semantics(
       button: true,
       label: widget.label,
+      excludeSemantics: true,
       child: GestureDetector(
         onTapDown: (_) => _setPressed(true),
         onTapUp: (_) => _setPressed(false),

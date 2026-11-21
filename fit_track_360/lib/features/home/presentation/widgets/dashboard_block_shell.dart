@@ -232,22 +232,26 @@ class _DashboardGlassPillButtonState extends State<DashboardGlassPillButton> {
                   : AppColors.glassBorder,
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (widget.icon != null) ...[
-                Icon(widget.icon, size: 15, color: AppColors.textPrimary),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                widget.label,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.icon != null) ...[
+                  Icon(widget.icon, size: 15, color: AppColors.textPrimary),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  widget.label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

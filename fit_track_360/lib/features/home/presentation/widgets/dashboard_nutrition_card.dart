@@ -91,21 +91,30 @@ class DashboardNutritionCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                '/ ${data.targetKcal} kcal',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  '/ ${data.targetKcal} kcal',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-              const Spacer(),
-              Text(
-                'Restan $remaining kcal',
-                style: const TextStyle(
-                  color: AppColors.textMuted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Restan $remaining kcal',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

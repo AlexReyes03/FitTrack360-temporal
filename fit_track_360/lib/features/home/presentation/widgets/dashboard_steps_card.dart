@@ -114,12 +114,16 @@ class DashboardStepsCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      '/ ${data.goalSteps} pasos',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    Flexible(
+                      child: Text(
+                        '/ ${data.goalSteps} pasos',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],

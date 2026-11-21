@@ -39,7 +39,7 @@ class DashboardMedicalNotice extends StatelessWidget {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Aviso médico: FitTrack360 es una herramienta de seguimiento y no sustituye diagnóstico ni atención médica o nutricional profesional.',
+                      'Aviso médico: FitTrack360 es una herramienta de registro. No ofrece diagnósticos ni sustituye la atención médica o nutricional.',
                       style: TextStyle(
                         color: AppColors.warningText,
                         fontSize: 12,

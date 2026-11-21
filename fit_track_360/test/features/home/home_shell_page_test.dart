@@ -108,7 +108,7 @@ Future<http.Response> _route(http.Request request) async {
   return http.Response('not found', 404);
 }
 
-Future<void> _pumpShell(
+Future<GoRouter> _pumpShell(
   WidgetTester tester, {
   required FakeConnectivityService connectivity,
   required FakeSessionStorage storage,
@@ -129,12 +129,29 @@ Future<void> _pumpShell(
         ),
       ),
       GoRoute(
+        path: '/app/entrenamientos',
+        builder: (context, state) => const Text('Pantalla entrenamientos'),
+      ),
+      GoRoute(
+        path: '/app/comidas',
+        builder: (context, state) => const Text('Pantalla comidas'),
+      ),
+      GoRoute(
+        path: '/app/foto',
+        builder: (context, state) => const Text('Pantalla foto'),
+      ),
+      GoRoute(
+        path: '/app/ejercicios',
+        builder: (context, state) => const Text('Pantalla ejercicios'),
+      ),
+      GoRoute(
         path: '/login',
         builder: (context, state) => const Text('Pantalla login'),
       ),
     ],
   );
   await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+  return router;
 }
 
 void main() {
@@ -304,5 +321,153 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('No disponible'), findsOneWidget);
+  });
+
+  for (final (label, path, page) in [
+    ('Entrenamiento', '/app/entrenamientos', 'Pantalla entrenamientos'),
+    ('Comida', '/app/comidas', 'Pantalla comidas'),
+    ('Foto progreso', '/app/foto', 'Pantalla foto'),
+  ]) {
+    testWidgets('el acceso rápido $label navega a $path', (tester) async {
+      await _pumpShell(
+        tester,
+        connectivity: FakeConnectivityService(online: true),
+        storage: storage,
+        client: MockClient(_route),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+
+      expect(find.text(page), findsOneWidget);
+    });
+  }
+
+  testWidgets('mantiene los accesos mientras el dashboard carga', (
+    tester,
+  ) async {
+    final pending = Completer<http.Response>();
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient((request) {
+        if (request.url.path.endsWith('/users/me')) {
+          return Future.value(_profile());
+        }
+        return pending.future;
+      }),
+    );
+    await tester.pump();
+
+    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Comida'), findsOneWidget);
+    expect(find.text('Foto progreso'), findsOneWidget);
+    expect(find.text('Reintentar'), findsNothing);
+
+    pending.complete(_dashboardEmpty());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('un error HTTP no se muestra como falta de conexión', (
+    tester,
+  ) async {
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/users/me')) return _profile();
+        return http.Response('{}', 500);
+      }),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sin conexión'), findsNothing);
+    expect(
+      find.text('No pudimos cargar tu resumen de nutrición.'),
+      findsOneWidget,
+    );
+    expect(find.text('Reintentar'), findsNWidgets(3));
+
+    await tester.ensureVisible(find.text('Entrenamiento'));
+    await tester.tap(find.text('Entrenamiento'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pantalla entrenamientos'), findsOneWidget);
+  });
+
+  testWidgets('Reintentar un bloque recupera sus datos', (tester) async {
+    var dashboardCalls = 0;
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/users/me')) return _profile();
+        dashboardCalls++;
+        return dashboardCalls == 1
+            ? http.Response('{}', 500)
+            : _dashboardEmpty();
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('No pudimos cargar tu resumen de nutrición.'),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Reintentar').first);
+    await tester.tap(find.text('Reintentar').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('No pudimos cargar tu resumen de nutrición.'),
+      findsNothing,
+    );
+    expect(
+      find.textContaining('Aún no registras comidas hoy'),
+      findsOneWidget,
+    );
+    expect(dashboardCalls, 2);
+  });
+
+  testWidgets('no desborda en una pantalla estrecha', (tester) async {
+    tester.view.physicalSize = const Size(320, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient(_route),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Cerrar sesión'), findsOneWidget);
+  });
+
+  testWidgets('la navegación heredada de Ejercicios sigue disponible', (
+    tester,
+  ) async {
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient(_route),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Ejercicios'));
+    await tester.tap(find.text('Ejercicios'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pantalla ejercicios'), findsOneWidget);
   });
 }

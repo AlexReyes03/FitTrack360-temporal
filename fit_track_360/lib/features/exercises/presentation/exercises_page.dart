@@ -39,6 +39,7 @@ class _ExercisesPageState extends State<ExercisesPage> {
   late final ExercisesApi _api = widget.api ?? ExercisesApi(_ownedClient!);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  StreamSubscription<bool>? _connectivitySubscription;
 
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchTimer;
@@ -56,11 +57,16 @@ class _ExercisesPageState extends State<ExercisesPage> {
   @override
   void initState() {
     super.initState();
+    _connectivitySubscription = _connectivity.onStatusChange.listen(
+      _onConnectivityChange,
+      onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
+    );
     _load();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _searchTimer?.cancel();
     _searchController.dispose();
     _ownedClient?.dispose();
@@ -94,6 +100,11 @@ class _ExercisesPageState extends State<ExercisesPage> {
       if (!mounted || requestId != _requestId) return;
       setState(() => _state = AsyncError<ExercisePage>(error, stackTrace));
     }
+  }
+
+  /// Al recuperar la red, recarga solo si la última carga falló.
+  void _onConnectivityChange(bool online) {
+    if (online && mounted && _state is AsyncError) _load();
   }
 
   void _onSearchChanged(String _) {

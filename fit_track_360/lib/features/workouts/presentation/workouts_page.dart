@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -43,6 +45,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       widget.api ?? WorkoutsApi(_ownClient = widget.apiClientFactory());
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  StreamSubscription<bool>? _connectivitySubscription;
   late final TextEditingController _notesController = TextEditingController(
     text: widget.draft?.notes,
   );
@@ -60,11 +63,16 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   @override
   void initState() {
     super.initState();
+    _connectivitySubscription = _connectivity.onStatusChange.listen(
+      _onConnectivityChange,
+      onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
+    );
     _load();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _notesController.dispose();
     _ownClient?.dispose();
     super.dispose();
@@ -82,6 +90,11 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       if (!mounted) return;
       setState(() => _state = AsyncError(error, stackTrace));
     }
+  }
+
+  /// Al recuperar la red, recarga solo si la última carga falló.
+  void _onConnectivityChange(bool online) {
+    if (online && mounted && _state is AsyncError) _load();
   }
 
   Future<void> _pickStartedAt() async {

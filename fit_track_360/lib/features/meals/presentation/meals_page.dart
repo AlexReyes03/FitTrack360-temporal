@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
+import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/widgets/offline_banner.dart';
@@ -45,6 +48,7 @@ class _MealsPageState extends State<MealsPage> {
   late final FoodSearchRepository _foods;
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  StreamSubscription<bool>? _connectivitySubscription;
 
   ApiClient get _api => _client ??= ApiClient();
 
@@ -55,11 +59,16 @@ class _MealsPageState extends State<MealsPage> {
       widget.mealsRepository ?? MealsApiRepository.fromClient(_api),
     )..addListener(_onChange);
     _foods = widget.foodsRepository ?? FoodsApiRepository.fromClient(_api);
+    _connectivitySubscription = _connectivity.onStatusChange.listen(
+      _onConnectivityChange,
+      onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
+    );
     _load();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _viewModel
       ..removeListener(_onChange)
       ..dispose();
@@ -73,6 +82,12 @@ class _MealsPageState extends State<MealsPage> {
   }
 
   Future<void> _load() => _viewModel.load();
+
+  /// Al recuperar la red, recarga solo si la última carga falló.
+  void _onConnectivityChange(bool online) {
+    if (!online || !mounted || _viewModel.sessionExpired) return;
+    if (_viewModel.state is AsyncError) _load();
+  }
 
   Future<void> _openSearch() async {
     final entry = await context.push<NewMealEntry>(

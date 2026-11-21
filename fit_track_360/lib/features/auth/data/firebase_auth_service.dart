@@ -146,10 +146,7 @@ class FirebaseAuthService {
     UserCredential credential;
     try {
       credential = await _auth.signInWithCredential(
-        GoogleAuthProvider.credential(
-          idToken: googleTokens.idToken,
-          accessToken: googleTokens.accessToken,
-        ),
+        GoogleAuthProvider.credential(idToken: googleTokens.idToken),
       );
     } on FirebaseAuthException catch (e) {
       await _safeGoogleSignOut();

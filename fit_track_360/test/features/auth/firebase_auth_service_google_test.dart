@@ -42,6 +42,7 @@ class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
   final bool isNewUser;
   bool signedIn = false;
   int signInCalls = 0;
+  AuthCredential? lastCredential;
   int signOutCalls = 0;
 
   @override
@@ -50,6 +51,7 @@ class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
   @override
   Future<UserCredential> signInWithCredential(AuthCredential credential) async {
     signInCalls++;
+    lastCredential = credential;
     signedIn = true;
     return _FakeCredential(user, isNewUser: isNewUser);
   }
@@ -74,7 +76,6 @@ class _FakeGoogle implements GoogleAuthGateway {
     if (value != null) throw value;
     return GoogleAuthTokens(
       idToken: 'g-id',
-      accessToken: 'g-access',
       email: email,
       displayName: 'Ana Torres',
     );
@@ -204,6 +205,9 @@ void main() {
         final user = await h.service.loginWithGoogle();
 
         expect(user.id, 'u1');
+        final credential = h.auth.lastCredential as OAuthCredential;
+        expect(credential.providerId, 'google.com');
+        expect(credential.idToken, 'g-id');
         expect(h.registerCalls, isEmpty);
         expect(h.firebaseUser.deleteCalls, 0);
       },

@@ -3,21 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-class _FakeAuthentication extends Fake implements GoogleSignInAuthentication {
-  _FakeAuthentication({this.idToken, this.accessToken});
-
-  @override
-  final String? idToken;
-
-  @override
-  final String? accessToken;
-}
-
 class _FakeAccount extends Fake implements GoogleSignInAccount {
-  _FakeAccount({this.auth, this.authError});
+  _FakeAccount({this.idToken = 'id'});
 
-  final GoogleSignInAuthentication? auth;
-  final Object? authError;
+  final String? idToken;
 
   @override
   String get email => 'ana@test.com';
@@ -26,89 +15,138 @@ class _FakeAccount extends Fake implements GoogleSignInAccount {
   String? get displayName => 'Ana';
 
   @override
-  Future<GoogleSignInAuthentication> get authentication async {
-    final error = authError;
-    if (error != null) throw error;
-    return auth!;
-  }
+  GoogleSignInAuthentication get authentication =>
+      GoogleSignInAuthentication(idToken: idToken);
 }
 
 class _FakeGoogleSignIn extends Fake implements GoogleSignIn {
-  _FakeGoogleSignIn({this.account, this.error});
+  _FakeGoogleSignIn({
+    GoogleSignInAccount? account,
+    this.error,
+    this.initError,
+    this.supportsAuth = true,
+  }) : account = account ?? _FakeAccount();
 
-  final GoogleSignInAccount? account;
+  final GoogleSignInAccount account;
   final Object? error;
+  Object? initError;
+  final bool supportsAuth;
+  int initializeCalls = 0;
+  int authenticateCalls = 0;
   int signOutCalls = 0;
+  String? lastServerClientId;
 
   @override
-  Future<GoogleSignInAccount?> signIn() async {
+  Future<void> initialize({
+    String? clientId,
+    String? serverClientId,
+    String? nonce,
+    String? hostedDomain,
+  }) async {
+    initializeCalls++;
+    lastServerClientId = serverClientId;
+    final value = initError;
+    if (value != null) throw value;
+  }
+
+  @override
+  bool supportsAuthenticate() => supportsAuth;
+
+  @override
+  Future<GoogleSignInAccount> authenticate({
+    List<String> scopeHint = const <String>[],
+  }) async {
+    authenticateCalls++;
     final value = error;
     if (value != null) throw value;
     return account;
   }
 
   @override
-  Future<GoogleSignInAccount?> signOut() async {
-    signOutCalls++;
-    return null;
-  }
+  Future<void> signOut() async => signOutCalls++;
 }
 
-GoogleSignInGateway _gateway(_FakeGoogleSignIn googleSignIn) =>
-    GoogleSignInGateway(googleSignIn: googleSignIn);
+GoogleSignInGateway _gateway(
+  _FakeGoogleSignIn googleSignIn, {
+  String? serverClientId,
+}) => GoogleSignInGateway(
+  googleSignIn: googleSignIn,
+  serverClientId: serverClientId,
+);
+
+GoogleSignInException _googleError(
+  GoogleSignInExceptionCode code, [
+  String? description,
+]) => GoogleSignInException(code: code, description: description);
 
 void main() {
-  group('GoogleSignInGateway', () {
-    test('signIn exitoso devuelve tokens y datos del perfil', () async {
-      final gateway = _gateway(
-        _FakeGoogleSignIn(
-          account: _FakeAccount(
-            auth: _FakeAuthentication(idToken: 'id', accessToken: 'access'),
-          ),
-        ),
-      );
+  group('GoogleSignInGateway (google_sign_in 7.x)', () {
+    test('authenticate exitoso devuelve idToken y datos del perfil', () async {
+      final google = _FakeGoogleSignIn();
 
-      final tokens = await gateway.signIn();
+      final tokens = await _gateway(google, serverClientId: 'web-id').signIn();
 
       expect(tokens.idToken, 'id');
-      expect(tokens.accessToken, 'access');
       expect(tokens.email, 'ana@test.com');
       expect(tokens.displayName, 'Ana');
-    });
-
-    test('cerrar el selector (cuenta null) es cancelacion', () async {
-      final gateway = _gateway(_FakeGoogleSignIn());
-
-      expect(gateway.signIn(), throwsA(isA<GoogleSignInCancelledException>()));
-    });
-
-    test('PlatformException sign_in_canceled es cancelacion, no error', () {
-      final gateway = _gateway(
-        _FakeGoogleSignIn(
-          error: PlatformException(code: GoogleSignIn.kSignInCanceledError),
-        ),
-      );
-
-      expect(gateway.signIn(), throwsA(isA<GoogleSignInCancelledException>()));
+      expect(google.lastServerClientId, 'web-id');
     });
 
     test(
-      'DEVELOPER_ERROR (sign_in_failed) se mapea a no disponible en espanol',
+      'initialize se llama una sola vez por instancia de GoogleSignIn',
       () async {
-        final gateway = _gateway(
-          _FakeGoogleSignIn(
-            error: PlatformException(
-              code: GoogleSignIn.kSignInFailedError,
-              message: 'com.google.android.gms.common.api.ApiException: 10: ',
-            ),
+        final google = _FakeGoogleSignIn();
+
+        await _gateway(google).signIn();
+        await _gateway(google).signIn();
+        await _gateway(google).signOut();
+
+        expect(google.initializeCalls, 1);
+        expect(google.authenticateCalls, 2);
+      },
+    );
+
+    test('initialize fallido se mapea y permite reintentar', () async {
+      final google = _FakeGoogleSignIn(
+        initError: PlatformException(code: 'missing-config'),
+      );
+
+      await expectLater(
+        _gateway(google).signIn(),
+        throwsA(isA<GoogleSignInUnavailableException>()),
+      );
+
+      google.initError = null;
+      await _gateway(google).signIn();
+      expect(google.initializeCalls, 2);
+    });
+
+    test('canceled es cancelacion, no error', () {
+      final google = _FakeGoogleSignIn(
+        error: _googleError(GoogleSignInExceptionCode.canceled),
+      );
+
+      expect(
+        _gateway(google).signIn(),
+        throwsA(isA<GoogleSignInCancelledException>()),
+      );
+    });
+
+    test(
+      'clientConfigurationError (DEVELOPER_ERROR / client ID) es no disponible',
+      () async {
+        final google = _FakeGoogleSignIn(
+          error: _googleError(
+            GoogleSignInExceptionCode.clientConfigurationError,
+            'serverClientId must be provided on Android',
           ),
         );
 
         await expectLater(
-          gateway.signIn(),
+          _gateway(google).signIn(),
           throwsA(
             isA<GoogleSignInUnavailableException>()
-                .having((e) => e.code, 'code', 'sign_in_failed')
+                .having((e) => e.code, 'code', 'clientConfigurationError')
                 .having(
                   (e) => e.message,
                   'message',
@@ -119,28 +157,33 @@ void main() {
       },
     );
 
-    test('cliente OAuth faltante (codigo desconocido) es no disponible', () {
-      final gateway = _gateway(
-        _FakeGoogleSignIn(
-          error: PlatformException(code: 'missing-config', message: 'No ID'),
+    test(
+      'providerConfigurationError y uiUnavailable son no disponible',
+      () async {
+        for (final code in [
+          GoogleSignInExceptionCode.providerConfigurationError,
+          GoogleSignInExceptionCode.uiUnavailable,
+          GoogleSignInExceptionCode.interrupted,
+        ]) {
+          await expectLater(
+            _gateway(_FakeGoogleSignIn(error: _googleError(code))).signIn(),
+            throwsA(isA<GoogleSignInUnavailableException>()),
+            reason: code.name,
+          );
+        }
+      },
+    );
+
+    test('unknownError de red se mapea a error de red', () {
+      final google = _FakeGoogleSignIn(
+        error: _googleError(
+          GoogleSignInExceptionCode.unknownError,
+          'A network error occurred',
         ),
       );
 
       expect(
-        gateway.signIn(),
-        throwsA(isA<GoogleSignInUnavailableException>()),
-      );
-    });
-
-    test('network_error se mapea a error de red', () {
-      final gateway = _gateway(
-        _FakeGoogleSignIn(
-          error: PlatformException(code: GoogleSignIn.kNetworkError),
-        ),
-      );
-
-      expect(
-        gateway.signIn(),
+        _gateway(google).signIn(),
         throwsA(
           isA<GoogleSignInNetworkException>().having(
             (e) => e.message,
@@ -151,41 +194,41 @@ void main() {
       );
     });
 
-    test('PlatformException al pedir tokens tambien se mapea', () {
-      final gateway = _gateway(
-        _FakeGoogleSignIn(
-          account: _FakeAccount(
-            authError: PlatformException(code: 'failed_to_recover_auth'),
-          ),
-        ),
+    test('PlatformException nativa residual es no disponible', () {
+      final google = _FakeGoogleSignIn(
+        error: PlatformException(code: 'sign_in_failed', message: '10: '),
       );
 
       expect(
-        gateway.signIn(),
+        _gateway(google).signIn(),
         throwsA(isA<GoogleSignInUnavailableException>()),
       );
     });
 
-    test('tokens vacios son configuracion no disponible', () {
-      final gateway = _gateway(
-        _FakeGoogleSignIn(
-          account: _FakeAccount(
-            auth: _FakeAuthentication(idToken: null, accessToken: 'access'),
-          ),
-        ),
+    test('plataforma sin authenticate es no disponible', () async {
+      final google = _FakeGoogleSignIn(supportsAuth: false);
+
+      await expectLater(
+        _gateway(google).signIn(),
+        throwsA(isA<GoogleSignInUnavailableException>()),
       );
+      expect(google.authenticateCalls, 0);
+    });
+
+    test('idToken vacio es configuracion no disponible', () {
+      final google = _FakeGoogleSignIn(account: _FakeAccount(idToken: null));
 
       expect(
-        gateway.signIn(),
+        _gateway(google).signIn(),
         throwsA(isA<GoogleSignInUnavailableException>()),
       );
     });
 
     test('signOut delega en GoogleSignIn', () async {
-      final googleSignIn = _FakeGoogleSignIn();
-      await _gateway(googleSignIn).signOut();
+      final google = _FakeGoogleSignIn();
+      await _gateway(google).signOut();
 
-      expect(googleSignIn.signOutCalls, 1);
+      expect(google.signOutCalls, 1);
     });
   });
 }

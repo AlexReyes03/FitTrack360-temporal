@@ -12,15 +12,11 @@ const googleSignInNetworkMessage =
 
 /// Resultado del picker de Google (antes de Firebase credential).
 class GoogleAuthTokens {
-  const GoogleAuthTokens({
-    required this.idToken,
-    required this.accessToken,
-    this.email,
-    this.displayName,
-  });
+  const GoogleAuthTokens({required this.idToken, this.email, this.displayName});
 
+  /// Suficiente para `GoogleAuthProvider.credential` (Firebase no exige
+  /// access token; en google_sign_in 7.x requiere un paso de autorizacion).
   final String idToken;
-  final String accessToken;
   final String? email;
   final String? displayName;
 }
@@ -40,62 +36,85 @@ abstract class GoogleAuthGateway {
   Future<void> signOut();
 }
 
-/// Gateway real. [serverClientId] = Web client ID de Firebase (Android idToken).
+/// Gateway real sobre `google_sign_in` 7.x.
+///
+/// [serverClientId] = Web client ID de Firebase (Android lo necesita para
+/// emitir idToken). `GoogleSignIn.instance` es singleton y `initialize` debe
+/// llamarse una sola vez por proceso, aunque se creen varios gateways.
 class GoogleSignInGateway implements GoogleAuthGateway {
   GoogleSignInGateway({GoogleSignIn? googleSignIn, String? serverClientId})
-    : _googleSignIn =
-          googleSignIn ??
-          GoogleSignIn(
-            scopes: const ['email', 'profile'],
-            serverClientId: serverClientId?.isEmpty == true
-                ? null
-                : serverClientId,
-          );
+    : _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+      _serverClientId = serverClientId?.isEmpty == true ? null : serverClientId;
+
+  static const _scopes = ['email', 'profile'];
+
+  /// Inicializaciones en curso/completadas por instancia de [GoogleSignIn].
+  static final Expando<Future<void>> _initializations = Expando();
 
   final GoogleSignIn _googleSignIn;
+  final String? _serverClientId;
+
+  Future<void> _ensureInitialized() {
+    final existing = _initializations[_googleSignIn];
+    if (existing != null) return existing;
+    final future = _googleSignIn
+        .initialize(serverClientId: _serverClientId)
+        .catchError((Object error) {
+          // Permite reintentar si la configuracion falla.
+          _initializations[_googleSignIn] = null;
+          throw error;
+        });
+    _initializations[_googleSignIn] = future;
+    return future;
+  }
 
   @override
   Future<GoogleAuthTokens> signIn() async {
     try {
-      final account = await _googleSignIn.signIn();
-      if (account == null) {
-        throw const GoogleSignInCancelledException();
+      await _ensureInitialized();
+      if (!_googleSignIn.supportsAuthenticate()) {
+        throw const GoogleSignInUnavailableException(
+          code: 'authenticate_unsupported',
+        );
       }
-      final auth = await account.authentication;
-      final idToken = auth.idToken;
-      final accessToken = auth.accessToken;
-      if (idToken == null ||
-          idToken.isEmpty ||
-          accessToken == null ||
-          accessToken.isEmpty) {
-        throw const GoogleSignInUnavailableException(code: 'missing_tokens');
+      final account = await _googleSignIn.authenticate(scopeHint: _scopes);
+      final idToken = account.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw const GoogleSignInUnavailableException(code: 'missing_id_token');
       }
       return GoogleAuthTokens(
         idToken: idToken,
-        accessToken: accessToken,
         email: account.email,
         displayName: account.displayName,
       );
+    } on GoogleSignInException catch (e) {
+      throw mapGoogleSignInException(e);
     } on PlatformException catch (e) {
-      throw mapGoogleSignInPlatformException(e);
+      throw GoogleSignInUnavailableException(code: e.code);
     }
   }
 
   @override
-  Future<void> signOut() => _googleSignIn.signOut();
+  Future<void> signOut() async {
+    await _ensureInitialized();
+    await _googleSignIn.signOut();
+  }
 }
 
-/// Traduce errores nativos de `google_sign_in` a errores de dominio.
+/// Traduce errores de `google_sign_in` 7.x a errores de dominio.
 ///
-/// `sign_in_canceled` es una cancelacion del usuario (no se muestra error).
-Exception mapGoogleSignInPlatformException(PlatformException e) {
+/// `canceled` es una cancelacion del usuario (no se muestra error). El plugin
+/// no tiene codigo de red: llega como `unknownError` y solo la descripcion
+/// tecnica lo distingue.
+Exception mapGoogleSignInException(GoogleSignInException e) {
   switch (e.code) {
-    case GoogleSignIn.kSignInCanceledError:
+    case GoogleSignInExceptionCode.canceled:
       return const GoogleSignInCancelledException();
-    case GoogleSignIn.kNetworkError:
+    case GoogleSignInExceptionCode.unknownError
+        when (e.description ?? '').toLowerCase().contains('network'):
       return const GoogleSignInNetworkException();
     default:
-      return GoogleSignInUnavailableException(code: e.code);
+      return GoogleSignInUnavailableException(code: e.code.name);
   }
 }
 
@@ -123,7 +142,7 @@ class GoogleSignInUnavailableException extends GoogleSignInFailure {
 
 /// Google no respondio por falta de red.
 class GoogleSignInNetworkException extends GoogleSignInFailure {
-  const GoogleSignInNetworkException({super.code = GoogleSignIn.kNetworkError});
+  const GoogleSignInNetworkException({super.code = 'network_error'});
 
   @override
   String get message => googleSignInNetworkMessage;

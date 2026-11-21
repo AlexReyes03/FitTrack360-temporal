@@ -32,14 +32,7 @@ export class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
       if (!email) {
         throw new UnauthorizedException('Token sin correo');
       }
-      const firebase = decoded.firebase as
-        { sign_in_provider?: string } | undefined;
-      return {
-        uid: decoded.uid,
-        email,
-        signInProvider: firebase?.sign_in_provider,
-        name: typeof decoded.name === 'string' ? decoded.name : undefined,
-      };
+      return { uid: decoded.uid, email };
     } catch (error) {
       if (error instanceof UnauthorizedException) throw error;
       throw new UnauthorizedException('Token invalido');

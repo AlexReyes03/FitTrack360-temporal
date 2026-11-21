@@ -42,6 +42,8 @@ class ApiClient {
   Future<http.Response> patch(String path, {Object? body}) =>
       _send('PATCH', path, body: body);
 
+  Future<http.Response> delete(String path) => _send('DELETE', path);
+
   Future<http.Response> uploadFile(String path, File file) async {
     final accessToken = await _storage.readAccessToken();
     var response = await _upload(path, file, accessToken);
@@ -110,6 +112,9 @@ class ApiClient {
 
     if (method == 'GET') {
       return _http.get(uri, headers: headers);
+    }
+    if (method == 'DELETE') {
+      return _http.delete(uri, headers: headers);
     }
     if (method == 'PATCH') {
       return _http.patch(

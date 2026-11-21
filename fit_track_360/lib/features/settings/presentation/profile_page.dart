@@ -18,6 +18,7 @@ import '../../auth/data/logout_service.dart';
 import '../data/profile_api_repository.dart';
 import '../data/share_plus_export_sharer.dart';
 import '../domain/export_sharer.dart';
+import '../domain/privacy_repository.dart';
 import '../domain/profile_repository.dart';
 import '../domain/profile_validation.dart';
 import '../domain/user_profile.dart';
@@ -47,6 +48,7 @@ class ProfilePage extends StatefulWidget {
     this.logoutService,
     this.connectivityService,
     this.exportSharer,
+    this.privacyRepository,
   });
 
   final ProfileRepository? repository;
@@ -55,6 +57,7 @@ class ProfilePage extends StatefulWidget {
   final LogoutService? logoutService;
   final ConnectivityService? connectivityService;
   final ExportSharer? exportSharer;
+  final PrivacyRepository? privacyRepository;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -142,7 +145,12 @@ class _ProfilePageState extends State<ProfilePage> {
   /// Comparte el archivo; si el plugin falla, muestra el JSON para copiarlo.
   Future<void> _export() async {
     final json = await _vm.exportData(origin: _exportOrigin());
-    if (json == null || !mounted) return;
+    if (!mounted) return;
+    if (_vm.sessionExpired) {
+      await _promptLogin();
+      return;
+    }
+    if (json == null) return;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -180,6 +188,104 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _logout() async {
     setState(() => _loggingOut = true);
     await _vm.logout();
+    if (!mounted) return;
+    context.go('/login');
+  }
+
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.bgMid,
+        title: const Text(
+          'Eliminar mi cuenta',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Se solicitará la eliminación de tu cuenta y de los datos asociados. '
+          'Esta acción no se puede deshacer.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: AppColors.warningText),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final deleted = await _vm.deleteAccount();
+    if (!mounted) return;
+    if (_vm.sessionExpired) {
+      await _promptLogin();
+      return;
+    }
+    if (!deleted) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.bgMid,
+        title: const Text(
+          'Cuenta eliminada',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'El servidor confirmó la eliminación de tu cuenta. Se cerrará la '
+          'sesión en este dispositivo.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Entendido',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    await _logout();
+  }
+
+  Future<void> _promptLogin() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.bgMid,
+        title: const Text(
+          'Sesión expirada',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Tu sesión ya no es válida. Inicia sesión de nuevo para continuar.',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Iniciar sesión',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
     if (!mounted) return;
     context.go('/login');
   }
@@ -445,9 +551,19 @@ class _ProfilePageState extends State<ProfilePage> {
                 icon: Icons.privacy_tip_outlined,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const PrivacyNoticePage(),
+                    builder: (_) => PrivacyNoticePage(
+                      userId: profile.id,
+                      repository: widget.privacyRepository,
+                    ),
                   ),
                 ),
+              ),
+              _LinkRow(
+                label: _vm.deleting
+                    ? 'Eliminando cuenta...'
+                    : 'Eliminar mi cuenta',
+                icon: Icons.delete_outline,
+                onTap: _vm.deleting ? null : _deleteAccount,
               ),
             ],
           ),
@@ -541,7 +657,7 @@ class _LinkRow extends StatelessWidget {
 
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

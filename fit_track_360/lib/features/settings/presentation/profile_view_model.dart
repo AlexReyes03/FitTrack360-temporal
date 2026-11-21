@@ -3,6 +3,7 @@ import 'dart:ui' show Rect;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/async_state.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/notifications/reminder_service.dart';
 import '../../../core/security/biometric_service.dart';
 import '../../auth/data/logout_service.dart';
@@ -27,6 +28,9 @@ const exportShareFailedMessage =
     'No se pudo abrir el menú para compartir. Copia tus datos desde aquí.';
 const saveFailedMessage =
     'No se pudieron guardar los cambios. Intenta de nuevo.';
+const deleteAccountFailedMessage =
+    'No se pudo eliminar la cuenta. Intenta de nuevo.';
+const sessionExpiredMessage = 'Tu sesión expiró. Inicia sesión de nuevo.';
 
 /// Hora local del recordatorio diario (P3, programación inexacta).
 const reminderHour = 20;
@@ -61,6 +65,8 @@ class ProfileViewModel extends ChangeNotifier {
   bool reminderSupported = false;
   bool biometricAvailable = false;
   bool saving = false;
+  bool deleting = false;
+  bool sessionExpired = false;
   Map<String, String> fieldErrors = const {};
 
   /// Aviso no bloqueante (éxito o fallo) para mostrar en la vista.
@@ -75,6 +81,7 @@ class ProfileViewModel extends ChangeNotifier {
 
   Future<void> load() async {
     state = const AsyncLoading();
+    sessionExpired = false;
     _notify();
     try {
       final result = await _repository.fetchProfile();
@@ -220,9 +227,15 @@ class ProfileViewModel extends ChangeNotifier {
   /// respaldo (el plugin falló); null si se compartió o si no hay exportación.
   Future<String?> exportData({Rect? origin}) async {
     message = null;
+    sessionExpired = false;
     final String json;
     try {
       json = await _repository.exportData();
+    } on SessionExpiredException {
+      sessionExpired = true;
+      message = sessionExpiredMessage;
+      _notify();
+      return null;
     } catch (_) {
       message = exportUnavailableMessage;
       _notify();
@@ -243,6 +256,29 @@ class ProfileViewModel extends ChangeNotifier {
   }
 
   Future<void> logout() => _logout.logout();
+
+  /// Solo devuelve true cuando el servidor confirma la eliminación.
+  Future<bool> deleteAccount() async {
+    if (deleting) return false;
+    message = null;
+    sessionExpired = false;
+    deleting = true;
+    _notify();
+    try {
+      await _repository.deleteAccount();
+      return true;
+    } on SessionExpiredException {
+      sessionExpired = true;
+      message = sessionExpiredMessage;
+      return false;
+    } catch (_) {
+      message = deleteAccountFailedMessage;
+      return false;
+    } finally {
+      deleting = false;
+      _notify();
+    }
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();

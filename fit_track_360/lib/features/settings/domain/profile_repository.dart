@@ -18,4 +18,7 @@ abstract class ProfileRepository {
 
   /// JSON con los datos del usuario. Lanza [ExportUnavailableException].
   Future<String> exportData();
+
+  /// Elimina la cuenta del usuario autenticado.
+  Future<void> deleteAccount();
 }

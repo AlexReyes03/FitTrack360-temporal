@@ -116,6 +116,46 @@ void main() {
       expect(entry.item.servingG, 50);
       expect(entry.item.macros.kcal, 190);
     });
+
+    test('canEdit permite un registro normal', () {
+      expect(
+        _entry(
+          MealType.lunch,
+          const Macros(kcal: 100, proteinG: 1, carbsG: 1, fatG: 1),
+        ).canEdit,
+        isTrue,
+      );
+    });
+
+    test('canEdit bloquea un legacy sin porción decodificable', () {
+      final legacy = MealEntry(
+        id: 'old',
+        mealType: MealType.snack,
+        eatenAt: DateTime(2026, 11, 10),
+        items: const [
+          MealItem(name: 'Notas libres', servingG: 0, macros: Macros.zero),
+        ],
+        isLegacy: true,
+      );
+      expect(legacy.canEdit, isFalse);
+    });
+
+    test('canEdit permite un legacy con porción decodificada', () {
+      final legacy = MealEntry(
+        id: 'old',
+        mealType: MealType.snack,
+        eatenAt: DateTime(2026, 11, 10),
+        items: const [
+          MealItem(
+            name: 'Manzana',
+            servingG: 120,
+            macros: Macros(kcal: 62, proteinG: 0.3, carbsG: 17, fatG: 0.2),
+          ),
+        ],
+        isLegacy: true,
+      );
+      expect(legacy.canEdit, isTrue);
+    });
   });
 
   group('LocalDay', () {

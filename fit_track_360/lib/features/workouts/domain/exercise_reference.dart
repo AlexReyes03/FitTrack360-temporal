@@ -67,16 +67,12 @@ PreviousSetReference? findPreviousSetReference({
   required DateTime currentStartedAt,
   required bool Function(ExerciseSetRecord set) equivalent,
 }) {
-  ExerciseHistorySession? latest;
-  for (final session in sessions) {
-    if (session.sessionId == currentSessionId) continue;
-    if (session.endedAt == null) continue;
-    if (!session.startedAt.isBefore(currentStartedAt)) continue;
-    if (!session.sets.any((set) => set.exerciseId == exerciseId)) continue;
-    if (latest == null || session.startedAt.isAfter(latest.startedAt)) {
-      latest = session;
-    }
-  }
+  final latest = _latestSessionWith(
+    sessions: sessions,
+    exerciseId: exerciseId,
+    currentSessionId: currentSessionId,
+    currentStartedAt: currentStartedAt,
+  );
   if (latest == null) return null;
 
   for (final set in latest.sets) {
@@ -89,4 +85,61 @@ PreviousSetReference? findPreviousSetReference({
     );
   }
   return null;
+}
+
+/// Igual que [findPreviousSetReference], pero la serie equivalente es la que
+/// ocupa [position] (desde 1) entre las series de [exerciseId] en esa sesión,
+/// ordenadas por `order`. Sirve cuando `order` es global en la sesión y se
+/// mezclan varios ejercicios.
+PreviousSetReference? findPreviousSetReferenceByPosition({
+  required List<ExerciseHistorySession> sessions,
+  required String exerciseId,
+  required String currentSessionId,
+  required DateTime currentStartedAt,
+  required int position,
+}) {
+  if (position < 1) return null;
+  final latest = _latestSessionWith(
+    sessions: sessions,
+    exerciseId: exerciseId,
+    currentSessionId: currentSessionId,
+    currentStartedAt: currentStartedAt,
+  );
+  if (latest == null) return null;
+
+  final indexed = [
+    for (var i = 0; i < latest.sets.length; i++)
+      if (latest.sets[i].exerciseId == exerciseId) (i, latest.sets[i]),
+  ];
+  // Orden por `order` y, si falta o empata, por posición original (estable).
+  indexed.sort((a, b) {
+    final byOrder = (a.$2.order ?? a.$1).compareTo(b.$2.order ?? b.$1);
+    return byOrder != 0 ? byOrder : a.$1.compareTo(b.$1);
+  });
+  if (position > indexed.length) return null;
+  final set = indexed[position - 1].$2;
+  return PreviousSetReference(
+    performedAt: latest.startedAt,
+    weightKg: set.weightKg,
+    reps: set.reps,
+  );
+}
+
+ExerciseHistorySession? _latestSessionWith({
+  required List<ExerciseHistorySession> sessions,
+  required String exerciseId,
+  required String currentSessionId,
+  required DateTime currentStartedAt,
+}) {
+  ExerciseHistorySession? latest;
+  for (final session in sessions) {
+    if (session.sessionId == currentSessionId) continue;
+    if (session.endedAt == null) continue;
+    if (!session.startedAt.isBefore(currentStartedAt)) continue;
+    if (!session.sets.any((set) => set.exerciseId == exerciseId)) continue;
+    if (latest == null || session.startedAt.isAfter(latest.startedAt)) {
+      latest = session;
+    }
+  }
+  return latest;
 }

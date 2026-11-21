@@ -44,7 +44,18 @@ class TrackerEditableSet {
     previousReference: previousReference,
     hasWeightError: hasWeightError,
     hasRepsError: hasRepsError,
+    errorText: _errorText,
   );
+
+  String? get _errorText {
+    final messages = [
+      if (hasWeightError)
+        'Peso: de 0 a ${TrackerViewModel.maxWeightKg.toInt()} kg',
+      if (hasRepsError)
+        'Repeticiones: entero de 1 a ${TrackerViewModel.maxReps}',
+    ];
+    return messages.isEmpty ? null : messages.join(' · ');
+  }
 }
 
 /// ViewModel del tracker live: timers locales, series, P2 y persistencia.
@@ -73,6 +84,11 @@ class TrackerViewModel extends ChangeNotifier {
     }
     unawaited(loadHistoryReferences());
   }
+
+  /// Limites de captura. El API solo exige minimos (peso >= 0, reps >= 1);
+  /// estos maximos evitan valores absurdos y no finitos antes de enviar.
+  static const double maxWeightKg = 1000;
+  static const int maxReps = 1000;
 
   final WorkoutsRepository _repository;
   final TrackerLocationProvider _locationProvider;
@@ -379,13 +395,17 @@ class TrackerViewModel extends ChangeNotifier {
     }
   }
 
-  /// Valida series y persiste la sesion. Devuelve el id creado o null.
+  /// Valida las series completadas y persiste la sesion. Devuelve el id
+  /// creado o null. Las series pendientes no se validan ni se envian.
   Future<String?> finishSession() async {
     finishError = null;
     final payloadSets = <TrackerFinishSet>[];
     var hasError = false;
+    var completedCount = 0;
 
     for (final set in _sets) {
+      if (!set.completed) continue;
+      completedCount++;
       final weightOk = _isValidWeight(set.weightText);
       final repsOk = _isValidReps(set.repsText);
       set.hasWeightError = !weightOk;
@@ -394,22 +414,20 @@ class TrackerViewModel extends ChangeNotifier {
         hasError = true;
         continue;
       }
-      final reps = int.parse(set.repsText.trim());
-      final weight = _parseWeight(set.weightText) ?? 0;
       payloadSets.add(
         TrackerFinishSet(
           exerciseId: exerciseId,
-          order: set.order,
-          weightKg: weight,
-          reps: reps,
+          order: payloadSets.length + 1,
+          weightKg: _parseWeight(set.weightText) ?? 0,
+          reps: int.parse(set.repsText.trim()),
         ),
       );
     }
 
-    if (hasError || payloadSets.isEmpty) {
-      finishError = payloadSets.isEmpty
-          ? 'Agrega al menos una serie con repeticiones validas'
-          : 'Corrige peso y repeticiones antes de finalizar';
+    if (completedCount == 0 || hasError) {
+      finishError = completedCount == 0
+          ? 'Completa al menos una serie'
+          : 'Corrige peso y repeticiones de las series completadas';
       _finishState = AsyncError(finishError!);
       _notify();
       return null;
@@ -456,13 +474,15 @@ class TrackerViewModel extends ChangeNotifier {
     }
   }
 
-  PreviousSetReference? _referenceForOrder(int order) {
-    return findPreviousSetReference(
+  /// Referencia por posicion entre las series de este ejercicio en la sesion
+  /// previa: el `order` del API es global y mezcla ejercicios.
+  PreviousSetReference? _referenceForOrder(int position) {
+    return findPreviousSetReferenceByPosition(
       sessions: _history,
       exerciseId: exerciseId,
       currentSessionId: 'active-tracker',
       currentStartedAt: startedAt,
-      equivalent: (set) => set.order == order,
+      position: position,
     );
   }
 
@@ -472,20 +492,24 @@ class TrackerViewModel extends ChangeNotifier {
     final text = raw.trim();
     if (text.isEmpty) return true;
     final value = double.tryParse(text.replaceAll(',', '.'));
-    return value != null && value >= 0;
+    return value != null &&
+        value.isFinite &&
+        value >= 0 &&
+        value <= maxWeightKg;
   }
 
   static bool _isValidReps(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return false;
     final value = int.tryParse(text);
-    return value != null && value >= 1;
+    return value != null && value >= 1 && value <= maxReps;
   }
 
   static double? _parseWeight(String raw) {
     final text = raw.trim();
     if (text.isEmpty) return null;
-    return double.tryParse(text.replaceAll(',', '.'));
+    final value = double.tryParse(text.replaceAll(',', '.'));
+    return value != null && value.isFinite ? value : null;
   }
 
   static String _formatNumber(double value) {

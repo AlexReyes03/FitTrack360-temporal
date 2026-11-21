@@ -20,6 +20,7 @@ class TrackerSetItem {
     this.previousReference,
     this.hasWeightError = false,
     this.hasRepsError = false,
+    this.errorText,
   });
 
   final String id;
@@ -30,6 +31,9 @@ class TrackerSetItem {
   final PreviousSetReference? previousReference;
   final bool hasWeightError;
   final bool hasRepsError;
+
+  /// Mensaje visible bajo la serie cuando peso o repeticiones son invalidos.
+  final String? errorText;
 }
 
 /// Bloque editable visual de series (peso, reps, estado, +/- y agregar/quitar).
@@ -300,6 +304,16 @@ class _TrackerSetRowState extends State<_TrackerSetRow> {
               ),
             ],
           ),
+          if (item.errorText != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              item.errorText!,
+              style: AppTypography.body.copyWith(
+                fontSize: 12,
+                color: AppColors.dangerText,
+              ),
+            ),
+          ],
         ],
       ),
     );

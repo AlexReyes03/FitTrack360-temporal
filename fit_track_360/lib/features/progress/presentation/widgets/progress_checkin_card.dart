@@ -5,20 +5,9 @@ import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
 import '../../../../design_system/tokens/app_spacing.dart';
 import '../../../../design_system/widgets/ds_text_field.dart';
+import '../../domain/body_weight_validation.dart';
+import '../state/progress_view_state.dart';
 import 'progress_section_shell.dart';
-
-/// Valores capturados en el formulario visual de check-in.
-class ProgressCheckInDraft {
-  const ProgressCheckInDraft({
-    required this.weightText,
-    required this.notesText,
-    required this.hasPhotoSelected,
-  });
-
-  final String weightText;
-  final String notesText;
-  final bool hasPhotoSelected;
-}
 
 /// Formulario Liquid Glass de check-in diario: peso, notas y slot de foto P1.
 class ProgressCheckInCard extends StatefulWidget {
@@ -29,6 +18,7 @@ class ProgressCheckInCard extends StatefulWidget {
     this.initialNotesText = '',
     this.selectedPhotoLabel,
     this.isSubmitting = false,
+    this.feedbackMessage,
     this.onSelectPhoto,
     this.onSubmit,
     this.onRetry,
@@ -39,6 +29,10 @@ class ProgressCheckInCard extends StatefulWidget {
   final String initialNotesText;
   final String? selectedPhotoLabel;
   final bool isSubmitting;
+
+  /// Resultado del último envío (lo decide el ViewModel, p. ej. que el peso
+  /// aún no se guarda por #122).
+  final String? feedbackMessage;
   final VoidCallback? onSelectPhoto;
   final ValueChanged<ProgressCheckInDraft>? onSubmit;
   final VoidCallback? onRetry;
@@ -51,7 +45,6 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
   late final TextEditingController _weightController;
   late final TextEditingController _notesController;
   String? _weightError;
-  String? _feedbackMessage;
 
   @override
   void initState() {
@@ -68,23 +61,14 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
   }
 
   void _handleSubmit() {
-    final weight = _weightController.text.trim();
-    if (weight.isEmpty) {
-      setState(() {
-        _weightError = 'Ingresa tu peso en kg para guardar el check-in.';
-        _feedbackMessage = null;
-      });
-      return;
-    }
-
-    setState(() {
-      _weightError = null;
-      _feedbackMessage = 'Check-in listo para guardar ($weight kg).';
-    });
+    final validation = validateBodyWeightKg(_weightController.text);
+    final weightKg = validation.weightKg;
+    setState(() => _weightError = validation.error);
+    if (weightKg == null) return;
 
     widget.onSubmit?.call(
       ProgressCheckInDraft(
-        weightText: weight,
+        weightKg: weightKg,
         notesText: _notesController.text.trim(),
         hasPhotoSelected: widget.selectedPhotoLabel != null,
       ),
@@ -115,11 +99,8 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
             enabled: !widget.isSubmitting,
             errorText: _weightError,
             onChanged: (_) {
-              if (_weightError != null || _feedbackMessage != null) {
-                setState(() {
-                  _weightError = null;
-                  _feedbackMessage = null;
-                });
+              if (_weightError != null) {
+                setState(() => _weightError = null);
               }
             },
           ),
@@ -142,10 +123,10 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
             label: widget.isSubmitting ? 'Guardando...' : 'Guardar check-in',
             onPressed: widget.isSubmitting ? null : _handleSubmit,
           ),
-          if (_feedbackMessage != null) ...[
+          if (widget.feedbackMessage != null) ...[
             const SizedBox(height: 10),
             Text(
-              _feedbackMessage!,
+              widget.feedbackMessage!,
               style: const TextStyle(
                 fontSize: 12.5,
                 color: AppColors.textSecondary,

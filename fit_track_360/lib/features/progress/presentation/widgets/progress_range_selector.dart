@@ -2,19 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
-
-/// Rangos de tiempo disponibles para la vista de progreso biométrico.
-enum ProgressRange {
-  d7('7d', 'Últimos 7 días'),
-  d30('30d', 'Últimos 30 días'),
-  d90('90d', 'Últimos 90 días'),
-  y1('1y', 'Último año');
-
-  const ProgressRange(this.label, this.description);
-
-  final String label;
-  final String description;
-}
+import '../state/progress_view_state.dart';
 
 /// Selector segmentado Liquid Glass para elegir rango temporal (7d a 1y).
 class ProgressRangeSelector extends StatelessWidget {

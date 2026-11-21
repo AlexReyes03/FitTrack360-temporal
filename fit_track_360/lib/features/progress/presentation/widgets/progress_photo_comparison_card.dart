@@ -3,22 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
 import '../../../../design_system/tokens/app_spacing.dart';
+import '../state/progress_view_state.dart';
 import 'progress_section_shell.dart';
-
-/// Datos de presentación para cada panel de comparación de fotos (Inicial / Actual).
-class ProgressPhotoPreviewSlot {
-  const ProgressPhotoPreviewSlot({
-    required this.label,
-    required this.dateLabel,
-    required this.weightLabel,
-    this.caption,
-  });
-
-  final String label;
-  final String dateLabel;
-  final String weightLabel;
-  final String? caption;
-}
 
 /// Tarjeta Liquid Glass de comparación visual antes/después (Inicial vs Actual).
 class ProgressPhotoComparisonCard extends StatelessWidget {

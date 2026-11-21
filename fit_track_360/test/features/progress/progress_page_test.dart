@@ -1,7 +1,5 @@
 import 'package:fit_track_360/features/progress/presentation/progress_page.dart';
-import 'package:fit_track_360/features/progress/presentation/widgets/progress_checkin_card.dart';
-import 'package:fit_track_360/features/progress/presentation/widgets/progress_range_selector.dart';
-import 'package:fit_track_360/features/progress/presentation/widgets/progress_section_shell.dart';
+import 'package:fit_track_360/features/progress/presentation/state/progress_view_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -13,7 +11,7 @@ void main() {
   testWidgets('renderiza todas las secciones de progreso con datos mock', (
     tester,
   ) async {
-    await tester.pumpWidget(wrap(const ProgressPage()));
+    await tester.pumpWidget(wrap(const ProgressPage(usePreviewData: true)));
 
     expect(find.text('Progreso'), findsOneWidget);
     expect(find.text('7d'), findsOneWidget);
@@ -135,7 +133,79 @@ void main() {
     await tester.tap(find.text('Guardar check-in'));
     await tester.pump();
     expect(submitted, isNotNull);
-    expect(submitted!.weightText, '73.8');
+    expect(submitted!.weightKg, 73.8);
     expect(submitted!.notesText, 'Buen descanso');
+  });
+
+  testWidgets('por defecto no muestra datos de maqueta', (tester) async {
+    await tester.pumpWidget(wrap(const ProgressPage()));
+
+    expect(find.text('74.2 kg'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Comparación de fotos'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('-0.4 kg vs sem. ant.'), findsNothing);
+    expect(find.text('77.4 kg'), findsNothing);
+    expect(find.text('Frente · Inicio'), findsNothing);
+  });
+
+  group('validación de peso del check-in', () {
+    Future<ProgressCheckInDraft?> submitWeight(
+      WidgetTester tester,
+      String weight,
+    ) async {
+      ProgressCheckInDraft? submitted;
+      await tester.pumpWidget(
+        wrap(ProgressPage(onSubmitCheckIn: (draft) => submitted = draft)),
+      );
+      await tester.ensureVisible(find.byType(TextField).first);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).first, weight);
+      await tester.ensureVisible(find.text('Guardar check-in'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guardar check-in'));
+      await tester.pump();
+      return submitted;
+    }
+
+    for (final invalid in ['abc', '0', '-5', '12', '650', '7,4,2']) {
+      testWidgets('rechaza "$invalid" y muestra el error en el formulario', (
+        tester,
+      ) async {
+        final submitted = await submitWeight(tester, invalid);
+
+        expect(submitted, isNull);
+        expect(
+          find.text('Ingresa un peso válido entre 20 y 500 kg.'),
+          findsOneWidget,
+        );
+      });
+    }
+
+    testWidgets('acepta coma decimal y no promete guardar el peso', (
+      tester,
+    ) async {
+      final submitted = await submitWeight(tester, '73,8');
+
+      expect(submitted, isNotNull);
+      expect(submitted!.weightKg, 73.8);
+      expect(find.textContaining('listo para guardar'), findsNothing);
+    });
+  });
+
+  testWidgets('muestra en el formulario el mensaje del check-in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        const ProgressPage(checkInFeedback: 'Tu peso aún no se guarda (#122).'),
+      ),
+    );
+    await tester.ensureVisible(find.text('Guardar check-in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Tu peso aún no se guarda (#122).'), findsOneWidget);
   });
 }

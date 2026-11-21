@@ -2,47 +2,24 @@ import 'dart:io';
 
 import 'package:fit_track_360/core/async_state.dart';
 import 'package:fit_track_360/core/network/api_client.dart';
-import 'package:fit_track_360/core/session_storage.dart';
-import 'package:fit_track_360/features/progress/data/progress_photos_api.dart';
+import 'package:fit_track_360/features/progress/domain/progress_photo_errors.dart';
 import 'package:fit_track_360/features/progress/presentation/progress_view_model.dart';
-import 'package:fit_track_360/features/progress/presentation/widgets/progress_checkin_card.dart';
-import 'package:fit_track_360/features/progress/presentation/widgets/progress_range_selector.dart';
-import 'package:fit_track_360/features/progress/presentation/widgets/progress_section_shell.dart';
+import 'package:fit_track_360/features/progress/presentation/state/progress_view_state.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 
-import 'support/progress_test_data.dart';
+import 'support/fake_progress_photos_repository.dart';
 
-class _FakeStorage implements SessionStorage {
-  @override
-  Future<String?> readAccessToken({bool forceRefresh = false}) async =>
-      'access';
+const _draft = ProgressCheckInDraft(
+  weightKg: 74.2,
+  notesText: '',
+  hasPhotoSelected: false,
+);
 
-  @override
-  Future<String?> readRefreshToken() async => null;
-
-  @override
-  Future<void> saveTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
-
-  @override
-  Future<void> clear() async {}
-}
-
-ProgressViewModel _vm(MockClient client) {
-  return ProgressViewModel(
-    photosApi: ProgressPhotosApi(
-      ApiClient(storage: _FakeStorage(), httpClient: client),
-    ),
-  );
-}
+File _photo(String name) => File('${Directory.systemTemp.path}/$name');
 
 void main() {
   test('métricas quedan empty por bloqueo #122', () {
-    final vm = _vm(MockClient((_) async => http.Response('', 500)));
+    final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
 
     expect(vm.chartStatus, ProgressSectionStatus.empty);
     expect(vm.historyStatus, ProgressSectionStatus.empty);
@@ -58,96 +35,111 @@ void main() {
     vm.dispose();
   });
 
-  test('check-in sin foto solo informa el bloqueo de métricas', () async {
-    final vm = _vm(MockClient((_) async => http.Response('', 500)));
+  test('reintentar recarga métricas aunque el rango no cambie', () {
+    final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+    var notifications = 0;
+    vm.addListener(() => notifications++);
 
-    await vm.submitCheckIn(
-      const ProgressCheckInDraft(
-        weightText: '74.2',
-        notesText: '',
-        hasPhotoSelected: false,
-      ),
-    );
+    vm.setRange(vm.range);
+    expect(notifications, 0, reason: 'mismo rango sin forzar no recarga');
 
+    vm.reloadMetrics();
+    expect(notifications, greaterThan(0));
+    expect(vm.chartStatus, ProgressSectionStatus.empty);
+    expect(vm.historyStatus, ProgressSectionStatus.empty);
+
+    vm.dispose();
+  });
+
+  test('check-in sin foto dice que el peso aún no se guarda', () async {
+    final repo = FakeProgressPhotosRepository();
+    final vm = ProgressViewModel(photos: repo);
+
+    await vm.submitCheckIn(_draft);
+
+    expect(vm.checkInFeedback, contains('aún no se guarda'));
     expect(vm.checkInFeedback, contains('#122'));
+    expect(vm.checkInFeedback, isNot(contains('listo para guardar')));
+    expect(repo.uploaded, isEmpty);
     expect(vm.sessionPhotos, isEmpty);
 
     vm.dispose();
   });
 
-  test('check-in con foto sube a /photos y arma comparación de sesión', () async {
-    var uploads = 0;
-    final temp = File(
-      '${Directory.systemTemp.path}/ft360-vm-photo-${DateTime.now().microsecondsSinceEpoch}.jpg',
-    );
-    await temp.writeAsBytes(transparentImage);
+  test('check-in con foto sube y arma comparación de sesión', () async {
+    final repo = FakeProgressPhotosRepository();
+    final vm = ProgressViewModel(photos: repo);
 
-    final vm = _vm(
-      MockClient((request) async {
-        expect(request.url.path, '/api/v1/photos');
-        uploads++;
-        return http.Response(
-          '''
-{
-  "id": "ph-$uploads",
-  "mimeType": "image/jpeg",
-  "sizeBytes": 12,
-  "width": 1,
-  "height": 1,
-  "mealId": null,
-  "metricId": null,
-  "createdAt": "2026-11-19T12:0$uploads:00.000Z"
-}
-''',
-          201,
-          headers: {'content-type': 'application/json'},
-        );
-      }),
-    );
+    vm.selectPendingPhoto(_photo('a.jpg'), label: 'selfie.jpg');
+    await vm.submitCheckIn(_draft);
 
-    vm.selectPendingPhoto(temp, label: 'selfie.jpg');
-    await vm.submitCheckIn(
-      const ProgressCheckInDraft(
-        weightText: '74.2',
-        notesText: 'nota',
-        hasPhotoSelected: true,
-      ),
-    );
-
-    expect(uploads, 1);
+    expect(repo.uploaded, hasLength(1));
     expect(vm.sessionPhotos, hasLength(1));
     expect(vm.comparisonStatus, ProgressSectionStatus.data);
     expect(vm.checkInFeedback, contains('Foto guardada'));
-    expect(vm.checkInFeedback, contains('#122'));
+    expect(vm.checkInFeedback, contains('aún no se guarda'));
+    expect(vm.selectedCheckInPhotoLabel, isNull);
 
-    vm.selectPendingPhoto(temp, label: 'selfie2.jpg');
-    await vm.submitCheckIn(
-      const ProgressCheckInDraft(
-        weightText: '74.0',
-        notesText: '',
-        hasPhotoSelected: true,
-      ),
-    );
+    vm.selectPendingPhoto(_photo('b.jpg'), label: 'selfie2.jpg');
+    await vm.submitCheckIn(_draft);
 
     expect(vm.sessionPhotos, hasLength(2));
-    expect(vm.sessionComparison, isNotNull);
     expect(vm.sessionComparison!.initial!.id, 'ph-1');
     expect(vm.sessionComparison!.current!.id, 'ph-2');
 
-    await temp.delete();
+    vm.dispose();
+  });
+
+  test('sesión expirada al subir marca sessionExpired', () async {
+    final vm = ProgressViewModel(
+      photos: FakeProgressPhotosRepository(
+        uploadError: const SessionExpiredException(),
+      ),
+    );
+    vm.selectPendingPhoto(_photo('a.jpg'), label: 'a.jpg');
+
+    await vm.submitCheckIn(_draft);
+
+    expect(vm.sessionExpired, isTrue);
+    expect(vm.isSubmittingCheckIn, isFalse);
+    vm.dispose();
+  });
+
+  test('error de validación de foto se muestra sin tumbar el VM', () async {
+    final vm = ProgressViewModel(
+      photos: FakeProgressPhotosRepository(
+        uploadError: const ProgressPhotoValidationException('Formato raro'),
+      ),
+    );
+    vm.selectPendingPhoto(_photo('a.jpg'), label: 'a.jpg');
+
+    await vm.submitCheckIn(_draft);
+
+    expect(vm.checkInFeedback, 'Formato raro');
+    vm.dispose();
+  });
+
+  test('reintentar comparación recalcula los slots de la sesión', () async {
+    final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+    await vm.uploadProgressPhoto(_photo('a.jpg'));
+    vm.comparisonStatus = ProgressSectionStatus.error;
+
+    vm.refreshComparison();
+
+    expect(vm.comparisonStatus, ProgressSectionStatus.data);
+    expect(vm.initialPhotoSlot, isNotNull);
     vm.dispose();
   });
 
   test('delete 404 de foto ajena no tumba el VM', () async {
-    final vm = _vm(
-      MockClient((request) async {
-        expect(request.method, 'DELETE');
-        return http.Response('{"message":"Foto no encontrada"}', 404);
-      }),
+    final vm = ProgressViewModel(
+      photos: FakeProgressPhotosRepository(
+        deleteError: const ProgressPhotoUnavailableException(),
+      ),
     );
 
-    expect(
-      () => vm.deletePhoto('ajena'),
+    await expectLater(
+      vm.deletePhoto('ajena'),
       throwsA(isA<ProgressPhotoUnavailableException>()),
     );
 

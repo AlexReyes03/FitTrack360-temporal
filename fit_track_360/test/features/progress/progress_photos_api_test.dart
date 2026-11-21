@@ -143,6 +143,11 @@ void main() {
           request.headers['content-type'] ?? '',
           contains('multipart/form-data'),
         );
+        // La parte `file` declara el formato real (PNG), no octet-stream:
+        // el API responde 400 si no coincide.
+        final body = String.fromCharCodes(request.bodyBytes).toLowerCase();
+        expect(body, contains('content-type: image/png'));
+        expect(body, isNot(contains('application/octet-stream')));
         return http.Response(
           jsonEncode({
             'id': 'ph-1',
@@ -223,5 +228,52 @@ void main() {
     final api = _api(MockClient((request) async => http.Response('', 204)));
 
     await api.delete('ph-1');
+  });
+
+  test('metricId y mealId juntos lanzan error de validación de foto', () async {
+    final api = _api(MockClient((request) async => fail('no debe llamar')));
+
+    expect(
+      () => api.upload(File('x.jpg'), metricId: 'm', mealId: 'c'),
+      throwsA(isA<ProgressPhotoValidationException>()),
+    );
+  });
+
+  test('un 400 del API se reporta como validación de foto', () async {
+    final temp = File('${Directory.systemTemp.path}/ft360-photo-400.jpg');
+    await temp.writeAsBytes(transparentImage);
+    final api = _api(
+      MockClient(
+        (request) async => http.Response(
+          '{"message":"Imagen inválida o formato no admitido"}',
+          400,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+
+    await expectLater(
+      api.upload(temp),
+      throwsA(
+        isA<ProgressPhotoValidationException>().having(
+          (e) => e.message,
+          'message',
+          'Imagen inválida o formato no admitido',
+        ),
+      ),
+    );
+    await temp.delete();
+  });
+
+  test('un 500 al subir lanza ProgressPhotoUploadException', () async {
+    final temp = File('${Directory.systemTemp.path}/ft360-photo-500.jpg');
+    await temp.writeAsBytes(transparentImage);
+    final api = _api(MockClient((request) async => http.Response('', 500)));
+
+    await expectLater(
+      api.upload(temp),
+      throwsA(isA<ProgressPhotoUploadException>()),
+    );
+    await temp.delete();
   });
 }

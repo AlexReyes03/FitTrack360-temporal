@@ -4,17 +4,17 @@ import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
+import 'state/progress_view_state.dart';
 import 'widgets/progress_checkin_card.dart';
 import 'widgets/progress_history_card.dart';
 import 'widgets/progress_photo_comparison_card.dart';
 import 'widgets/progress_range_selector.dart';
-import 'widgets/progress_section_shell.dart';
 import 'widgets/progress_weight_chart_card.dart';
 
 /// Vista 9: Progreso biométrico e historial (maquetación Liquid Glass).
 ///
-/// Lista para registrarse en `/app/progreso` o integrarse en la navegación
-/// principal sin acoplarse todavía a llamadas de red ni a lógica de métricas.
+/// Vista pura: recibe estado y callbacks (ver `ProgressShellPage`). Los datos
+/// de maqueta solo se muestran con [usePreviewData] explícito (demos/tests).
 class ProgressPage extends StatefulWidget {
   const ProgressPage({
     super.key,
@@ -27,9 +27,10 @@ class ProgressPage extends StatefulWidget {
     this.historyEntries,
     this.initialPhotoSlot,
     this.currentPhotoSlot,
-    this.usePreviewPhotos = true,
+    this.usePreviewData = false,
     this.selectedCheckInPhotoLabel,
     this.isSubmittingCheckIn = false,
+    this.checkInFeedback,
     this.onBack,
     this.onRangeChanged,
     this.onSelectCheckInPhoto,
@@ -52,9 +53,13 @@ class ProgressPage extends StatefulWidget {
   final List<ProgressHistoryEntry>? historyEntries;
   final ProgressPhotoPreviewSlot? initialPhotoSlot;
   final ProgressPhotoPreviewSlot? currentPhotoSlot;
-  final bool usePreviewPhotos;
+
+  /// Rellena gráfica, historial y fotos con datos de maqueta cuando no se
+  /// pasan. Producción lo deja en `false`.
+  final bool usePreviewData;
   final String? selectedCheckInPhotoLabel;
   final bool isSubmittingCheckIn;
+  final String? checkInFeedback;
   final VoidCallback? onBack;
   final ValueChanged<ProgressRange>? onRangeChanged;
   final VoidCallback? onSelectCheckInPhoto;
@@ -73,6 +78,13 @@ class ProgressPage extends StatefulWidget {
 
 class _ProgressPageState extends State<ProgressPage> {
   late ProgressRange _selectedRange;
+
+  static const ProgressChartData _emptyChart = ProgressChartData(
+    currentWeightKg: 0,
+    periodDeltaKg: 0,
+    averageWeightKg: 0,
+    points: [],
+  );
 
   static const Map<ProgressRange, ProgressChartData> _previewChartByRange = {
     ProgressRange.d7: ProgressChartData(
@@ -179,14 +191,17 @@ class _ProgressPageState extends State<ProgressPage> {
 
   @override
   Widget build(BuildContext context) {
-    final chartData = widget.chartData ?? _previewChartByRange[_selectedRange]!;
-    final historyEntries = widget.historyEntries ?? _previewHistory;
+    final preview = widget.usePreviewData;
+    final chartData =
+        widget.chartData ??
+        (preview ? _previewChartByRange[_selectedRange]! : _emptyChart);
+    final historyEntries =
+        widget.historyEntries ??
+        (preview ? _previewHistory : const <ProgressHistoryEntry>[]);
     final initialPhoto =
-        widget.initialPhotoSlot ??
-        (widget.usePreviewPhotos ? _previewInitialPhoto : null);
+        widget.initialPhotoSlot ?? (preview ? _previewInitialPhoto : null);
     final currentPhoto =
-        widget.currentPhotoSlot ??
-        (widget.usePreviewPhotos ? _previewCurrentPhoto : null);
+        widget.currentPhotoSlot ?? (preview ? _previewCurrentPhoto : null);
 
     return AppScaffoldTemplate(
       body: SafeArea(
@@ -221,6 +236,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   status: widget.checkInStatus,
                   selectedPhotoLabel: widget.selectedCheckInPhotoLabel,
                   isSubmitting: widget.isSubmittingCheckIn,
+                  feedbackMessage: widget.checkInFeedback,
                   onSelectPhoto: widget.onSelectCheckInPhoto,
                   onSubmit: widget.onSubmitCheckIn,
                   onRetry: widget.onRetryCheckIn,

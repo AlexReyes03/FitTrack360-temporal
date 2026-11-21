@@ -5,9 +5,7 @@ import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
 import '../../../../design_system/tokens/app_spacing.dart';
 import '../../../../design_system/tokens/app_typography.dart';
-
-/// Estado visual de cada sección de la pantalla de progreso.
-enum ProgressSectionStatus { loading, data, empty, error }
+import '../state/progress_view_state.dart';
 
 /// Contenedor Liquid Glass reutilizable para secciones de progreso con estados
 /// visuales loading, data, empty y error.

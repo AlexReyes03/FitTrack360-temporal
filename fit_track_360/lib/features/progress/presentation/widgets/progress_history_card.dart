@@ -3,22 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
 import '../../../../design_system/tokens/app_spacing.dart';
+import '../state/progress_view_state.dart';
 import 'progress_section_shell.dart';
-
-/// Registro visual de historial biométrico con variación semanal.
-class ProgressHistoryEntry {
-  const ProgressHistoryEntry({
-    required this.dateLabel,
-    required this.weightKg,
-    this.weeklyDiffKg,
-    this.note,
-  });
-
-  final String dateLabel;
-  final double weightKg;
-  final double? weeklyDiffKg;
-  final String? note;
-}
 
 /// Lista Liquid Glass con historial de peso y diferencia frente a la semana previa.
 class ProgressHistoryCard extends StatelessWidget {

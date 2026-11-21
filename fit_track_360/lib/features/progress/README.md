@@ -7,7 +7,10 @@ Métricas corporales y fotos de progreso (data/domain/presentation).
 ### Desbloqueado (este PR)
 
 - Ruta `/app/progreso` → `ProgressShellPage` + `ProgressPage` (UI Liquid Glass).
-- Fotos vía `POST/GET/DELETE /api/v1/photos` (`ProgressPhotosApi`).
+- Fotos vía `POST/GET/DELETE /api/v1/photos` (`ProgressPhotosApi`, implementa `domain/ProgressPhotosRepository`; el VM depende solo de la interfaz).
+- El multipart declara el formato real de la imagen (jpeg/png/webp por firma o extensión); el API rechaza `application/octet-stream`.
+- Tipos de estado de la vista en `presentation/state/progress_view_state.dart` (sin depender de `widgets/`).
+- Check-in: peso validado en el formulario (número finito, 20–500 kg, coma o punto); todavía no se persiste y la vista lo dice.
 - Upload de `ProgressPhotoPage` migrado desde `/storage/files` a `/photos`.
 - 404 de foto ajena/inexistente → `ProgressPhotoUnavailableException` ("Foto no disponible"), sin 403.
 - Comparación: solo con fotos subidas en la sesión actual (no hay listado en el API).

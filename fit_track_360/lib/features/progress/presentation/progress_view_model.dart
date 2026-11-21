@@ -4,26 +4,24 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
-import '../data/progress_photos_api.dart';
 import '../domain/progress_photo.dart';
+import '../domain/progress_photo_errors.dart';
 import '../domain/progress_photo_meta.dart';
-import 'widgets/progress_checkin_card.dart';
-import 'widgets/progress_history_card.dart';
-import 'widgets/progress_photo_comparison_card.dart';
-import 'widgets/progress_range_selector.dart';
-import 'widgets/progress_section_shell.dart';
-import 'widgets/progress_weight_chart_card.dart';
+import '../domain/progress_photos_repository.dart';
+import 'state/progress_view_state.dart';
 
-/// Motivo explícito del bloqueo de métricas (#122).
+/// Motivo explícito del bloqueo de métricas (#122): el peso del check-in se
+/// valida pero todavía no se persiste.
 const String kMetricsBlockedReason =
-    'El CRUD de métricas corporales aún no está en el API (issue #122). '
-    'Gráfica, historial con diff y check-in de peso quedan pendientes.';
+    'Tu peso aún no se guarda: las métricas se guardarán cuando el backend '
+    'de métricas corporales esté disponible (#122).';
 
-/// ViewModel de Progreso: fotos vía `/photos`; métricas bloqueadas por #122.
+/// ViewModel de Progreso: fotos vía [ProgressPhotosRepository]; métricas
+/// bloqueadas por #122.
 class ProgressViewModel extends ChangeNotifier {
-  ProgressViewModel({required this._photosApi});
+  ProgressViewModel({required this._photos});
 
-  final ProgressPhotosApi _photosApi;
+  final ProgressPhotosRepository _photos;
 
   bool _disposed = false;
   ProgressRange _range = ProgressRange.d30;
@@ -78,9 +76,20 @@ class ProgressViewModel extends ChangeNotifier {
   void setRange(ProgressRange range) {
     if (_range == range) return;
     _range = range;
-    // Sin serie de métricas (#122) el cambio de rango no trae datos nuevos.
+    reloadMetrics();
+  }
+
+  /// Recarga gráfica e historial del rango actual aunque no haya cambiado
+  /// (usado por «Reintentar»). Sin serie de métricas (#122) quedan vacíos.
+  void reloadMetrics() {
     chartStatus = ProgressSectionStatus.empty;
     historyStatus = ProgressSectionStatus.empty;
+    _notify();
+  }
+
+  /// Recalcula la comparación con las fotos de la sesión («Reintentar»).
+  void refreshComparison() {
+    _refreshComparisonSlots();
     _notify();
   }
 
@@ -97,7 +106,8 @@ class ProgressViewModel extends ChangeNotifier {
     _notify();
   }
 
-  /// Check-in: sin #122 no se persiste peso. Si hay foto, sube a `/photos`.
+  /// Check-in: [draft] ya viene validado; sin #122 no se persiste el peso.
+  /// Si hay foto, la sube a `/photos`.
   Future<void> submitCheckIn(ProgressCheckInDraft draft) async {
     sessionExpired = false;
     checkInFeedback = null;
@@ -107,15 +117,13 @@ class ProgressViewModel extends ChangeNotifier {
     try {
       final file = _pendingPhotoFile;
       if (file != null) {
-        final meta = await _photosApi.upload(file);
+        final meta = await _photos.upload(file);
         if (_disposed) return;
         _sessionPhotos.add(meta);
         _pendingPhotoFile = null;
         selectedCheckInPhotoLabel = null;
         _refreshComparisonSlots();
-        checkInFeedback =
-            'Foto guardada (${meta.id}). El peso del check-in no se '
-            'persiste hasta el CRUD de métricas (#122).';
+        checkInFeedback = 'Foto guardada. $kMetricsBlockedReason';
       } else {
         checkInFeedback = kMetricsBlockedReason;
       }
@@ -124,10 +132,10 @@ class ProgressViewModel extends ChangeNotifier {
       checkInFeedback = 'Sesión expirada.';
     } on ProgressPhotoUnavailableException {
       checkInFeedback = 'Foto no disponible.';
-    } catch (error) {
-      checkInFeedback = error is Exception
-          ? error.toString().replaceFirst('Exception: ', '')
-          : 'No se pudo completar el check-in.';
+    } on ProgressPhotoException catch (error) {
+      checkInFeedback = error.message;
+    } catch (_) {
+      checkInFeedback = 'No se pudo completar el check-in.';
     } finally {
       isSubmittingCheckIn = false;
       _notify();
@@ -138,7 +146,7 @@ class ProgressViewModel extends ChangeNotifier {
   Future<ProgressPhotoMeta?> uploadProgressPhoto(File file) async {
     sessionExpired = false;
     try {
-      final meta = await _photosApi.upload(file);
+      final meta = await _photos.upload(file);
       if (_disposed) return meta;
       _sessionPhotos.add(meta);
       _refreshComparisonSlots();
@@ -154,7 +162,7 @@ class ProgressViewModel extends ChangeNotifier {
   Future<void> deletePhoto(String photoId) async {
     sessionExpired = false;
     try {
-      await _photosApi.delete(photoId);
+      await _photos.delete(photoId);
       if (_disposed) return;
       _sessionPhotos.removeWhere((p) => p.id == photoId);
       _refreshComparisonSlots();

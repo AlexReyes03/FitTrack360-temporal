@@ -5,31 +5,8 @@ import 'package:flutter/material.dart';
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
 import '../../../../design_system/tokens/app_spacing.dart';
-import 'progress_range_selector.dart';
+import '../state/progress_view_state.dart';
 import 'progress_section_shell.dart';
-
-/// Punto visual para la gráfica placeholder de evolución de peso.
-class ProgressChartPoint {
-  const ProgressChartPoint({required this.label, required this.weightKg});
-
-  final String label;
-  final double weightKg;
-}
-
-/// Datos de presentación para la tarjeta de gráfica de peso.
-class ProgressChartData {
-  const ProgressChartData({
-    required this.currentWeightKg,
-    required this.periodDeltaKg,
-    required this.averageWeightKg,
-    required this.points,
-  });
-
-  final double currentWeightKg;
-  final double periodDeltaKg;
-  final double averageWeightKg;
-  final List<ProgressChartPoint> points;
-}
 
 /// Tarjeta Liquid Glass con gráfica visual placeholder de evolución de peso.
 class ProgressWeightChartCard extends StatelessWidget {

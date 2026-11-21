@@ -168,7 +168,13 @@ export class ProgressService {
     });
   }
 
-  private parseAndValidateMeasuredAt(rawDate: string): Date {
+  private parseAndValidateMeasuredAt(rawDate: unknown): Date {
+    if (typeof rawDate !== 'string' || !rawDate.trim()) {
+      throw new BadRequestException(
+        'measuredAt debe ser una fecha ISO 8601 válida',
+      );
+    }
+
     const parsed = new Date(rawDate);
     if (Number.isNaN(parsed.getTime())) {
       throw new BadRequestException(

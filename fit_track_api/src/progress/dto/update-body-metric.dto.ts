@@ -6,6 +6,7 @@ import {
   IsPositive,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { IsNotFutureDate } from '../validators/not-future-date.validator';
 
@@ -16,7 +17,7 @@ export class UpdateBodyMetricDto {
     example: '2026-11-10T07:30:00.000Z',
     format: 'date-time',
   })
-  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined)
   @IsDateString(
     {},
     { message: 'measuredAt debe ser una fecha ISO 8601 válida' },
@@ -30,7 +31,7 @@ export class UpdateBodyMetricDto {
     minimum: 0,
     exclusiveMinimum: true,
   })
-  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined)
   @IsNumber(
     { allowNaN: false, allowInfinity: false },
     { message: 'weightKg debe ser un número válido' },

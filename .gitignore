@@ -45,6 +45,7 @@ package-lock.json
 **/dist/
 **/build/
 **/coverage/
+fit_track_api/backups/
 **/.nyc_output/
 **/.turbo/
 **/.nest/

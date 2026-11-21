@@ -334,6 +334,80 @@ describe('ProgressModule · /api/v1/progress (Task W12-03)', () => {
         .send({ waistCm: -2 })
         .expect(400);
     });
+
+    it('rechaza PATCH con measuredAt: null devolviendo 400 y mantiene el registro intacto', async () => {
+      const initialDate = daysAgoIso(4);
+      const created = await request(server())
+        .post('/api/v1/progress')
+        .set('Authorization', `Bearer ${anaToken}`)
+        .send({
+          measuredAt: initialDate,
+          weightKg: 74.5,
+          bodyFatPercent: 18.2,
+          waistCm: 81.5,
+        })
+        .expect(201);
+
+      await request(server())
+        .patch(`/api/v1/progress/${created.body.id}`)
+        .set('Authorization', `Bearer ${anaToken}`)
+        .send({ measuredAt: null })
+        .expect(400);
+
+      const persistedRes = await request(server())
+        .get(`/api/v1/progress/${created.body.id}`)
+        .set('Authorization', `Bearer ${anaToken}`)
+        .expect(200);
+
+      expect(persistedRes.body).toMatchObject({
+        id: created.body.id,
+        measuredAt: initialDate,
+        weightKg: 74.5,
+        bodyFatPercent: 18.2,
+        waistCm: 81.5,
+      });
+
+      const stored = store.metrics.find((m) => m.id === created.body.id);
+      expect(stored?.measuredAt.toISOString()).toBe(initialDate);
+      expect(stored?.weightKg).toBe(74.5);
+    });
+
+    it('rechaza PATCH con weightKg: null devolviendo 400 y mantiene el registro intacto', async () => {
+      const initialDate = daysAgoIso(4);
+      const created = await request(server())
+        .post('/api/v1/progress')
+        .set('Authorization', `Bearer ${anaToken}`)
+        .send({
+          measuredAt: initialDate,
+          weightKg: 74.5,
+          bodyFatPercent: 18.2,
+          waistCm: 81.5,
+        })
+        .expect(201);
+
+      await request(server())
+        .patch(`/api/v1/progress/${created.body.id}`)
+        .set('Authorization', `Bearer ${anaToken}`)
+        .send({ weightKg: null })
+        .expect(400);
+
+      const persistedRes = await request(server())
+        .get(`/api/v1/progress/${created.body.id}`)
+        .set('Authorization', `Bearer ${anaToken}`)
+        .expect(200);
+
+      expect(persistedRes.body).toMatchObject({
+        id: created.body.id,
+        measuredAt: initialDate,
+        weightKg: 74.5,
+        bodyFatPercent: 18.2,
+        waistCm: 81.5,
+      });
+
+      const stored = store.metrics.find((m) => m.id === created.body.id);
+      expect(stored?.measuredAt.toISOString()).toBe(initialDate);
+      expect(stored?.weightKg).toBe(74.5);
+    });
   });
 
   describe('5. Aislamiento entre dos usuarios JWT (Regla S4 · 404 Not Found)', () => {

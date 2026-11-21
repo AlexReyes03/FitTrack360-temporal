@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../design_system/components/glass_surface.dart';
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_spacing.dart';
+import '../../domain/steps_sensor.dart';
 import 'dashboard_block_shell.dart';
 import 'dashboard_medical_notice.dart';
 import 'dashboard_metric_card.dart';
@@ -32,7 +33,12 @@ class HomeDashboardContent extends StatelessWidget {
     this.stepsStatus = DashboardBlockStatus.data,
     this.stepsData = DashboardStepsData.preview,
     this.stepsUnavailable = false,
+    this.stepsUnavailableReason,
+    this.stepsNeedPermission = false,
+    this.stepsCanOpenSettings = false,
     this.onRetrySteps,
+    this.onEnableSteps,
+    this.onOpenStepsSettings,
     this.onOpenWorkout,
     this.onOpenMeals,
     this.onOpenPhoto,
@@ -55,7 +61,12 @@ class HomeDashboardContent extends StatelessWidget {
   final DashboardBlockStatus stepsStatus;
   final DashboardStepsData stepsData;
   final bool stepsUnavailable;
+  final StepsUnavailableReason? stepsUnavailableReason;
+  final bool stepsNeedPermission;
+  final bool stepsCanOpenSettings;
   final VoidCallback? onRetrySteps;
+  final VoidCallback? onEnableSteps;
+  final VoidCallback? onOpenStepsSettings;
 
   final VoidCallback? onOpenWorkout;
   final VoidCallback? onOpenMeals;
@@ -118,7 +129,12 @@ class HomeDashboardContent extends StatelessWidget {
           status: stepsStatus,
           data: stepsData,
           isUnavailable: stepsUnavailable,
+          unavailableReason: stepsUnavailableReason,
+          needsPermission: stepsNeedPermission,
+          canOpenSettings: stepsCanOpenSettings,
           onRetry: onRetrySteps,
+          onEnable: onEnableSteps,
+          onOpenSettings: onOpenStepsSettings,
         ),
         const SizedBox(height: AppSpacing.sm),
         const DashboardMedicalNotice(),

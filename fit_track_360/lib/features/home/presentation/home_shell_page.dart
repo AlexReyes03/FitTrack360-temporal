@@ -62,6 +62,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
   bool _loggingOut = false;
   bool _loadingProfile = false;
 
+  /// Evita navegar dos veces a login cuando perfil y dashboard expiran juntos.
+  bool _redirectingToLogin = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,9 +90,13 @@ class _HomeShellPageState extends State<HomeShellPage> {
   }
 
   void _onDashboardChanged() {
-    if (_dashboard.sessionExpired && mounted) {
-      context.go('/login');
-    }
+    if (_dashboard.sessionExpired) _goToLogin();
+  }
+
+  void _goToLogin() {
+    if (_redirectingToLogin || !mounted) return;
+    _redirectingToLogin = true;
+    context.go('/login');
   }
 
   @override
@@ -112,8 +119,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       if (!mounted) return;
       setState(() => _displayName = profile.displayName);
     } on SessionExpiredException {
-      if (!mounted) return;
-      context.go('/login');
+      _goToLogin();
     } catch (_) {
       // Sin red o perfil no disponible: se mantiene el saludo generico.
     } finally {
@@ -128,8 +134,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
   Future<void> _logout() async {
     setState(() => _loggingOut = true);
     await LogoutService(storage: _storage).logout();
-    if (!mounted) return;
-    context.go('/login');
+    _goToLogin();
   }
 
   @override
@@ -179,7 +184,15 @@ class _HomeShellPageState extends State<HomeShellPage> {
                                 _dashboard.steps.dataOrNull ??
                                 DashboardStepsData.preview,
                             stepsUnavailable: _dashboard.stepsUnavailable,
-                            onRetrySteps: _dashboard.load,
+                            stepsUnavailableReason:
+                                _dashboard.stepsUnavailableReason,
+                            stepsNeedPermission: _dashboard.stepsNeedPermission,
+                            stepsCanOpenSettings:
+                                _dashboard.stepsCanOpenSettings,
+                            onRetrySteps: _dashboard.retrySteps,
+                            onEnableSteps: _dashboard.enableSteps,
+                            onOpenStepsSettings: () =>
+                                unawaited(_dashboard.openStepsSettings()),
                             onOpenWorkout: () =>
                                 context.push('/app/entrenamientos'),
                             onOpenMeals: () => context.push('/app/comidas'),

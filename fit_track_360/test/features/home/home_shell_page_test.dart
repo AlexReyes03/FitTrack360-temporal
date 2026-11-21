@@ -113,9 +113,15 @@ Future<GoRouter> _pumpShell(
   required FakeConnectivityService connectivity,
   required FakeSessionStorage storage,
   required http.Client client,
+  StepsSensor? stepsSensor,
+  void Function()? onLoginNavigation,
 }) async {
   final router = GoRouter(
     initialLocation: '/app',
+    redirect: (context, state) {
+      if (state.uri.path == '/login') onLoginNavigation?.call();
+      return null;
+    },
     routes: [
       GoRoute(
         path: '/app',
@@ -123,9 +129,9 @@ Future<GoRouter> _pumpShell(
           apiClient: ApiClient(storage: storage, httpClient: client),
           sessionStorage: storage,
           connectivityService: connectivity,
-          stepsSensor: FakeStepsSensor(
-            snapshots: [StepsSnapshot.unavailableDevice],
-          ),
+          stepsSensor:
+              stepsSensor ??
+              FakeStepsSensor(snapshots: [StepsSnapshot.unavailableDevice]),
         ),
       ),
       GoRoute(
@@ -282,6 +288,84 @@ void main() {
     expect(storage.accessToken, isNull);
   });
 
+  testWidgets('sesion expirada navega a login una sola vez', (tester) async {
+    var loginNavigations = 0;
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient((_) async => http.Response('{}', 401)),
+      onLoginNavigation: () => loginNavigations++,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pantalla login'), findsOneWidget);
+    expect(loginNavigations, 1);
+  });
+
+  testWidgets(
+    'sin permiso previo explica y pide los pasos solo al tocar la acción',
+    (tester) async {
+      final sensor = FakeStepsSensor(
+        readyWithoutPrompt: false,
+        snapshots: [const StepsSnapshot(steps: 4321)],
+      );
+      await _pumpShell(
+        tester,
+        connectivity: FakeConnectivityService(online: true),
+        storage: storage,
+        client: MockClient(_route),
+        stepsSensor: sensor,
+      );
+      await tester.pumpAndSettle();
+
+      expect(sensor.watchCalls, 0);
+      expect(find.textContaining('sensor de actividad física'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Mostrar mis pasos'));
+      await tester.tap(find.text('Mostrar mis pasos'));
+      await tester.pumpAndSettle();
+
+      expect(sensor.watchCalls, 1);
+      expect(find.text('4321'), findsOneWidget);
+      expect(find.text('Mostrar mis pasos'), findsNothing);
+    },
+  );
+
+  testWidgets('tras negar el permiso ofrece Reintentar y Ajustes', (
+    tester,
+  ) async {
+    final sensor = FakeStepsSensor(
+      snapshots: [
+        const StepsSnapshot.unavailableFor(StepsUnavailableReason.blocked),
+      ],
+    );
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient(_route),
+      stepsSensor: sensor,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Puedes activarlo después desde Ajustes'),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.text('Abrir ajustes'));
+    await tester.tap(find.text('Abrir ajustes'));
+    await tester.pumpAndSettle();
+    expect(sensor.settingsOpened, 1);
+
+    sensor.snapshots = [const StepsSnapshot(steps: 77)];
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+
+    expect(sensor.watchCalls, 2);
+    expect(find.text('77'), findsOneWidget);
+  });
+
   testWidgets('cerrar sesion sin red limpia la sesion y va a login', (
     tester,
   ) async {
@@ -312,10 +396,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('Aún no registras comidas hoy'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Aún no registras comidas hoy'), findsOneWidget);
     expect(
       find.textContaining('Aún no tienes sesiones registradas'),
       findsOneWidget,
@@ -358,6 +439,7 @@ void main() {
         }
         return pending.future;
       }),
+      stepsSensor: FakeStepsSensor(snapshots: [const StepsSnapshot(steps: 1)]),
     );
     await tester.pump();
 
@@ -381,6 +463,7 @@ void main() {
         if (request.url.path.endsWith('/users/me')) return _profile();
         return http.Response('{}', 500);
       }),
+      stepsSensor: FakeStepsSensor(snapshots: [const StepsSnapshot(steps: 1)]),
     );
     await tester.pumpAndSettle();
 
@@ -425,10 +508,7 @@ void main() {
       find.text('No pudimos cargar tu resumen de nutrición.'),
       findsNothing,
     );
-    expect(
-      find.textContaining('Aún no registras comidas hoy'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Aún no registras comidas hoy'), findsOneWidget);
     expect(dashboardCalls, 2);
   });
 

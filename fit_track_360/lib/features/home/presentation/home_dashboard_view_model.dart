@@ -35,24 +35,41 @@ class HomeDashboardViewModel extends ChangeNotifier {
   AsyncState<DashboardMetricData> _metric = const AsyncLoading();
   AsyncState<DashboardStepsData> _steps = const AsyncLoading();
   bool _stepsUnavailable = false;
+  StepsUnavailableReason? _stepsUnavailableReason;
+  bool _stepsNeedPermission = false;
+  bool _stepsInitialized = false;
   bool _sessionExpired = false;
+
+  /// Folio de la última llamada a [load]; descarta respuestas viejas.
+  int _loadSequence = 0;
 
   AsyncState<DashboardNutritionData> get nutrition => _nutrition;
   AsyncState<DashboardSessionData> get session => _session;
   AsyncState<DashboardMetricData> get metric => _metric;
   AsyncState<DashboardStepsData> get steps => _steps;
   bool get stepsUnavailable => _stepsUnavailable;
+  StepsUnavailableReason? get stepsUnavailableReason => _stepsUnavailableReason;
+
+  /// El bloque de pasos espera la acción «Mostrar mis pasos» del usuario.
+  bool get stepsNeedPermission => _stepsNeedPermission;
+
+  /// El sistema ya no vuelve a preguntar: solo queda abrir Ajustes.
+  bool get stepsCanOpenSettings =>
+      _stepsUnavailable &&
+      _stepsUnavailableReason == StepsUnavailableReason.blocked;
   bool get sessionExpired => _sessionExpired;
 
-  /// Carga el resumen remoto y arranca el sensor de pasos si aún no corre.
+  /// Carga el resumen remoto. La primera vez prepara el bloque de pasos sin
+  /// mostrar diálogos del sistema (el permiso se pide en contexto).
   Future<void> load() async {
+    final sequence = ++_loadSequence;
     _sessionExpired = false;
     _nutrition = const AsyncLoading();
     _session = const AsyncLoading();
     _metric = const AsyncLoading();
     _notify();
 
-    _ensureStepsListening();
+    unawaited(_initSteps());
 
     final now = _now();
     final local = now.toLocal();
@@ -67,16 +84,17 @@ class HomeDashboardViewModel extends ChangeNotifier {
         date: date,
         utcOffsetMinutes: utcOffsetMinutes,
       );
-      if (_disposed) return;
+      if (_isStale(sequence)) return;
       _applyToday(today);
     } on SessionExpiredException catch (error, stackTrace) {
+      if (_isStale(sequence)) return;
       _sessionExpired = true;
       _nutrition = AsyncError(error, stackTrace);
       _session = AsyncError(error, stackTrace);
       _metric = AsyncError(error, stackTrace);
       _notify();
     } catch (error, stackTrace) {
-      if (_disposed) return;
+      if (_isStale(sequence)) return;
       _nutrition = AsyncError(error, stackTrace);
       _session = AsyncError(error, stackTrace);
       _metric = AsyncError(error, stackTrace);
@@ -109,65 +127,118 @@ class HomeDashboardViewModel extends ChangeNotifier {
     _notify();
   }
 
-  void _ensureStepsListening() {
-    if (_stepsSubscription != null) return;
+  bool _isStale(int sequence) => _disposed || sequence != _loadSequence;
+
+  Future<void> _initSteps() async {
+    if (_stepsInitialized) return;
+    _stepsInitialized = true;
     final sensor = _stepsSensor;
     if (sensor == null) {
-      _stepsUnavailable = true;
-      _steps = AsyncData(
-        const DashboardStepsData(
-          stepsCount: 0,
-          goalSteps: kDefaultDailyStepsGoal,
-          subtitle: 'Meta diaria de actividad',
-        ),
-      );
-      _notify();
+      _setStepsUnavailable(StepsUnavailableReason.sensorError);
       return;
     }
-
-    _steps = const AsyncLoading();
+    bool ready;
+    try {
+      ready = await sensor.canReadWithoutPrompt();
+    } catch (_) {
+      ready = false;
+    }
+    // Si el usuario ya tocó «Mostrar mis pasos» mientras se consultaba, no
+    // se pisa la lectura en curso.
+    if (_disposed || _stepsSubscription != null) return;
+    if (ready) {
+      _listenSteps(sensor);
+      return;
+    }
+    _stepsNeedPermission = true;
     _stepsUnavailable = false;
+    _steps = const AsyncData(_stepsPlaceholder);
+    _notify();
+  }
+
+  /// Acción «Mostrar mis pasos»: dispara el diálogo del sistema (en Android
+  /// vía `permission_handler`; en iOS al escuchar CoreMotion).
+  void enableSteps() {
+    final sensor = _stepsSensor;
+    if (_disposed || sensor == null) return;
+    _listenSteps(sensor);
+  }
+
+  /// «Reintentar» del bloque de pasos: reinicia la lectura del sensor.
+  void retrySteps() => enableSteps();
+
+  Future<void> openStepsSettings() async {
+    try {
+      await _stepsSensor?.openSettings();
+    } catch (_) {
+      // Si el sistema no abre Ajustes, el bloque sigue con «Reintentar».
+    }
+  }
+
+  void _listenSteps(StepsSensor sensor) {
+    final previous = _stepsSubscription;
+    _stepsSubscription = null;
+    unawaited(previous?.cancel());
+
+    _stepsNeedPermission = false;
+    _stepsUnavailable = false;
+    _stepsUnavailableReason = null;
+    _steps = const AsyncLoading();
     _notify();
 
     _stepsSubscription = sensor.watchDailySteps().listen(
       (snapshot) {
         if (_disposed) return;
         if (snapshot.unavailable) {
-          _stepsUnavailable = true;
-          _steps = AsyncData(
-            const DashboardStepsData(
-              stepsCount: 0,
-              goalSteps: kDefaultDailyStepsGoal,
-              subtitle: 'Meta diaria de actividad',
-            ),
+          _setStepsUnavailable(
+            snapshot.reason ?? StepsUnavailableReason.sensorError,
           );
-        } else {
-          _stepsUnavailable = false;
-          _steps = AsyncData(
-            DashboardStepsData(
-              stepsCount: snapshot.steps,
-              goalSteps: kDefaultDailyStepsGoal,
-              subtitle: snapshot.steps == 0
-                  ? 'Todavía no se registran pasos en el día de hoy.'
-                  : 'Meta diaria de actividad',
-            ),
-          );
+          return;
         }
-        _notify();
-      },
-      onError: (_) {
-        if (_disposed) return;
-        _stepsUnavailable = true;
+        _stepsUnavailable = false;
+        _stepsUnavailableReason = null;
         _steps = AsyncData(
-          const DashboardStepsData(
-            stepsCount: 0,
+          DashboardStepsData(
+            stepsCount: snapshot.steps,
             goalSteps: kDefaultDailyStepsGoal,
-            subtitle: 'Meta diaria de actividad',
+            subtitle: _stepsSubtitle(snapshot),
           ),
         );
         _notify();
       },
+      onError: (_) {
+        if (_disposed) return;
+        _setStepsUnavailable(StepsUnavailableReason.sensorError);
+      },
     );
+  }
+
+  void _setStepsUnavailable(StepsUnavailableReason reason) {
+    _stepsNeedPermission = false;
+    _stepsUnavailable = true;
+    _stepsUnavailableReason = reason;
+    _steps = const AsyncData(_stepsPlaceholder);
+    _notify();
+  }
+
+  static const _stepsPlaceholder = DashboardStepsData(
+    stepsCount: 0,
+    goalSteps: kDefaultDailyStepsGoal,
+    subtitle: 'Meta diaria de actividad',
+  );
+
+  /// El podómetro no guarda los pasos previos a la primera lectura del día,
+  /// así que se indica honestamente desde qué hora se cuentan.
+  static String _stepsSubtitle(StepsSnapshot snapshot) {
+    final since = snapshot.countingSince?.toLocal();
+    if (snapshot.steps == 0) {
+      return since == null
+          ? 'Todavía no se registran pasos en el día de hoy.'
+          : 'Todavía no se registran pasos desde las ${_hhmm(since)}.';
+    }
+    return since == null
+        ? 'Meta diaria de actividad'
+        : 'Contados desde las ${_hhmm(since)} de hoy';
   }
 
   static DashboardNutritionData _mapNutrition(DayNutrition nutrition) {

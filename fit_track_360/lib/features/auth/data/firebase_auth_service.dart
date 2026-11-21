@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'auth_api.dart';
@@ -7,20 +9,51 @@ import 'google_auth_gateway.dart';
 /// `--dart-define=GOOGLE_WEB_CLIENT_ID=...` (no es un secret de service account).
 const googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
+/// Login con Google sin User en Nest y sin consentimiento de privacidad.
+const googleAccountNotLinkedMessage =
+    'No hay cuenta vinculada. Usa Crear cuenta, acepta el aviso de privacidad y continua con Google.';
+
+/// El correo de Google ya pertenece a otra cuenta de FitTrack360.
+const googleEmailTakenMessage = 'El correo ya esta registrado con otra cuenta';
+
+/// Intentos de username con sufijo aleatorio tras la primera colision.
+const googleUsernameRetryAttempts = 5;
+
+typedef SyncSessionFn = Future<AuthUser> Function({required String idToken});
+
+typedef SyncRegisterFn = Future<AuthUser> Function({
+  required String idToken,
+  required String username,
+  required String displayName,
+  required bool privacyConsent,
+  required String privacyNoticeVersion,
+});
+
 /// Auth remoto: Firebase Auth + sync Nest (AUTH-01 / AUTH-02 Google).
 class FirebaseAuthService {
-  FirebaseAuthService({FirebaseAuth? auth, GoogleAuthGateway? googleAuth})
-    : _auth = auth ?? FirebaseAuth.instance,
-      _googleAuth =
-          googleAuth ??
-          GoogleSignInGateway(
-            serverClientId: googleWebClientId.isEmpty
-                ? null
-                : googleWebClientId,
-          );
+  FirebaseAuthService({
+    FirebaseAuth? auth,
+    GoogleAuthGateway? googleAuth,
+    SyncSessionFn? syncSessionFn,
+    SyncRegisterFn? syncRegisterFn,
+    Random? random,
+  }) : _auth = auth ?? FirebaseAuth.instance,
+       _googleAuth =
+           googleAuth ??
+           GoogleSignInGateway(
+             serverClientId: googleWebClientId.isEmpty
+                 ? null
+                 : googleWebClientId,
+           ),
+       _syncSession = syncSessionFn ?? syncSession,
+       _syncRegister = syncRegisterFn ?? syncRegister,
+       _random = random ?? Random();
 
   final FirebaseAuth _auth;
   final GoogleAuthGateway _googleAuth;
+  final SyncSessionFn _syncSession;
+  final SyncRegisterFn _syncRegister;
+  final Random _random;
 
   User? get currentUser => _auth.currentUser;
 
@@ -57,7 +90,7 @@ class FirebaseAuthService {
     try {
       await credential.user?.updateDisplayName(displayName);
       final idToken = await _requireIdToken(forceRefresh: true);
-      return await syncRegister(
+      return await _syncRegister(
         idToken: idToken,
         username: username,
         displayName: displayName,
@@ -86,7 +119,7 @@ class FirebaseAuthService {
       throw AuthApiException(_mapFirebaseError(e));
     }
     final idToken = await _requireIdToken(forceRefresh: true);
-    return syncSession(idToken: idToken);
+    return _syncSession(idToken: idToken);
   }
 
   /// Login / alta con Google (AUTH-02).
@@ -96,6 +129,8 @@ class FirebaseAuthService {
   /// controlado sin inventar consentimiento.
   ///
   /// Cancelar el sheet de Google → [GoogleSignInCancelledException] (no fatal).
+  /// Si algo falla tras crear el usuario Firebase en este flujo, se borra
+  /// (igual que AUTH-01) para no dejar huérfanos sin fila en Postgres.
   Future<AuthUser> loginWithGoogle({
     bool allowAutoRegister = false,
     bool privacyConsent = false,
@@ -104,115 +139,120 @@ class FirebaseAuthService {
     GoogleAuthTokens googleTokens;
     try {
       googleTokens = await _googleAuth.signIn();
-    } on GoogleSignInCancelledException {
-      rethrow;
-    } on AuthGoogleTokensMissingException catch (e) {
-      throw AuthApiException(e.toString());
+    } on GoogleSignInFailure catch (e) {
+      throw AuthApiException(e.message);
     }
 
+    UserCredential credential;
     try {
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleTokens.idToken,
-        accessToken: googleTokens.accessToken,
+      credential = await _auth.signInWithCredential(
+        GoogleAuthProvider.credential(
+          idToken: googleTokens.idToken,
+          accessToken: googleTokens.accessToken,
+        ),
       );
-      await _auth.signInWithCredential(credential);
     } on FirebaseAuthException catch (e) {
       await _safeGoogleSignOut();
       throw AuthApiException(_mapFirebaseError(e));
     }
 
-    final idToken = await _requireIdToken(forceRefresh: true);
+    final isNewFirebaseUser = credential.additionalUserInfo?.isNewUser ?? false;
     try {
-      return await syncSession(idToken: idToken);
-    } on AuthApiException catch (error) {
-      final message = error.message;
-      final needsRegister =
-          message.contains('Usuario no sincronizado') ||
-          message.contains('no sincronizado');
-      final emailTaken = message.contains('otra cuenta');
-
-      if (emailTaken) {
-        await _rollbackGoogleSession();
-        throw const AuthApiException(
-          'El correo ya esta registrado con otra cuenta',
-        );
-      }
-
-      if (!needsRegister) {
-        await _rollbackGoogleSession();
-        rethrow;
-      }
-
-      if (!allowAutoRegister || !privacyConsent) {
-        await _rollbackGoogleSession();
-        throw const AuthApiException(
-          'No hay cuenta vinculada. Usa Crear cuenta, acepta el aviso de privacidad y continua con Google.',
-        );
-      }
-
-      final email =
-          googleTokens.email ??
-          _auth.currentUser?.email ??
-          'user@fittrack.local';
-      final displayName =
-          (googleTokens.displayName?.trim().isNotEmpty == true
-              ? googleTokens.displayName!.trim()
-              : null) ??
-          _auth.currentUser?.displayName?.trim() ??
-          email.split('@').first;
-
-      return _registerGoogleProfile(
+      final idToken = await _requireIdToken(forceRefresh: true);
+      return await _resolveGoogleUser(
         idToken: idToken,
-        email: email,
-        displayName: displayName,
+        googleTokens: googleTokens,
+        allowAutoRegister: allowAutoRegister,
         privacyConsent: privacyConsent,
         privacyNoticeVersion: privacyNoticeVersion,
       );
+    } catch (_) {
+      await _rollbackGoogleSession(
+        deleteUser: isNewFirebaseUser ? credential.user : null,
+      );
+      rethrow;
     }
+  }
+
+  Future<AuthUser> _resolveGoogleUser({
+    required String idToken,
+    required GoogleAuthTokens googleTokens,
+    required bool allowAutoRegister,
+    required bool privacyConsent,
+    required String privacyNoticeVersion,
+  }) async {
+    try {
+      return await _syncSession(idToken: idToken);
+    } on AuthApiException catch (error) {
+      switch (classifyAuthApiFailure(error)) {
+        case AuthApiFailure.notSynced:
+          break;
+        case AuthApiFailure.emailTaken:
+          throw const AuthApiException(googleEmailTakenMessage);
+        default:
+          rethrow;
+      }
+    }
+
+    if (!allowAutoRegister || !privacyConsent) {
+      throw const AuthApiException(googleAccountNotLinkedMessage);
+    }
+
+    final email =
+        _nonEmpty(googleTokens.email) ?? _nonEmpty(_auth.currentUser?.email);
+    if (email == null) {
+      throw const AuthApiException(
+        'Tu cuenta de Google no comparte un correo. Usa correo y contraseña.',
+      );
+    }
+    final displayName =
+        _nonEmpty(googleTokens.displayName) ??
+        _nonEmpty(_auth.currentUser?.displayName) ??
+        email.split('@').first;
+
+    return _registerGoogleProfile(
+      idToken: idToken,
+      email: email,
+      displayName: displayName,
+      privacyNoticeVersion: privacyNoticeVersion,
+    );
   }
 
   Future<AuthUser> _registerGoogleProfile({
     required String idToken,
     required String email,
     required String displayName,
-    required bool privacyConsent,
     required String privacyNoticeVersion,
   }) async {
-    var username = _usernameFromEmail(email);
+    final base = _usernameFromEmail(email);
+    final safeDisplayName = displayName.length > 80
+        ? displayName.substring(0, 80)
+        : displayName;
     AuthApiException? lastConflict;
 
-    for (var attempt = 0; attempt < 4; attempt++) {
-      final candidate = attempt == 0
-          ? username
-          : _withSuffix(username, attempt);
+    for (var attempt = 0; attempt <= googleUsernameRetryAttempts; attempt++) {
+      final candidate = attempt == 0 ? base : _withRandomSuffix(base);
       try {
-        return await syncRegister(
+        return await _syncRegister(
           idToken: idToken,
           username: candidate,
-          displayName: displayName.length > 80
-              ? displayName.substring(0, 80)
-              : displayName,
-          privacyConsent: privacyConsent,
+          displayName: safeDisplayName,
+          privacyConsent: true,
           privacyNoticeVersion: privacyNoticeVersion,
         );
       } on AuthApiException catch (error) {
-        if (error.message.contains('correo ya esta registrado')) {
-          await _rollbackGoogleSession();
-          throw const AuthApiException(
-            'El correo ya esta registrado con otra cuenta',
-          );
+        switch (classifyAuthApiFailure(error)) {
+          case AuthApiFailure.usernameTaken:
+            lastConflict = error;
+            continue;
+          case AuthApiFailure.emailTaken:
+            throw const AuthApiException(googleEmailTakenMessage);
+          default:
+            rethrow;
         }
-        if (error.message.contains('usuario ya esta registrado') ||
-            error.message.contains('username')) {
-          lastConflict = error;
-          continue;
-        }
-        await _rollbackGoogleSession();
-        rethrow;
       }
     }
 
-    await _rollbackGoogleSession();
     throw lastConflict ??
         const AuthApiException('No se pudo completar el registro con Google');
   }
@@ -244,7 +284,12 @@ class FirebaseAuthService {
     }
   }
 
-  Future<void> _rollbackGoogleSession() async {
+  Future<void> _rollbackGoogleSession({User? deleteUser}) async {
+    if (deleteUser != null) {
+      try {
+        await deleteUser.delete();
+      } catch (_) {}
+    }
     await _safeGoogleSignOut();
     try {
       await _auth.signOut();
@@ -271,11 +316,17 @@ class FirebaseAuthService {
     return cleaned;
   }
 
-  static String _withSuffix(String base, int attempt) {
-    final suffix = '_${attempt + 1}';
+  /// Sufijo `_NNNN` (4 digitos). RegisterDto: 3..30 chars, `[a-zA-Z0-9_]`.
+  String _withRandomSuffix(String base) {
+    final suffix = '_${1000 + _random.nextInt(9000)}';
     final maxBase = 30 - suffix.length;
     final trimmed = base.length > maxBase ? base.substring(0, maxBase) : base;
     return '$trimmed$suffix';
+  }
+
+  static String? _nonEmpty(String? value) {
+    final trimmed = value?.trim();
+    return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
   String _mapFirebaseError(FirebaseAuthException e) {

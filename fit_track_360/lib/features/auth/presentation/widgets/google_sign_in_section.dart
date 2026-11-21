@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
+import '../../../../design_system/tokens/app_spacing.dart';
+import '../../../../design_system/tokens/app_typography.dart';
 
 /// Separador horizontal monocromo "o" para flujos de autenticacion.
 class AuthOrDivider extends StatelessWidget {
@@ -16,15 +18,7 @@ class AuthOrDivider extends StatelessWidget {
         const Expanded(child: Divider(height: 1, color: AppColors.glassBorder)),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0.2,
-            ),
-          ),
+          child: Text(label, style: AppTypography.caption),
         ),
         const Expanded(child: Divider(height: 1, color: AppColors.glassBorder)),
       ],
@@ -100,23 +94,18 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
   static const _idleGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0x1AFFFFFF), Color(0x0AFFFFFF)],
+    colors: [AppColors.glassFillStrong, AppColors.glassFillSoft],
   );
 
   static const _pressedGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0x29FFFFFF), Color(0x14FFFFFF)],
+    colors: [AppColors.glassFillPressedStrong, AppColors.glassFillPressedSoft],
   );
 
   void _handleTap() {
     if (!_interactive) return;
-    final callback = widget.onGooglePressed;
-    if (callback != null) {
-      callback();
-    } else {
-      debugPrint('UI only');
-    }
+    widget.onGooglePressed?.call();
   }
 
   @override
@@ -152,12 +141,14 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
               gradient: _pressed ? _pressedGradient : _idleGradient,
               border: Border.all(
                 color: _pressed
-                    ? Colors.white.withValues(alpha: 0.45)
+                    ? AppColors.glassBorderPressed
                     : AppColors.glassBorderStrong,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.white.withValues(alpha: _pressed ? 0.10 : 0.04),
+                  color: _pressed
+                      ? AppColors.glassFillStrong
+                      : AppColors.glassFillSoft,
                   blurRadius: _pressed ? 16 : 10,
                   offset: const Offset(0, 4),
                 ),
@@ -177,7 +168,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                         gradient: LinearGradient(
                           colors: [
                             Colors.transparent,
-                            Colors.white.withValues(alpha: 0.35),
+                            AppColors.glassHighlight,
                             Colors.transparent,
                           ],
                         ),
@@ -187,7 +178,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       vertical: 14,
-                      horizontal: 24,
+                      horizontal: AppSpacing.md,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -206,7 +197,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                           )
                         else
                           const _MonochromeGoogleMark(),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.sm),
                         Flexible(
                           child: Text(
                             widget.isLoading
@@ -214,12 +205,7 @@ class _GoogleSignInButtonState extends State<GoogleSignInButton> {
                                 : widget.label,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 15.5,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.1,
-                            ),
+                            style: AppTypography.secondaryCta,
                           ),
                         ),
                       ],
@@ -246,18 +232,10 @@ class _MonochromeGoogleMark extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: 0.10),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        color: AppColors.glassFillStrong,
+        border: Border.all(color: AppColors.glassMarkBorder),
       ),
-      child: const Text(
-        'G',
-        style: TextStyle(
-          color: AppColors.accentWhite,
-          fontSize: 13,
-          fontWeight: FontWeight.w800,
-          height: 1,
-        ),
-      ),
+      child: const Text('G', style: AppTypography.badgeGlyph),
     );
   }
 }

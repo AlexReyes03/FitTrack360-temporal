@@ -20,6 +20,11 @@ interface ResolvedDateRange {
   to?: Date;
 }
 
+const MAX_PROGRESS_RECORDS = 1000;
+
+/** Solo-fecha YYYY-MM-DD; se interpreta y normaliza a límites de día en UTC. */
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
 @Injectable()
 export class ProgressService {
   constructor(private readonly prisma: PrismaService) {}
@@ -60,6 +65,7 @@ export class ProgressService {
         measuredAt: this.buildMeasuredAtFilter(range),
       },
       orderBy: { measuredAt: 'desc' },
+      take: MAX_PROGRESS_RECORDS,
     });
 
     return metrics.map((metric) => BodyMetricResponseDto.fromEntity(metric));
@@ -88,6 +94,7 @@ export class ProgressService {
         measuredAt: this.buildMeasuredAtFilter(range),
       },
       orderBy: { measuredAt: 'asc' },
+      take: MAX_PROGRESS_RECORDS,
     });
 
     const points = metrics.map((metric) =>
@@ -225,6 +232,10 @@ export class ProgressService {
     }
   }
 
+  /**
+   * Resuelve el rango de fechas de consulta.
+   * Las entradas en formato YYYY-MM-DD operan en UTC (inicio/fin del día).
+   */
   private resolveDateRange(query: ProgressRangeQueryDto): ResolvedDateRange {
     let fromDate: Date | undefined;
     let toDate: Date | undefined;
@@ -234,7 +245,7 @@ export class ProgressService {
       if (Number.isNaN(fromDate.getTime())) {
         throw new BadRequestException('Fecha inicial (from) inválida');
       }
-      if (!query.from.includes('T')) {
+      if (DATE_ONLY_REGEX.test(query.from)) {
         fromDate.setUTCHours(0, 0, 0, 0);
       }
     }
@@ -244,7 +255,7 @@ export class ProgressService {
       if (Number.isNaN(toDate.getTime())) {
         throw new BadRequestException('Fecha final (to) inválida');
       }
-      if (!query.to.includes('T')) {
+      if (DATE_ONLY_REGEX.test(query.to)) {
         toDate.setUTCHours(23, 59, 59, 999);
       }
     }

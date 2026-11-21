@@ -57,11 +57,13 @@ export function createProgressStore(seed: {
       findMany: ({
         where,
         orderBy,
+        take,
       }: {
         where?: { userId?: string; measuredAt?: DateFilter };
         orderBy?: { measuredAt: 'asc' | 'desc' };
+        take?: number;
       }): Promise<BodyMetric[]> => {
-        const result = metrics
+        const sorted = metrics
           .filter(
             (m) =>
               matchesOwner(m.userId, where?.userId) &&
@@ -71,9 +73,9 @@ export function createProgressStore(seed: {
             orderBy?.measuredAt === 'asc'
               ? a.measuredAt.getTime() - b.measuredAt.getTime()
               : b.measuredAt.getTime() - a.measuredAt.getTime(),
-          )
-          .map((m) => ({ ...m }));
-        return Promise.resolve(result);
+          );
+        const limited = take !== undefined ? sorted.slice(0, take) : sorted;
+        return Promise.resolve(limited.map((m) => ({ ...m })));
       },
 
       findFirst: ({

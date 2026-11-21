@@ -21,7 +21,7 @@ export class ProgressSeriesPointDto {
 
   @ApiProperty({
     description:
-      'Fecha calendario (YYYY-MM-DD) lista para etiquetar ejes en Flutter',
+      'Fecha calendario en UTC (YYYY-MM-DD) lista para etiquetar ejes en Flutter',
     example: '2026-11-10',
   })
   date!: string;

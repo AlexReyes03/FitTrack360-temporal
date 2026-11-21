@@ -19,7 +19,7 @@ export class CreateBodyMetricDto {
   })
   @IsNotEmpty({ message: 'measuredAt es obligatorio' })
   @IsDateString(
-    {},
+    { strict: true },
     { message: 'measuredAt debe ser una fecha ISO 8601 válida' },
   )
   @IsNotFutureDate({ message: 'measuredAt no puede ser una fecha futura' })

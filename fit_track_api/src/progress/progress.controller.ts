@@ -74,6 +74,8 @@ export class ProgressController {
   @ApiOperation({
     summary:
       'Obtiene el historial de métricas biométricas del usuario autenticado, filtrable por rango de fechas (from/to)',
+    description:
+      'Los filtros from/to en formato solo-fecha (YYYY-MM-DD) operan en UTC (00:00:00.000Z para from y 23:59:59.999Z para to). Devuelve como máximo 1000 registros ordenados del más reciente al más antiguo.',
   })
   @ApiOkResponse({
     description:
@@ -117,6 +119,8 @@ export class ProgressController {
   @ApiOperation({
     summary:
       'Obtiene una serie cronológica ascendente de métricas biométricas lista para graficar en Flutter',
+    description:
+      'Los filtros from/to en formato solo-fecha (YYYY-MM-DD) operan en UTC (00:00:00.000Z para from y 23:59:59.999Z para to). Devuelve como máximo 1000 puntos ordenados cronológicamente.',
   })
   @ApiOkResponse({
     description: 'Serie biométrica ordenada cronológicamente por measuredAt',

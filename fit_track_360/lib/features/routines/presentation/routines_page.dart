@@ -22,8 +22,12 @@ class RoutinesPage extends StatefulWidget {
 }
 
 class _RoutinesPageState extends State<RoutinesPage> {
-  late final ApiClient _client = ApiClient();
-  late final RoutinesReader _reader = widget.reader ?? RoutinesApi(_client);
+  // El cliente solo se crea (y se libera) si la página no recibió un reader.
+  late final ApiClient? _ownedClient = widget.reader == null
+      ? ApiClient()
+      : null;
+  late final RoutinesReader _reader =
+      widget.reader ?? RoutinesApi(_ownedClient!);
 
   AsyncState<List<RoutineSummary>> _state = const AsyncLoading();
 
@@ -35,7 +39,7 @@ class _RoutinesPageState extends State<RoutinesPage> {
 
   @override
   void dispose() {
-    _client.dispose();
+    _ownedClient?.dispose();
     super.dispose();
   }
 
@@ -57,6 +61,14 @@ class _RoutinesPageState extends State<RoutinesPage> {
     return error is AuthApiException ? error.message : 'No se pudo conectar';
   }
 
+  void _back() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/app');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffoldTemplate(
@@ -64,6 +76,17 @@ class _RoutinesPageState extends State<RoutinesPage> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                tooltip: 'Volver',
+                onPressed: _back,
+                icon: const Icon(
+                  Icons.arrow_back,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
             Text('Rutinas', style: AppTypography.pageTitle),
             const SizedBox(height: AppSpacing.xs),
             Text(

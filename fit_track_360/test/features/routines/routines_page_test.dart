@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_routines_reader.dart';
+import 'support/reject_http_overrides.dart';
 import 'support/routines_test_app.dart';
 
 RoutineSummary _summary({
@@ -124,5 +126,32 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('login'), findsOneWidget);
+  });
+
+  testWidgets('vuelve a inicio desde el listado', (tester) async {
+    final reader = FakeRoutinesReader(routines: [_summary(name: 'Fuerza')]);
+
+    await tester.pumpWidget(routinesTestApp(reader));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Volver'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('inicio'), findsOneWidget);
+  });
+
+  testWidgets('no crea ni libera un cliente HTTP con reader inyectado', (
+    tester,
+  ) async {
+    final previous = HttpOverrides.current;
+    HttpOverrides.global = RejectHttpOverrides();
+    addTearDown(() => HttpOverrides.global = previous);
+
+    final reader = FakeRoutinesReader(routines: [_summary(name: 'Fuerza')]);
+    await tester.pumpWidget(routinesTestApp(reader));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    expect(tester.takeException(), isNull);
   });
 }

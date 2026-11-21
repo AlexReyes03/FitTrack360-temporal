@@ -1,21 +1,25 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
 import 'package:fit_track_360/features/routines/data/routines_reader.dart';
+import 'package:fit_track_360/features/routines/presentation/routine_detail_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_routines_reader.dart';
+import 'support/reject_http_overrides.dart';
 import 'support/routines_test_app.dart';
 
 RoutineDetail _detail({
+  String id = 'r1',
   String name = 'Full body',
   String? notes,
   List<Map<String, dynamic>> exercises = const [],
 }) {
   return RoutineDetail.fromJson({
-    'id': 'r1',
+    'id': id,
     'name': name,
     'notes': notes,
     'exercises': exercises,
@@ -187,5 +191,92 @@ void main() {
 
     expect(find.text('Rutinas'), findsOneWidget);
     expect(find.text('Aún no tienes rutinas.'), findsOneWidget);
+  });
+
+  testWidgets('recarga al cambiar de rutina y descarta la respuesta anterior', (
+    tester,
+  ) async {
+    final first = Completer<RoutineDetail>();
+    final second = Completer<RoutineDetail>();
+    final reader = FakeRoutinesReader()..detailGates.addAll([first, second]);
+    final routineId = ValueNotifier('r1');
+    addTearDown(routineId.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ValueListenableBuilder<String>(
+          valueListenable: routineId,
+          builder: (context, id, _) =>
+              RoutineDetailPage(routineId: id, reader: reader),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    routineId.value = 'r2';
+    await tester.pump();
+
+    second.complete(_detail(id: 'r2', name: 'Pierna'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pierna'), findsOneWidget);
+    expect(reader.detailCalls, 2);
+    expect(reader.lastRequestedId, 'r2');
+
+    first.complete(_detail(id: 'r1', name: 'Fuerza'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pierna'), findsOneWidget);
+    expect(find.text('Fuerza'), findsNothing);
+  });
+
+  testWidgets('ignora el error de una rutina anterior', (tester) async {
+    final first = Completer<RoutineDetail>();
+    final second = Completer<RoutineDetail>();
+    final reader = FakeRoutinesReader()..detailGates.addAll([first, second]);
+    final routineId = ValueNotifier('r1');
+    addTearDown(routineId.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ValueListenableBuilder<String>(
+          valueListenable: routineId,
+          builder: (context, id, _) =>
+              RoutineDetailPage(routineId: id, reader: reader),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    routineId.value = 'r2';
+    await tester.pump();
+
+    second.complete(_detail(id: 'r2', name: 'Pierna'));
+    await tester.pumpAndSettle();
+
+    first.completeError(const AuthApiException('Sin conexión'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pierna'), findsOneWidget);
+    expect(find.text('Sin conexión'), findsNothing);
+  });
+
+  testWidgets('no crea ni libera un cliente HTTP con reader inyectado', (
+    tester,
+  ) async {
+    final previous = HttpOverrides.current;
+    HttpOverrides.global = RejectHttpOverrides();
+    addTearDown(() => HttpOverrides.global = previous);
+
+    final reader = FakeRoutinesReader(detail: _detail());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RoutineDetailPage(routineId: 'r1', reader: reader),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+
+    expect(tester.takeException(), isNull);
   });
 }

@@ -23,10 +23,17 @@ class RoutineDetailPage extends StatefulWidget {
 }
 
 class _RoutineDetailPageState extends State<RoutineDetailPage> {
-  late final ApiClient _client = ApiClient();
-  late final RoutinesReader _reader = widget.reader ?? RoutinesApi(_client);
+  // El cliente solo se crea (y se libera) si la página no recibió un reader.
+  late final ApiClient? _ownedClient = widget.reader == null
+      ? ApiClient()
+      : null;
+  late final RoutinesReader _reader =
+      widget.reader ?? RoutinesApi(_ownedClient!);
 
   AsyncState<RoutineDetail> _state = const AsyncLoading();
+
+  /// Descarta respuestas viejas cuando cambia la rutina solicitada.
+  int _requestId = 0;
 
   @override
   void initState() {
@@ -35,21 +42,30 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
   }
 
   @override
+  void didUpdateWidget(covariant RoutineDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.routineId != widget.routineId) {
+      _load();
+    }
+  }
+
+  @override
   void dispose() {
-    _client.dispose();
+    _ownedClient?.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    final requestId = ++_requestId;
     setState(() => _state = const AsyncLoading());
     try {
       final routine = await _reader.getById(widget.routineId);
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() => _state = AsyncData(routine));
     } on SessionExpiredException {
       if (mounted) context.go('/login');
     } catch (error, stackTrace) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() => _state = AsyncError(error, stackTrace));
     }
   }

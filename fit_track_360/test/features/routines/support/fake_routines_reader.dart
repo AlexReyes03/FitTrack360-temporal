@@ -20,6 +20,9 @@ class FakeRoutinesReader implements RoutinesReader {
   Completer<List<RoutineSummary>>? listGate;
   Completer<RoutineDetail>? detailGate;
 
+  /// Puertas por llamada, para simular respuestas fuera de orden.
+  final List<Completer<RoutineDetail>> detailGates = [];
+
   @override
   Future<List<RoutineSummary>> list() {
     listCalls++;
@@ -34,6 +37,7 @@ class FakeRoutinesReader implements RoutinesReader {
   Future<RoutineDetail> getById(String id) {
     detailCalls++;
     lastRequestedId = id;
+    if (detailGates.isNotEmpty) return detailGates.removeAt(0).future;
     final gate = detailGate;
     if (gate != null) return gate.future;
     final error = detailError;

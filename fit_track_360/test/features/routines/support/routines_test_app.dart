@@ -17,6 +17,10 @@ Widget routinesTestApp(
         builder: (context, state) => const Scaffold(body: Text('login')),
       ),
       GoRoute(
+        path: '/app',
+        builder: (context, state) => const Scaffold(body: Text('inicio')),
+      ),
+      GoRoute(
         path: '/app/rutinas',
         builder: (context, state) => RoutinesPage(reader: reader),
       ),

@@ -124,6 +124,8 @@ class TrackerLocationSection extends StatelessWidget {
             TextField(
               controller: manualZoneController,
               onChanged: onManualZoneChanged,
+              // Mismo limite que `location` en CreateWorkoutDto (MaxLength 120).
+              maxLength: 120,
               style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 14.5,
@@ -131,6 +133,7 @@ class TrackerLocationSection extends StatelessWidget {
               cursorColor: AppColors.accentWhite,
               decoration: InputDecoration(
                 hintText: 'Ej. Gimnasio Norte, Parque Central, Casa',
+                counterText: '',
                 hintStyle: const TextStyle(color: AppColors.textMuted),
                 filled: true,
                 fillColor: const Color(0xB807080C),

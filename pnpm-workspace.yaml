@@ -9,5 +9,5 @@ allowBuilds:
   '@node-rs/argon2': true
   '@scarf/scarf': false
   esbuild: false
-  '@firebase/util': set this to true or false
-  protobufjs: set this to true or false
+  '@firebase/util': false
+  protobufjs: false

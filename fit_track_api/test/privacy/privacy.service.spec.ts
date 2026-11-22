@@ -13,7 +13,7 @@ import { PrismaService } from '../../src/prisma/prisma.service';
 import { StorageService } from '../../src/storage/storage.service';
 
 describe('Privacidad', () => {
-  function setup(failIdentity = false) {
+  function setup(failIdentity = false, failDb = false) {
     const calls: string[] = [];
     const db = {
       user: {
@@ -37,10 +37,15 @@ describe('Privacidad', () => {
         },
         delete: () => {
           calls.push('delete-db');
+          if (failDb) throw new Error('base de datos no disponible');
           return Promise.resolve({});
         },
       },
-      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(db),
+      $transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+        const result = await fn(db);
+        calls.push('transaction-commit');
+        return result;
+      },
     };
     const storage = {
       stageUserRemoval: () => {
@@ -132,19 +137,28 @@ describe('Privacidad', () => {
     expect(calls).toEqual([
       'stage',
       'delete-db',
+      'transaction-commit',
       'delete-identity',
       'files-commit',
     ]);
   });
-  it('restaura los archivos si falla Firebase', async () => {
+  it('elimina archivos y conserva el fallo si Firebase falla después del commit', async () => {
     const { service, calls } = setup(true);
     await expect(service.removeAccount('u1', 'u1')).rejects.toThrow();
     expect(calls).toEqual([
       'stage',
       'delete-db',
+      'transaction-commit',
       'delete-identity',
-      'files-rollback',
+      'files-commit',
     ]);
+  });
+  it('restaura archivos y no elimina la identidad si falla la base de datos', async () => {
+    const { service, calls } = setup(false, true);
+    await expect(service.removeAccount('u1', 'u1')).rejects.toThrow(
+      'base de datos no disponible',
+    );
+    expect(calls).toEqual(['stage', 'delete-db', 'files-rollback']);
   });
   it('no borra datos si no se puede eliminar la identidad', async () => {
     const storage = {

@@ -25,8 +25,10 @@ class DeviceTokenApiException implements Exception {
 /// Cliente de `/api/v1/notifications/devices`.
 ///
 /// Registro: `POST /devices` con `{token, platform}`.
-/// Revocación: `POST /devices/revoke` con `{token}`; ante 404/405 intenta
-/// `DELETE /devices/:token`. Un 404 final se considera éxito por la regla S4.
+/// Revocación: `POST /devices/revoke` con `{token}` en el cuerpo. El token
+/// nunca viaja en la URL para no dejarlo en logs ni proxies.
+/// Un 404 se considera éxito por la regla S4 (o porque el endpoint aún no
+/// está desplegado).
 class DeviceTokenApi implements DeviceTokenClient {
   DeviceTokenApi(this._client);
 
@@ -56,20 +58,7 @@ class DeviceTokenApi implements DeviceTokenClient {
       '$_path/revoke',
       body: {'token': token},
     );
-    if (_isSuccess(response.statusCode)) return;
-
-    if (response.statusCode == 404 || response.statusCode == 405) {
-      final fallback = await _client.delete(
-        '$_path/${Uri.encodeComponent(token)}',
-      );
-      if (_isSuccess(fallback.statusCode) || fallback.statusCode == 404) {
-        return;
-      }
-      throw DeviceTokenApiException(
-        apiErrorMessage(fallback),
-        statusCode: fallback.statusCode,
-      );
-    }
+    if (_isSuccess(response.statusCode) || response.statusCode == 404) return;
 
     throw DeviceTokenApiException(
       apiErrorMessage(response),

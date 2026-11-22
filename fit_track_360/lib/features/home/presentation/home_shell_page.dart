@@ -12,6 +12,7 @@ import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../auth/data/logout_service.dart';
 import '../../notifications/data/push_device_lifecycle_service.dart';
+import '../../notifications/presentation/push_device_scope.dart';
 import '../data/dashboard_api_repository.dart';
 import '../data/pedometer_steps_sensor.dart';
 import '../domain/steps_sensor.dart';
@@ -59,9 +60,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
   late final ApiClient _api = widget.apiClient ?? ApiClient(storage: _storage);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
-  late final PushDeviceLifecycle _pushDeviceService =
-      widget.pushDeviceService ??
-      PushDeviceLifecycleService.fromClient(_api, storage: _storage);
+  PushDeviceLifecycle? _pushDeviceService;
+  PushDeviceLifecycle? _ownedPushDeviceService;
+  bool _didInitializeDependencies = false;
   late final HomeDashboardViewModel _dashboard;
   late final bool _ownsDashboard;
   StreamSubscription<bool>? _connectivitySubscription;
@@ -72,6 +73,20 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
   /// Evita navegar dos veces a login cuando perfil y dashboard expiran juntos.
   bool _redirectingToLogin = false;
+
+  PushDeviceLifecycle _resolvePushDeviceService() {
+    final resolved = _pushDeviceService;
+    if (resolved != null) return resolved;
+    final service =
+        widget.pushDeviceService ??
+        PushDeviceScope.maybeOf(context) ??
+        (_ownedPushDeviceService = PushDeviceLifecycleService.fromClient(
+          _api,
+          storage: _storage,
+        ));
+    _pushDeviceService = service;
+    return service;
+  }
 
   @override
   void initState() {
@@ -93,8 +108,16 @@ class _HomeShellPageState extends State<HomeShellPage> {
         unawaited(_dashboard.load());
       }
     }, onError: (_) {});
-    _loadProfile();
     unawaited(_dashboard.load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitializeDependencies) return;
+    _didInitializeDependencies = true;
+    _resolvePushDeviceService();
+    _loadProfile();
   }
 
   void _onDashboardChanged() {
@@ -113,6 +136,10 @@ class _HomeShellPageState extends State<HomeShellPage> {
     _dashboard.removeListener(_onDashboardChanged);
     if (_ownsDashboard) {
       _dashboard.dispose();
+    }
+    final ownedPush = _ownedPushDeviceService;
+    if (ownedPush != null) {
+      unawaited(ownedPush.dispose());
     }
     _api.dispose();
     super.dispose();
@@ -138,7 +165,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
   Future<void> _syncPushSilently(bool notificationsEnabled) async {
     try {
-      await _pushDeviceService.syncForActiveSession(
+      await _resolvePushDeviceService().syncForActiveSession(
         notificationsEnabled: notificationsEnabled,
         requestPermissionIfNeeded: false,
       );
@@ -155,7 +182,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
     setState(() => _loggingOut = true);
     await LogoutService(
       storage: _storage,
-      pushDeviceService: _pushDeviceService,
+      pushDeviceService: _resolvePushDeviceService(),
     ).logout();
     _goToLogin();
   }

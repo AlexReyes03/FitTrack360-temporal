@@ -15,6 +15,9 @@ abstract interface class PushDeviceLifecycle {
 
   /// Cancela la escucha de rotación y revoca el token en el backend.
   Future<void> deactivateAndRevoke();
+
+  /// Libera la instancia: cancela la suscripción y bloquea nuevos registros.
+  Future<void> dispose();
 }
 
 /// Coordina permiso, token, registro y revocación de FCM.
@@ -54,6 +57,7 @@ class PushDeviceLifecycleService implements PushDeviceLifecycle {
   static const _tokenTimeout = Duration(seconds: 2);
 
   bool _notificationsEnabled = false;
+  bool _disposed = false;
   String? _lastRegisteredToken;
   StreamSubscription<String>? _tokenSubscription;
 
@@ -62,6 +66,7 @@ class PushDeviceLifecycleService implements PushDeviceLifecycle {
     required bool notificationsEnabled,
     bool requestPermissionIfNeeded = false,
   }) async {
+    if (_disposed) return;
     _notificationsEnabled = notificationsEnabled;
 
     if (!_messagingGateway.isSupported || !notificationsEnabled) {
@@ -86,6 +91,7 @@ class PushDeviceLifecycleService implements PushDeviceLifecycle {
       _listenTokenRefresh();
 
       final token = await _messagingGateway.getToken();
+      if (_disposed) return;
       if (token == null || token.trim().isEmpty) return;
       if (token == _lastRegisteredToken) return;
       await _register(token.trim());
@@ -96,11 +102,13 @@ class PushDeviceLifecycleService implements PushDeviceLifecycle {
 
   @override
   Future<void> deactivateAndRevoke() async {
+    if (_disposed) return;
     _notificationsEnabled = false;
     await _cancelSubscription();
 
     final token = _lastRegisteredToken ?? await _safeGetToken();
     _lastRegisteredToken = null;
+    if (_disposed) return;
     if (token == null || token.trim().isEmpty) return;
 
     try {
@@ -112,20 +120,31 @@ class PushDeviceLifecycleService implements PushDeviceLifecycle {
     }
   }
 
+  @override
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    _notificationsEnabled = false;
+    _lastRegisteredToken = null;
+    await _cancelSubscription();
+  }
+
   Future<bool> _hasActiveSession() async {
     final accessToken = await _storage.readAccessToken();
     return accessToken != null && accessToken.trim().isNotEmpty;
   }
 
   void _listenTokenRefresh() {
+    if (_disposed) return;
     if (_tokenSubscription != null) return;
     _tokenSubscription = _messagingGateway.onTokenRefresh.listen(
       (token) async {
-        if (!_notificationsEnabled) return;
+        if (_disposed || !_notificationsEnabled) return;
         final next = token.trim();
         if (next.isEmpty || next == _lastRegisteredToken) return;
         try {
           if (!await _hasActiveSession()) return;
+          if (_disposed) return;
           await _register(next);
         } catch (_) {
           // La rotación fallida se reintenta en el siguiente sync.
@@ -138,6 +157,7 @@ class PushDeviceLifecycleService implements PushDeviceLifecycle {
   }
 
   Future<void> _register(String token) async {
+    if (_disposed) return;
     final platform = _messagingGateway.platformName;
     if (platform == null) return;
     await _deviceApi.registerDeviceToken(token: token, platform: platform);

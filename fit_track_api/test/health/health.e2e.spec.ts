@@ -30,9 +30,8 @@ async function bootstrapHealthApp(
     .overrideProvider(DatabaseProbe)
     .useValue(probe)
     .compile();
-  const app = moduleRef.createNestApplication<INestApplication<App>>(
-    APP_HTTP_OPTIONS,
-  );
+  const app =
+    moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
   configureApp(app);
   await app.init();
   return app;

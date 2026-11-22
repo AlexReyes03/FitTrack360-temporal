@@ -227,8 +227,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
                   onRetryMetric: _dashboard.load,
                   stepsStatus: _blockStatus(_dashboard.steps),
                   stepsData:
-                      _dashboard.steps.dataOrNull ??
-                      DashboardStepsData.preview,
+                      _dashboard.steps.dataOrNull ?? DashboardStepsData.preview,
                   stepsUnavailable: _dashboard.stepsUnavailable,
                   stepsUnavailableReason: _dashboard.stepsUnavailableReason,
                   stepsNeedPermission: _dashboard.stepsNeedPermission,

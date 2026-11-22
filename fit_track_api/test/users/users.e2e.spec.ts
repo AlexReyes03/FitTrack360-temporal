@@ -43,9 +43,8 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
       .overrideProvider(FIREBASE_TOKEN_VERIFIER)
       .useValue(new MockFirebaseTokenVerifier())
       .compile();
-    app = moduleRef.createNestApplication<INestApplication<App>>(
-      APP_HTTP_OPTIONS,
-    );
+    app =
+      moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
     configureApp(app);
     await app.init();
   });

@@ -85,9 +85,8 @@ async function bootstrap(options: {
           .useValue({ canActivate: () => true })
   ).compile();
 
-  const app = moduleRef.createNestApplication<INestApplication<App>>(
-    APP_HTTP_OPTIONS,
-  );
+  const app =
+    moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
   configureApp(app);
   await app.init();
   return app;
@@ -169,6 +168,7 @@ describe('GET /api/v1/foods/search', () => {
     expect(response.body).toEqual({
       code: 'USDA_UNAVAILABLE',
       message: 'Servicio nutricional no disponible temporalmente',
+      requestId: expect.any(String),
     });
     expect(JSON.stringify(response.body)).not.toContain(API_KEY);
     expect(JSON.stringify(response.body)).not.toContain('api_key');

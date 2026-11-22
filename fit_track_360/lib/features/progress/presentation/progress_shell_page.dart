@@ -98,10 +98,7 @@ class _ProgressShellPageState extends State<ProgressShellPage> {
       return;
     }
     if (picked == null || !mounted) return;
-    _vm.selectPendingPhoto(
-      File(picked.path),
-      label: _photoLabel(picked),
-    );
+    _vm.selectPendingPhoto(File(picked.path), label: _photoLabel(picked));
   }
 
   /// En Windows, `XFile.name` a veces trae la ruta completa si el path usa `/`.

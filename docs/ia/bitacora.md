@@ -141,6 +141,8 @@
 
 | 2026-11-21 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #177 (W12-FE-02.1, #129) | Atender la revisión de @AlexReyes03: ciclo de vida de `ApiClient` en rutinas, botón Volver y protección contra respuestas fuera de orden. | `fit_track_360/lib/features/routines/presentation/routines_page.dart`, `routine_detail_page.dart`, `fit_track_360/test/features/routines/` | Ajustado: `_ownedClient` solo con lector externo, pruebas de ciclo de vida, cambio de rutina y respuestas obsoletas. No se reutilizó `domain/routine.dart` porque exige campos no opcionales y rompería el editor e inicio desde rutina. | Rama `feat/w12-10-lista-detalle-rutinas` (sin commit) |
 
+| 2026-11-22 | MiguelSP040 | Codex | #206 | Implementar carga incremental del catálogo, conservar filtros y validar el dataset existente. | `fit_track_360/lib/features/exercises/`, `fit_track_360/test/features/exercises/` | Se conservó la paginación de 20 elementos del API, con reintento y descarte de respuestas obsoletas; el dataset contiene 1324 registros y diez grupos musculares. | Rama `feat/issue-206-catalogo-incremental` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

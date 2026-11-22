@@ -76,7 +76,6 @@ void main() {
     expect(find.text('Cintura'), findsOneWidget);
     expect(find.text('Peso corporal'), findsOneWidget);
     expect(find.textContaining('Gym visual'), findsOneWidget);
-    expect(find.text('Página 1 de 67'), findsOneWidget);
   });
 
   testWidgets('singulariza el contador con un solo resultado', (tester) async {
@@ -129,31 +128,7 @@ void main() {
     expect(find.text('No se pudo conectar'), findsNothing);
   });
 
-  testWidgets('la búsqueda envía q y reinicia a la página 1', (tester) async {
-    final urls = <Uri>[];
-    await pumpCatalogue(
-      tester,
-      client: MockClient((request) async {
-        urls.add(request.url);
-        return jsonResponse(pageJson([exerciseJson()], total: 1324));
-      }),
-    );
-    await flush(tester);
-
-    await tester.tap(find.text('Siguiente'));
-    await flush(tester);
-    expect(urls.last.queryParameters['page'], '2');
-
-    await tester.enterText(find.byType(TextField), 'press');
-    await tester.pump(const Duration(milliseconds: 400));
-    await flush(tester);
-
-    expect(urls.last.queryParameters['q'], 'press');
-    expect(urls.last.queryParameters['page'], '1');
-    expect(urls.last.queryParameters.containsKey('bodyPart'), isFalse);
-  });
-
-  testWidgets('el filtro de músculo envía bodyPart y reinicia la página', (
+  testWidgets('búsqueda y filtro reinician resultados y página', (
     tester,
   ) async {
     final urls = <Uri>[];
@@ -161,20 +136,39 @@ void main() {
       tester,
       client: MockClient((request) async {
         urls.add(request.url);
-        return jsonResponse(pageJson([exerciseJson()], total: 1324));
+        final page = int.parse(request.url.queryParameters['page']!);
+        final filtered =
+            request.url.queryParameters.containsKey('q') ||
+            request.url.queryParameters.containsKey('bodyPart');
+        return jsonResponse(
+          pageJson(
+            List.generate(
+              20,
+              (i) => exerciseJson(
+                id: '$page-$i',
+                name: filtered ? 'Filtrado $i' : 'Ejercicio $page-$i',
+              ),
+            ),
+            total: filtered ? 20 : 40,
+            page: page,
+          ),
+        );
       }),
     );
     await flush(tester);
-
-    await tester.tap(find.text('Siguiente'));
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
     await flush(tester);
     expect(urls.last.queryParameters['page'], '2');
-
+    await tester.enterText(find.byType(TextField), 'press');
+    await tester.pump(const Duration(milliseconds: 400));
+    await flush(tester);
+    expect(urls.last.queryParameters['q'], 'press');
+    expect(urls.last.queryParameters['page'], '1');
+    expect(find.text('Ejercicio 2-0'), findsNothing);
     await tester.tap(find.text('Todos').first);
     await flush(tester);
     await tester.tap(find.text('Pecho').last);
     await flush(tester);
-
     expect(urls.last.queryParameters['bodyPart'], 'chest');
     expect(urls.last.queryParameters['page'], '1');
   });
@@ -218,67 +212,121 @@ void main() {
     expect(urls.last.queryParameters['target'], 'abductors');
   });
 
-  testWidgets('pagina hacia adelante y atrás', (tester) async {
+  testWidgets('acumula páginas sin duplicar peticiones', (tester) async {
     final urls = <Uri>[];
+    final pending = Completer<http.Response>();
     await pumpCatalogue(
       tester,
       client: MockClient((request) async {
         urls.add(request.url);
+        final page = int.parse(request.url.queryParameters['page']!);
+        if (page == 2) return pending.future;
         return jsonResponse(
           pageJson(
-            [exerciseJson()],
-            total: 1324,
-            page: int.parse(request.url.queryParameters['page']!),
+            List.generate(
+              20,
+              (i) => exerciseJson(id: '$i', name: 'Ejercicio $i'),
+            ),
+            total: 40,
           ),
         );
       }),
     );
     await flush(tester);
-    expect(find.text('Página 1 de 67'), findsOneWidget);
-
-    await tester.tap(find.text('Siguiente'));
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await tester.pump();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -300));
+    await tester.pump();
+    expect(urls.where((u) => u.queryParameters['page'] == '2').length, 1);
+    pending.complete(
+      jsonResponse(
+        pageJson(
+          List.generate(
+            20,
+            (i) => exerciseJson(id: '${i + 20}', name: 'Ejercicio ${i + 20}'),
+          ),
+          total: 40,
+          page: 2,
+        ),
+      ),
+    );
     await flush(tester);
-
-    expect(urls.last.queryParameters['page'], '2');
-    expect(find.text('Página 2 de 67'), findsOneWidget);
-
-    await tester.tap(find.text('Anterior'));
+    await tester.drag(find.byType(ListView).last, const Offset(0, 3000));
     await flush(tester);
-
-    expect(urls.last.queryParameters['page'], '1');
-    expect(find.text('Página 1 de 67'), findsOneWidget);
+    expect(find.text('Ejercicio 0'), findsOneWidget);
+    expect(urls.length, 2);
   });
 
-  testWidgets('una página nueva descarta la búsqueda que aún no venció', (
-    tester,
-  ) async {
-    final urls = <Uri>[];
+  testWidgets('permite reintentar un fallo al cargar más', (tester) async {
+    var pageTwoCalls = 0;
     await pumpCatalogue(
       tester,
       client: MockClient((request) async {
-        urls.add(request.url);
+        final page = int.parse(request.url.queryParameters['page']!);
+        if (page == 2 && ++pageTwoCalls == 1) {
+          throw http.ClientException('sin red');
+        }
         return jsonResponse(
           pageJson(
-            [exerciseJson()],
-            total: 1324,
-            page: int.parse(request.url.queryParameters['page']!),
+            List.generate(
+              20,
+              (i) => exerciseJson(id: '$page-$i', name: 'Ejercicio $page-$i'),
+            ),
+            total: 40,
+            page: page,
           ),
         );
       }),
     );
     await flush(tester);
-    expect(find.text('Página 1 de 67'), findsOneWidget);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await flush(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await flush(tester);
+    await tester.tap(find.text('Reintentar carga de ejercicios'));
+    await flush(tester);
+    expect(pageTwoCalls, 2);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await flush(tester);
+    expect(find.text('Ejercicio 2-19'), findsOneWidget);
+  });
 
-    // Escribe y, antes de que venza el debounce, pide la página siguiente.
+  testWidgets('respuesta antigua se descarta al cambiar búsqueda', (
+    tester,
+  ) async {
+    final pending = Completer<http.Response>();
+    await pumpCatalogue(
+      tester,
+      client: MockClient((request) async {
+        if (request.url.queryParameters['page'] == '2') return pending.future;
+        final filtered = request.url.queryParameters.containsKey('q');
+        return jsonResponse(
+          pageJson(
+            List.generate(
+              20,
+              (i) => exerciseJson(
+                id: '$i',
+                name: filtered ? 'Filtrado $i' : 'Original $i',
+              ),
+            ),
+            total: filtered ? 20 : 40,
+          ),
+        );
+      }),
+    );
+    await flush(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await tester.pump();
     await tester.enterText(find.byType(TextField), 'press');
-    await tester.tap(find.text('Siguiente'));
+    pending.complete(
+      jsonResponse(
+        pageJson([exerciseJson(name: 'Obsoleto')], total: 40, page: 2),
+      ),
+    );
     await tester.pump(const Duration(milliseconds: 400));
     await flush(tester);
-
-    // El debounce vencido no debe devolver al usuario a la página 1.
-    expect(urls.last.queryParameters['page'], '2');
-    expect(urls.last.queryParameters['q'], 'press');
-    expect(find.text('Página 2 de 67'), findsOneWidget);
+    expect(find.text('Obsoleto'), findsNothing);
+    expect(find.text('Filtrado 0'), findsOneWidget);
   });
 
   testWidgets('sesión expirada manda a login', (tester) async {

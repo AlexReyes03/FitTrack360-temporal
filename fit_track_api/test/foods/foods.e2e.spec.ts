@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { configureApp } from '../../src/app.setup';
+import { APP_HTTP_OPTIONS, configureApp } from '../../src/app.setup';
 import { JwtAuthGuard } from '../../src/auth/jwt-auth.guard';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import {
@@ -85,7 +85,9 @@ async function bootstrap(options: {
           .useValue({ canActivate: () => true })
   ).compile();
 
-  const app = moduleRef.createNestApplication<INestApplication<App>>();
+  const app = moduleRef.createNestApplication<INestApplication<App>>(
+    APP_HTTP_OPTIONS,
+  );
   configureApp(app);
   await app.init();
   return app;

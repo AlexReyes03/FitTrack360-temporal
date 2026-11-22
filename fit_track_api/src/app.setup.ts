@@ -1,26 +1,47 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { buildCorsOptions } from './gateway/cors.config';
 import { requestIdMiddleware } from './gateway/request-id.middleware';
+import { createRequestTimeoutMiddleware } from './gateway/request-timeout.middleware';
 
-/** Prefijo de versión que comparten todos los controllers de negocio. */
 export const API_PREFIX = 'api/v1';
-
-/** Ruta pública de la UI de Swagger; queda fuera de API_PREFIX. */
 export const API_DOCS_PATH = 'api/docs';
+export const JSON_BODY_LIMIT = '1mb';
+export const APP_HTTP_OPTIONS = { bodyParser: false as const };
 
-/**
- * Configuración HTTP común del API. La usan main.ts y las pruebas, para que lo
- * que se prueba sea exactamente lo que arranca en producción.
- */
 export function configureApp(app: INestApplication): void {
-  // Primero, para que toda respuesta (404 y Swagger incluidos) lleve x-request-id.
-  app.use(requestIdMiddleware);
+  const httpApp = app as NestExpressApplication;
 
-  app.enableCors({ exposedHeaders: ['x-request-id'] });
+  httpApp.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'validator.swagger.io'],
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https:'],
+        },
+      },
+    }),
+  );
 
-  app.setGlobalPrefix(API_PREFIX, { exclude: [API_DOCS_PATH] });
+  httpApp.use(requestIdMiddleware);
+  httpApp.use(createRequestTimeoutMiddleware());
 
-  app.useGlobalPipes(
+  httpApp.useBodyParser('json', { limit: JSON_BODY_LIMIT });
+  httpApp.useBodyParser('urlencoded', {
+    extended: true,
+    limit: JSON_BODY_LIMIT,
+  });
+
+  httpApp.enableCors(buildCorsOptions());
+
+  httpApp.setGlobalPrefix(API_PREFIX, { exclude: [API_DOCS_PATH] });
+
+  httpApp.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
@@ -28,11 +49,13 @@ export function configureApp(app: INestApplication): void {
     }),
   );
 
+  httpApp.useGlobalFilters(new HttpExceptionFilter());
+
   const config = new DocumentBuilder()
     .setTitle('FitTrack360 API')
     .setVersion('1.0')
     .addBearerAuth()
     .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup(API_DOCS_PATH, app, document);
+  const document = SwaggerModule.createDocument(httpApp, config);
+  SwaggerModule.setup(API_DOCS_PATH, httpApp, document);
 }

@@ -2,8 +2,10 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUserDto } from './dto/auth-response.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -46,30 +48,55 @@ export class AuthService {
       throw new ConflictException('El usuario ya esta registrado');
     }
 
-    const user = await this.prisma.user.create({
-      data: {
-        firebaseUid: verified.uid,
-        email: verified.email,
-        username: dto.username,
-        displayName: dto.displayName,
-        privacyConsentAt: new Date(),
-        privacyNoticeVersion: dto.privacyNoticeVersion,
-      },
-    });
+    let user;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          firebaseUid: verified.uid,
+          email: verified.email,
+          username: dto.username,
+          displayName: dto.displayName,
+          privacyConsentAt: new Date(),
+          privacyNoticeVersion: dto.privacyNoticeVersion,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('El usuario ya esta registrado');
+      }
+      throw error;
+    }
 
     return this.toDto(user);
   }
 
-  /** Resuelve el User existente por firebaseUid (post-login Firebase). */
+  /**
+   * Resuelve el User por firebaseUid (post-login Firebase / Google).
+   * Si el correo ya pertenece a otro firebaseUid, responde 409 (una cuenta
+   * por correo; AUTH-02). No crea filas aquí: el alta va por `register`.
+   */
   async session(idToken: string): Promise<AuthUserDto> {
     const verified = await this.verify(idToken);
     const user = await this.prisma.user.findUnique({
       where: { firebaseUid: verified.uid },
     });
-    if (!user) {
-      throw new UnauthorizedException('Usuario no sincronizado');
+    if (user) {
+      return this.toDto(user);
     }
-    return this.toDto(user);
+
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: verified.email },
+    });
+    if (byEmail) {
+      throw new ConflictException(
+        'El correo ya esta registrado con otra cuenta',
+      );
+    }
+
+    throw new UnauthorizedException('Usuario no sincronizado');
   }
 
   /** Revoca refresh tokens de Firebase para el UID del Bearer. */
@@ -83,7 +110,10 @@ export class AuthService {
   private async verify(idToken: string): Promise<VerifiedFirebaseToken> {
     try {
       return await this.verifier.verifyIdToken(idToken);
-    } catch {
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
       throw new UnauthorizedException('Token invalido');
     }
   }

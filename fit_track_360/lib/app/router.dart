@@ -20,6 +20,7 @@ import '../features/meals/presentation/meals_page.dart';
 import '../features/progress/domain/progress_photo.dart';
 import '../features/progress/presentation/photo_comparison_page.dart';
 import '../features/progress/presentation/progress_photo_page.dart';
+import '../features/progress/presentation/progress_shell_page.dart';
 import '../features/routines/presentation/routine_detail_page.dart';
 import '../features/routines/presentation/routines_page.dart';
 import '../features/settings/presentation/profile_page.dart';
@@ -67,6 +68,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/app/foto',
       builder: (context, state) => const ProgressPhotoPage(),
+    ),
+    GoRoute(
+      path: '/app/progreso',
+      builder: (context, state) => const ProgressShellPage(),
     ),
     GoRoute(
       path: '/app/progreso/comparar',

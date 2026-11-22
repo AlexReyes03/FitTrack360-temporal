@@ -142,6 +142,13 @@ void main() {
           },
         ),
         GoRoute(
+          path: '/app/progreso',
+          builder: (context, state) {
+            visited.add('progreso');
+            return const Text('vista-progreso');
+          },
+        ),
+        GoRoute(
           path: '/app/perfil',
           builder: (context, state) {
             visited.add('perfil');
@@ -173,7 +180,7 @@ void main() {
     await openAndBack(find.text('Entrenos'), 'vista-entrenamientos');
     await openAndBack(find.text('Comidas').first, 'vista-comidas');
     await openAndBack(find.text('Ejercicios'), 'vista-ejercicios');
-    await openAndBack(find.text('Progreso'), 'vista-foto');
+    await openAndBack(find.text('Progreso'), 'vista-progreso');
     await openAndBack(find.text('Perfil').last, 'vista-perfil');
     await openAndBack(find.text('Tracker diario'), 'vista-tracker');
 
@@ -183,7 +190,7 @@ void main() {
         'entrenamientos',
         'comidas',
         'ejercicios',
-        'foto',
+        'progreso',
         'perfil',
         'tracker',
       ]),

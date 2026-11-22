@@ -144,6 +144,91 @@ void main() {
     expect(comparison.setCountDelta, 1);
   });
 
+  test('sin duración en la sesión actual el delta de tiempo es null', () {
+    final current = WorkoutSummary.of(session(startedAt: start));
+    final previous = WorkoutSummary.of(
+      session(
+        startedAt: start.subtract(const Duration(days: 1)),
+        endedAt: start
+            .subtract(const Duration(days: 1))
+            .add(const Duration(minutes: 30)),
+      ),
+    );
+
+    final comparison = WorkoutComparison.between(current, previous);
+
+    expect(comparison.durationDelta, isNull);
+    expect(comparison.volumeDeltaKg, 0);
+    expect(comparison.setCountDelta, 0);
+  });
+
+  test('sin duración en la sesión anterior el delta de tiempo es null', () {
+    final current = WorkoutSummary.of(
+      session(
+        startedAt: start,
+        endedAt: start.add(const Duration(minutes: 30)),
+      ),
+    );
+    final previous = WorkoutSummary.of(
+      session(startedAt: start.subtract(const Duration(days: 1))),
+    );
+
+    final comparison = WorkoutComparison.between(current, previous);
+
+    expect(comparison.durationDelta, isNull);
+  });
+
+  test('sesiones equivalentes producen diferencias en cero', () {
+    final startedAt = start.subtract(const Duration(days: 1));
+    final sets = const [
+      WorkoutSet(exerciseName: 'Remo', weightKg: 40, reps: 10),
+    ];
+    final current = WorkoutSummary.of(
+      session(
+        startedAt: start,
+        endedAt: start.add(const Duration(minutes: 40)),
+        sets: sets,
+      ),
+    );
+    final previous = WorkoutSummary.of(
+      session(
+        startedAt: startedAt,
+        endedAt: startedAt.add(const Duration(minutes: 40)),
+        sets: sets,
+      ),
+    );
+
+    final comparison = WorkoutComparison.between(current, previous);
+
+    expect(comparison.durationDelta, Duration.zero);
+    expect(comparison.volumeDeltaKg, 0);
+    expect(comparison.setCountDelta, 0);
+  });
+
+  test('WorkoutSession.fromJson lee el ejercicio y el orden de cada serie', () {
+    final parsed = WorkoutSession.fromJson({
+      'id': 's1',
+      'userId': 'u1',
+      'startedAt': '2026-11-04T10:00:00.000Z',
+      'endedAt': null,
+      'notes': null,
+      'createdAt': '2026-11-04T10:00:00.000Z',
+      'updatedAt': '2026-11-04T10:00:00.000Z',
+      'sets': [
+        {
+          'exerciseId': 'ej-a',
+          'exerciseName': 'Sentadilla',
+          'order': 2,
+          'weight': 80,
+          'reps': 8,
+        },
+      ],
+    });
+
+    expect(parsed.sets.single.exerciseId, 'ej-a');
+    expect(parsed.sets.single.order, 2);
+  });
+
   test('WorkoutSession.fromJson lee las series si el API las incluye', () {
     final parsed = WorkoutSession.fromJson({
       'id': 's1',

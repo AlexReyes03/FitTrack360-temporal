@@ -183,7 +183,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       case 3:
         context.push('/app/ejercicios');
       case 4:
-        context.push('/app/foto');
+        context.push('/app/progreso');
       case 5:
         context.push('/app/perfil');
     }

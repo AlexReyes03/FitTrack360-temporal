@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -14,9 +13,14 @@ import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
+import '../data/progress_photos_api.dart';
 
 class ProgressPhotoPage extends StatefulWidget {
-  const ProgressPhotoPage({super.key});
+  const ProgressPhotoPage({super.key, this.photosApi, this.apiClient});
+
+  /// Sustituibles en pruebas.
+  final ProgressPhotosApi? photosApi;
+  final ApiClient? apiClient;
 
   @override
   State<ProgressPhotoPage> createState() => _ProgressPhotoPageState();
@@ -27,6 +31,8 @@ class _ProgressPhotoPageState extends State<ProgressPhotoPage> {
   static const _quality = 70;
 
   final ImagePicker _picker = ImagePicker();
+  ApiClient? _ownedClient;
+  late final ProgressPhotosApi _photos;
   bool _busy = false;
   bool _canOpenSettings = false;
   String? _message;
@@ -38,6 +44,20 @@ class _ProgressPhotoPageState extends State<ProgressPhotoPage> {
     if (implementation is ImagePickerAndroid) {
       implementation.useAndroidPhotoPicker = true;
     }
+    if (widget.photosApi != null) {
+      _photos = widget.photosApi!;
+      _ownedClient = null;
+    } else {
+      final client = widget.apiClient ?? ApiClient();
+      _ownedClient = widget.apiClient == null ? client : null;
+      _photos = ProgressPhotosApi(client);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ownedClient?.dispose();
+    super.dispose();
   }
 
   Future<void> _openChoices() async {
@@ -122,27 +142,21 @@ class _ProgressPhotoPageState extends State<ProgressPhotoPage> {
         _busy = true;
         _message = null;
       });
-      final client = ApiClient();
       try {
-        final response = await client.uploadFile(
-          '/api/v1/storage/files',
-          File(picked.path),
-        );
+        final meta = await _photos.upload(File(picked.path));
         if (!mounted) return;
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          final body = jsonDecode(utf8.decode(response.bodyBytes));
-          final id = body is Map ? body['id'] : null;
-          setState(() {
-            _canOpenSettings = false;
-            _message = id == null ? 'Foto subida.' : 'Foto subida ($id).';
-          });
-        } else {
-          setState(() => _message = 'No se pudo subir la foto.');
-        }
+        setState(() {
+          _canOpenSettings = false;
+          _message = 'Foto de progreso guardada (${meta.id}).';
+        });
       } on SessionExpiredException {
         if (mounted) context.go('/login');
-      } finally {
-        client.dispose();
+      } on ProgressPhotoUnavailableException {
+        if (!mounted) return;
+        setState(() => _message = 'Foto no disponible.');
+      } catch (_) {
+        if (!mounted) return;
+        setState(() => _message = 'No se pudo subir la foto.');
       }
     } on PlatformException catch (error) {
       if (!mounted) return;

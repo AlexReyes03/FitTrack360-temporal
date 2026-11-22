@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../design_system/components/glass_surface.dart';
+import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
@@ -12,6 +13,7 @@ import '../../auth/data/auth_api.dart';
 import '../data/workouts_api.dart';
 import '../data/workouts_repository_impl.dart';
 import '../domain/workout_summary.dart';
+import '../domain/workout_summary_sharer.dart';
 import '../domain/workouts_repository.dart';
 import 'workout_detail_format.dart';
 import 'workout_detail_view_model.dart';
@@ -23,10 +25,12 @@ class WorkoutDetailPage extends StatefulWidget {
     super.key,
     required this.sessionId,
     this.repository,
+    this.sharer,
   });
 
   final String sessionId;
   final WorkoutsRepository? repository;
+  final WorkoutSummarySharer? sharer;
 
   @override
   State<WorkoutDetailPage> createState() => _WorkoutDetailPageState();
@@ -34,7 +38,9 @@ class WorkoutDetailPage extends StatefulWidget {
 
 class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   ApiClient? _client;
+  final _shareKey = GlobalKey();
   late final WorkoutDetailViewModel _viewModel;
+  bool _repeating = false;
 
   @override
   void initState() {
@@ -45,6 +51,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     _viewModel = WorkoutDetailViewModel(
       repository: repository,
       sessionId: widget.sessionId,
+      sharer: widget.sharer,
     )..addListener(_onSessionExpired);
     _viewModel.load();
   }
@@ -70,6 +77,25 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     } else {
       context.go('/app/entrenamientos');
     }
+  }
+
+  Rect? _shareOrigin() {
+    final box = _shareKey.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
+
+  Future<void> _shareSummary() =>
+      _viewModel.shareSummary(origin: _shareOrigin());
+
+  Future<void> _repeatSession() async {
+    if (_repeating) return;
+    final draft = _viewModel.repeatDraft();
+    if (draft == null) return;
+
+    setState(() => _repeating = true);
+    await context.push('/app/entrenamientos', extra: draft);
+    if (mounted) setState(() => _repeating = false);
   }
 
   @override
@@ -103,27 +129,40 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
             Expanded(
               child: ListenableBuilder(
                 listenable: _viewModel,
-                builder: (context, _) => _viewModel.summary.when(
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(
-                      color: AppColors.accentWhite,
+                builder: (context, _) {
+                  if (_viewModel.notFound) {
+                    return _UnavailableView(
+                      onGoToList: () => context.go('/app/entrenamientos'),
+                    );
+                  }
+                  return _viewModel.summary.when(
+                    loading: () => const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.accentWhite,
+                      ),
                     ),
-                  ),
-                  data: (summary) => _DetailContent(
-                    summary: summary,
-                    comparison: _viewModel.comparison,
-                  ),
-                  error: (error, _) => _ErrorView(
-                    message: error is AuthApiException
-                        ? error.message
-                        : 'No se pudo conectar',
-                    onRetry: _viewModel.load,
-                  ),
-                  empty: () => _ErrorView(
-                    message: 'No hay datos de esta sesión',
-                    onRetry: _viewModel.load,
-                  ),
-                ),
+                    data: (summary) => _DetailContent(
+                      summary: summary,
+                      comparison: _viewModel.comparison,
+                      actionError: _viewModel.actionError,
+                      sharing: _viewModel.sharing,
+                      repeating: _repeating,
+                      shareKey: _shareKey,
+                      onShare: _shareSummary,
+                      onRepeat: _repeatSession,
+                    ),
+                    error: (error, _) => _ErrorView(
+                      message: error is AuthApiException
+                          ? error.message
+                          : 'No se pudo conectar',
+                      onRetry: _viewModel.load,
+                    ),
+                    empty: () => _ErrorView(
+                      message: 'No hay datos de esta sesión',
+                      onRetry: _viewModel.load,
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -134,10 +173,25 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
 }
 
 class _DetailContent extends StatelessWidget {
-  const _DetailContent({required this.summary, required this.comparison});
+  const _DetailContent({
+    required this.summary,
+    required this.comparison,
+    required this.actionError,
+    required this.sharing,
+    required this.repeating,
+    required this.shareKey,
+    required this.onShare,
+    required this.onRepeat,
+  });
 
   final WorkoutSummary summary;
   final AsyncState<WorkoutComparison> comparison;
+  final String? actionError;
+  final bool sharing;
+  final bool repeating;
+  final GlobalKey shareKey;
+  final VoidCallback onShare;
+  final VoidCallback onRepeat;
 
   @override
   Widget build(BuildContext context) {
@@ -149,8 +203,30 @@ class _DetailContent extends StatelessWidget {
           formatDateTime(summary.startedAt),
           style: AppTypography.body.copyWith(color: AppColors.textSecondary),
         ),
-        // W11-FE-03.2 (Loreley): aquí van las acciones «Compartir» y
-        // «Repetir como borrador».
+        const SizedBox(height: AppSpacing.md),
+        PrimaryButton(
+          key: shareKey,
+          label: sharing ? 'Compartiendo...' : 'Compartir',
+          onPressed: sharing ? null : onShare,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        OutlinedButton(
+          onPressed: repeating ? null : onRepeat,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            side: const BorderSide(color: AppColors.glassBorderStrong),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            minimumSize: const Size.fromHeight(48),
+          ),
+          child: const Text('Repetir como borrador'),
+        ),
+        if (actionError != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            actionError!,
+            style: AppTypography.body.copyWith(color: AppColors.dangerText),
+          ),
+        ],
         const SizedBox(height: AppSpacing.md),
         GlassSurface(
           child: Row(
@@ -327,6 +403,35 @@ class _ErrorView extends StatelessWidget {
             onPressed: onRetry,
             child: const Text(
               'Reintentar',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UnavailableView extends StatelessWidget {
+  const _UnavailableView({required this.onGoToList});
+
+  final VoidCallback onGoToList;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            workoutNotFoundMessage,
+            style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+          ),
+          TextButton(
+            onPressed: onGoToList,
+            child: const Text(
+              'Volver al listado',
               style: TextStyle(color: AppColors.textSecondary),
             ),
           ),

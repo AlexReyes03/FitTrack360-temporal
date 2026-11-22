@@ -53,8 +53,8 @@ class WorkoutSession {
     final order = item['order'];
     return WorkoutSet(
       exerciseId: item['exerciseId'] as String?,
-      order: order is num ? order.toInt() : null,
       exerciseName: item['exerciseName'] as String? ?? 'Ejercicio sin nombre',
+      order: order is num ? order.toInt() : null,
       weightKg: weight is num ? weight.toDouble() : null,
       reps: reps is num ? reps.toInt() : 0,
     );

@@ -2,10 +2,10 @@
 class WorkoutSet {
   final String exerciseName;
 
-  /// Identificador del catálogo cuando el API lo envía.
+  /// Identificador del catálogo; null en respuestas antiguas.
   final String? exerciseId;
 
-  /// Orden de la serie en la sesión cuando el API lo envía.
+  /// Orden dentro de la sesión; null en respuestas antiguas.
   final int? order;
 
   /// Peso en kg, o `null` si la serie no lo registra (peso corporal).

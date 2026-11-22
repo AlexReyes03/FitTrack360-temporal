@@ -4,11 +4,15 @@ import 'macros.dart';
 /// congelados al registrarse (regla M-02): no se recalculan desde USDA.
 class MealItem {
   const MealItem({
+    this.id,
     this.fdcId,
     required this.name,
     required this.servingG,
     required this.macros,
   });
+
+  /// Identificador del MealItem en el API; null antes de persistirse.
+  final String? id;
 
   /// Identificador USDA FDC como texto; null en captura manual.
   final String? fdcId;

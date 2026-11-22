@@ -189,7 +189,15 @@ void main() {
         await vm.reloadMetrics();
 
         expect(metrics.seriesRequests.last, (from: from, to: '2026-11-22'));
-        expect(metrics.historyRequests.last, (from: from, to: '2026-11-22'));
+        // El historial pide 10 días de margen para la diferencia semanal.
+        final historyFrom = DateTime.parse(from)
+            .subtract(const Duration(days: 10))
+            .toIso8601String()
+            .substring(0, 10);
+        expect(metrics.historyRequests.last, (
+          from: historyFrom,
+          to: '2026-11-22',
+        ));
 
         vm.dispose();
       });
@@ -279,7 +287,8 @@ void main() {
         expect(vm.historyEntries, hasLength(3));
         expect(vm.historyEntries[0].weightKg, 71);
         expect(vm.historyEntries[0].weeklyDiffKg, closeTo(1, 1e-9));
-        expect(vm.historyEntries[1].weeklyDiffKg, closeTo(2, 1e-9));
+        // m2 (19 nov) no tiene medición a ±3 días del 12 nov: es «Base».
+        expect(vm.historyEntries[1].weeklyDiffKg, isNull);
         expect(vm.historyEntries[2].weeklyDiffKg, isNull);
         expect(vm.historyEntries[0].note, contains('Grasa: 18.2%'));
         expect(vm.historyEntries[0].note, contains('Cintura: 81.5 cm'));
@@ -483,7 +492,96 @@ void main() {
 
       expect(metrics.created, hasLength(1));
       expect(vm.sessionPhotos, isEmpty);
-      expect(vm.checkInFeedback, 'Formato raro');
+      expect(vm.checkInFeedback, contains('Tu peso se guardó'));
+      expect(vm.checkInFeedback, contains('Formato raro'));
+      // La métrica cuenta como guardada: el formulario se limpia, la foto
+      // fallida se descarta y el historial se recarga para no duplicarla.
+      expect(vm.checkInSavedCount, 1);
+      expect(vm.selectedCheckInPhotoLabel, isNull);
+      expect(metrics.historyRequests, isNotEmpty);
+
+      vm.dispose();
+    });
+
+    test('un error al crear no cuenta como métrica guardada', () async {
+      final metrics = FakeProgressMetricsRepository(
+        createError: const ProgressMetricValidationException('Peso inválido'),
+      );
+      final vm = _metricsVm(metrics);
+
+      await vm.submitCheckIn(_draft);
+
+      expect(vm.checkInSavedCount, 0);
+
+      vm.dispose();
+    });
+
+    test(
+      'ignora un segundo envío mientras el primero sigue en curso',
+      () async {
+        final metrics = FakeProgressMetricsRepository();
+        final vm = _metricsVm(metrics);
+
+        final first = vm.submitCheckIn(_draft);
+        final second = vm.submitCheckIn(_draft);
+        await Future.wait([first, second]);
+
+        expect(metrics.created, hasLength(1));
+
+        vm.dispose();
+      },
+    );
+
+    test(
+      'sin medición a ±3 días de hace una semana no hay diferencia',
+      () async {
+        final metrics = FakeProgressMetricsRepository(
+          history: [
+            sampleBodyMetric(
+              id: 'm2',
+              measuredAt: DateTime.utc(2026, 11, 22, 12),
+              weightKg: 73.8,
+            ),
+            sampleBodyMetric(
+              id: 'm1',
+              measuredAt: DateTime.utc(2026, 11, 22, 8),
+              weightKg: 74.2,
+            ),
+          ],
+        );
+        final vm = _metricsVm(metrics);
+
+        await vm.reloadMetrics();
+
+        expect(vm.historyEntries, hasLength(2));
+        expect(vm.historyEntries[0].weeklyDiffKg, isNull);
+
+        vm.dispose();
+      },
+    );
+
+    test('la entrada más antigua del rango se compara con el margen', () async {
+      final metrics = FakeProgressMetricsRepository(
+        history: [
+          sampleBodyMetric(
+            id: 'm2',
+            measuredAt: DateTime.utc(2026, 11, 20, 12),
+            weightKg: 73,
+          ),
+          sampleBodyMetric(
+            id: 'm1',
+            measuredAt: DateTime.utc(2026, 11, 13, 12),
+            weightKg: 74,
+          ),
+        ],
+      );
+      final vm = _metricsVm(metrics);
+      vm.setRange(ProgressRange.d7);
+      await vm.reloadMetrics();
+
+      // m1 (13 nov) queda fuera del rango 7d pero sirve de referencia.
+      expect(vm.historyEntries, hasLength(1));
+      expect(vm.historyEntries[0].weeklyDiffKg, closeTo(-1, 1e-9));
 
       vm.dispose();
     });

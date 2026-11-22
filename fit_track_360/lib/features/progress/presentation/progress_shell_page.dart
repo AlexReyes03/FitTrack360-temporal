@@ -133,6 +133,7 @@ class _ProgressShellPageState extends State<ProgressShellPage> {
           selectedCheckInPhotoLabel: _vm.selectedCheckInPhotoLabel,
           isSubmittingCheckIn: _vm.isSubmittingCheckIn,
           checkInFeedback: _vm.checkInFeedback,
+          checkInSavedCount: _vm.checkInSavedCount,
           onBack: () {
             if (context.canPop()) {
               context.pop();

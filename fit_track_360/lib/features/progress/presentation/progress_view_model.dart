@@ -57,6 +57,10 @@ class ProgressViewModel extends ChangeNotifier {
   File? _pendingPhotoFile;
   bool isSubmittingCheckIn = false;
   String? checkInFeedback;
+
+  /// Aumenta cada vez que una métrica del check-in queda guardada. El
+  /// formulario lo observa para limpiarse sin depender del texto del aviso.
+  int checkInSavedCount = 0;
   bool sessionExpired = false;
 
   /// Fotos subidas en esta sesión (no hay GET list en el API).
@@ -113,6 +117,7 @@ class ProgressViewModel extends ChangeNotifier {
       return;
     }
 
+    sessionExpired = false;
     chartStatus = ProgressSectionStatus.loading;
     historyStatus = ProgressSectionStatus.loading;
     chartError = null;
@@ -123,11 +128,16 @@ class ProgressViewModel extends ChangeNotifier {
     try {
       final results = await Future.wait<Object>([
         metrics.getSeries(from: range.from, to: range.to),
-        metrics.listHistory(from: range.from, to: range.to),
+        // Margen extra para que la entrada más antigua del rango también
+        // tenga contra qué calcular su diferencia semanal.
+        metrics.listHistory(from: range.historyFrom, to: range.to),
       ]);
       if (_disposed || request != _metricsRequest) return;
       _applySeries(results[0] as ProgressSeries);
-      _applyHistory(results[1] as List<BodyMetric>);
+      _applyHistory(
+        results[1] as List<BodyMetric>,
+        visibleFrom: range.fromDate,
+      );
     } on SessionExpiredException catch (failure) {
       if (_disposed || request != _metricsRequest) return;
       sessionExpired = true;
@@ -167,6 +177,7 @@ class ProgressViewModel extends ChangeNotifier {
   /// Check-in: [draft] ya viene validado. Crea la métrica, sube la foto
   /// vinculada con `metricId`, guarda la nota local y recarga la vista.
   Future<void> submitCheckIn(ProgressCheckInDraft draft) async {
+    if (isSubmittingCheckIn) return;
     sessionExpired = false;
     checkInFeedback = null;
     isSubmittingCheckIn = true;
@@ -189,27 +200,29 @@ class ProgressViewModel extends ChangeNotifier {
       );
       if (_disposed) return;
 
-      final file = _pendingPhotoFile;
-      if (file != null) {
-        final meta = await _photos.upload(file, metricId: created.id);
-        if (_disposed) return;
-        _sessionPhotos.add(meta);
-        _photoWeightsById[meta.id] = _weightLabel(
-          created.weightKg ?? draft.weightKg,
-        );
-        _pendingPhotoFile = null;
-        selectedCheckInPhotoLabel = null;
-        _refreshComparisonSlots();
-      }
-
+      // La métrica ya existe: a partir de aquí el formulario se limpia y el
+      // historial se recarga aunque la foto falle, para no duplicarla.
+      checkInSavedCount++;
       final note = draft.notesText.trim();
       if (note.isNotEmpty) _notesByMetricId[created.id] = note;
 
+      final photoFailure = await _uploadCheckInPhoto(
+        created.id,
+        created.weightKg ?? draft.weightKg,
+      );
+      if (_disposed) return;
+
       await reloadMetrics();
       if (_disposed) return;
-      checkInFeedback = sessionExpired
-          ? 'Sesión expirada.'
-          : 'Check-in registrado correctamente.';
+      if (sessionExpired) {
+        checkInFeedback = 'Sesión expirada.';
+      } else if (photoFailure != null) {
+        checkInFeedback =
+            'Tu peso se guardó, pero la foto no se pudo subir '
+            '($photoFailure). Puedes agregarla desde «Agregar foto».';
+      } else {
+        checkInFeedback = 'Check-in registrado correctamente.';
+      }
     } on SessionExpiredException {
       sessionExpired = true;
       checkInFeedback = 'Sesión expirada.';
@@ -224,6 +237,31 @@ class ProgressViewModel extends ChangeNotifier {
     } finally {
       isSubmittingCheckIn = false;
       _notify();
+    }
+  }
+
+  /// Sube la foto pendiente vinculada a [metricId]. Devuelve el motivo si
+  /// falla (la métrica ya quedó guardada) o `null` si no hubo error.
+  Future<String?> _uploadCheckInPhoto(String metricId, double weightKg) async {
+    final file = _pendingPhotoFile;
+    if (file == null) return null;
+    _pendingPhotoFile = null;
+    selectedCheckInPhotoLabel = null;
+    try {
+      final meta = await _photos.upload(file, metricId: metricId);
+      if (_disposed) return null;
+      _sessionPhotos.add(meta);
+      _photoWeightsById[meta.id] = _weightLabel(weightKg);
+      _refreshComparisonSlots();
+      return null;
+    } on SessionExpiredException {
+      rethrow;
+    } on ProgressPhotoUnavailableException {
+      return 'foto no disponible';
+    } on ProgressPhotoException catch (error) {
+      return error.message;
+    } catch (_) {
+      return 'error de conexión';
     }
   }
 
@@ -318,19 +356,25 @@ class ProgressViewModel extends ChangeNotifier {
     chartStatus = ProgressSectionStatus.data;
   }
 
-  void _applyHistory(List<BodyMetric> metrics) {
+  void _applyHistory(
+    List<BodyMetric> metrics, {
+    required DateTime visibleFrom,
+  }) {
     final sorted = [...metrics]
       ..sort((a, b) => b.measuredAt.compareTo(a.measuredAt));
     final weighted = sorted.where((metric) => metric.weightKg != null).toList();
+    final visibleCount = weighted
+        .where((metric) => !metric.measuredAt.toUtc().isBefore(visibleFrom))
+        .length;
 
-    if (weighted.isEmpty) {
+    if (visibleCount == 0) {
       historyEntries = const [];
       historyStatus = ProgressSectionStatus.empty;
       return;
     }
 
     historyEntries = [
-      for (var index = 0; index < weighted.length; index++)
+      for (var index = 0; index < visibleCount; index++)
         ProgressHistoryEntry(
           dateLabel: _formatDay(weighted[index].measuredAt),
           weightKg: weighted[index].weightKg!,
@@ -341,28 +385,25 @@ class ProgressViewModel extends ChangeNotifier {
     historyStatus = ProgressSectionStatus.data;
   }
 
-  /// Compara contra la medición más cercana a `measuredAt - 7 días`; si
-  /// ninguna cae dentro de ±3 días, usa la inmediata anterior.
+  /// Compara contra la medición más cercana a `measuredAt - 7 días`. Si
+  /// ninguna cae dentro de ±3 días no hay referencia semanal (`null`, que la
+  /// UI muestra como «Base»).
   double? _weeklyDiff(List<BodyMetric> metrics, int index) {
     final currentWeight = metrics[index].weightKg;
     if (currentWeight == null || index + 1 >= metrics.length) return null;
 
-    final older = metrics.sublist(index + 1);
     final target = metrics[index].measuredAt.subtract(const Duration(days: 7));
-    var comparator = older.first;
-    var bestDistance = comparator.measuredAt.difference(target).inHours.abs();
-    for (final candidate in older.skip(1)) {
+    BodyMetric? comparator;
+    var bestDistance = const Duration(days: 3).inHours;
+    for (final candidate in metrics.skip(index + 1)) {
       final distance = candidate.measuredAt.difference(target).inHours.abs();
-      if (distance < bestDistance) {
+      if (distance <= bestDistance) {
         bestDistance = distance;
         comparator = candidate;
       }
     }
-    if (bestDistance > const Duration(days: 3).inHours) {
-      comparator = older.first;
-    }
 
-    final comparatorWeight = comparator.weightKg;
+    final comparatorWeight = comparator?.weightKg;
     if (comparatorWeight == null) return null;
     return currentWeight - comparatorWeight;
   }
@@ -406,7 +447,13 @@ class ProgressViewModel extends ChangeNotifier {
     comparisonStatus = ProgressSectionStatus.data;
   }
 
-  ({String from, String to}) _rangeFor(ProgressRange range) {
+  /// Días extra de historial para calcular la diferencia semanal de la
+  /// entrada más antigua del rango (7 días ± 3 de tolerancia).
+  static const int _historyMarginDays = 10;
+
+  ({String from, String historyFrom, DateTime fromDate, String to}) _rangeFor(
+    ProgressRange range,
+  ) {
     final now = _clock().toUtc();
     final today = DateTime.utc(now.year, now.month, now.day);
     final days = switch (range) {
@@ -415,8 +462,13 @@ class ProgressViewModel extends ChangeNotifier {
       ProgressRange.d90 => 89,
       ProgressRange.y1 => 364,
     };
+    final fromDate = today.subtract(Duration(days: days));
     return (
-      from: _dateParam(today.subtract(Duration(days: days))),
+      from: _dateParam(fromDate),
+      historyFrom: _dateParam(
+        fromDate.subtract(const Duration(days: _historyMarginDays)),
+      ),
+      fromDate: fromDate,
       to: _dateParam(today),
     );
   }

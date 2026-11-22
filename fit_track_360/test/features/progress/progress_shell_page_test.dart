@@ -287,19 +287,19 @@ void main() {
         );
       }
 
-      List<BodyMetric> buildHistory(
-        String id,
-        DateTime firstDate,
-        double firstKg,
-        double lastKg,
-      ) => [
-        sampleBodyMetric(
-          id: '$id-2',
-          measuredAt: DateTime.utc(2026, 11, 22, 12),
-          weightKg: lastKg,
-        ),
-        sampleBodyMetric(id: '$id-1', measuredAt: firstDate, weightKg: firstKg),
-      ];
+      List<BodyMetric> buildHistory(String id, double firstKg, double lastKg) =>
+          [
+            sampleBodyMetric(
+              id: '$id-2',
+              measuredAt: DateTime.utc(2026, 11, 22, 12),
+              weightKg: lastKg,
+            ),
+            sampleBodyMetric(
+              id: '$id-1',
+              measuredAt: DateTime.utc(2026, 11, 15, 12),
+              weightKg: firstKg,
+            ),
+          ];
 
       final metrics = _RangeAwareMetricsRepository(
         seriesByFrom: {
@@ -328,31 +328,13 @@ void main() {
             74.4,
           ),
         },
+        // El historial se pide con 10 días de margen; la referencia del
+        // 15 nov queda a 7 días exactos del último registro (22 nov).
         historyByFrom: {
-          '2026-11-16': buildHistory(
-            '7d',
-            DateTime.utc(2026, 11, 18, 12),
-            74.6,
-            74.1,
-          ),
-          '2026-10-24': buildHistory(
-            '30d',
-            DateTime.utc(2026, 11, 1, 12),
-            75.5,
-            74.2,
-          ),
-          '2026-08-25': buildHistory(
-            '90d',
-            DateTime.utc(2026, 9, 10, 12),
-            78.0,
-            74.3,
-          ),
-          '2025-11-23': buildHistory(
-            '1y',
-            DateTime.utc(2026, 1, 15, 12),
-            82.0,
-            74.4,
-          ),
+          '2026-11-06': buildHistory('7d', 74.6, 74.1),
+          '2026-10-14': buildHistory('30d', 75.5, 74.2),
+          '2026-08-15': buildHistory('90d', 78.0, 74.3),
+          '2025-11-13': buildHistory('1y', 82.0, 74.4),
         },
       );
       final vm = ProgressViewModel(

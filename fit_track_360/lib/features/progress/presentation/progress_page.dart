@@ -31,6 +31,7 @@ class ProgressPage extends StatefulWidget {
     this.selectedCheckInPhotoLabel,
     this.isSubmittingCheckIn = false,
     this.checkInFeedback,
+    this.checkInSavedCount = 0,
     this.onBack,
     this.onRangeChanged,
     this.onSelectCheckInPhoto,
@@ -60,6 +61,9 @@ class ProgressPage extends StatefulWidget {
   final String? selectedCheckInPhotoLabel;
   final bool isSubmittingCheckIn;
   final String? checkInFeedback;
+
+  /// Métricas guardadas en esta sesión; limpia el formulario al cambiar.
+  final int checkInSavedCount;
   final VoidCallback? onBack;
   final ValueChanged<ProgressRange>? onRangeChanged;
   final VoidCallback? onSelectCheckInPhoto;
@@ -246,6 +250,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   selectedPhotoLabel: widget.selectedCheckInPhotoLabel,
                   isSubmitting: widget.isSubmittingCheckIn,
                   feedbackMessage: widget.checkInFeedback,
+                  savedCount: widget.checkInSavedCount,
                   onSelectPhoto: widget.onSelectCheckInPhoto,
                   onSubmit: widget.onSubmitCheckIn,
                   onRetry: widget.onRetryCheckIn,

@@ -21,6 +21,7 @@ class ProgressCheckInCard extends StatefulWidget {
     this.selectedPhotoLabel,
     this.isSubmitting = false,
     this.feedbackMessage,
+    this.savedCount = 0,
     this.onSelectPhoto,
     this.onSubmit,
     this.onRetry,
@@ -36,6 +37,10 @@ class ProgressCheckInCard extends StatefulWidget {
 
   /// Resultado del último envío (éxito o error decidido por el ViewModel).
   final String? feedbackMessage;
+
+  /// Contador de métricas guardadas (ViewModel). Cuando cambia, el
+  /// formulario se limpia.
+  final int savedCount;
   final VoidCallback? onSelectPhoto;
   final ValueChanged<ProgressCheckInDraft>? onSubmit;
   final VoidCallback? onRetry;
@@ -54,7 +59,6 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
   String? _weightError;
   String? _bodyFatError;
   String? _waistError;
-  bool _awaitingSubmitResult = false;
 
   @override
   void initState() {
@@ -68,23 +72,14 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
   @override
   void didUpdateWidget(covariant ProgressCheckInCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final finishedSubmit =
-        (oldWidget.isSubmitting || _awaitingSubmitResult) &&
-        !widget.isSubmitting;
-    if (!finishedSubmit) return;
-
-    if (_isSuccessFeedback(widget.feedbackMessage)) {
-      _weightController.clear();
-      _bodyFatController.clear();
-      _waistController.clear();
-      _notesController.clear();
-      _weightError = null;
-      _bodyFatError = null;
-      _waistError = null;
-      _awaitingSubmitResult = false;
-    } else if (widget.feedbackMessage != null) {
-      _awaitingSubmitResult = false;
-    }
+    if (widget.savedCount == oldWidget.savedCount) return;
+    _weightController.clear();
+    _bodyFatController.clear();
+    _waistController.clear();
+    _notesController.clear();
+    _weightError = null;
+    _bodyFatError = null;
+    _waistError = null;
   }
 
   @override
@@ -94,11 +89,6 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
     _waistController.dispose();
     _notesController.dispose();
     super.dispose();
-  }
-
-  static bool _isSuccessFeedback(String? message) {
-    if (message == null) return false;
-    return message.trim().toLowerCase().startsWith('check-in registrado');
   }
 
   static ({double? value, String? error}) _validateBodyFat(String input) {
@@ -143,9 +133,6 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
       return;
     }
 
-    if (widget.onSubmit != null) {
-      _awaitingSubmitResult = true;
-    }
     widget.onSubmit?.call(
       ProgressCheckInDraft(
         weightKg: weightKg,

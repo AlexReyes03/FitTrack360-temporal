@@ -285,7 +285,7 @@ void main() {
       expect(find.text('Ingresa un valor mayor a 0.'), findsOneWidget);
     });
 
-    testWidgets('limpia el formulario solo cuando el check-in guarda bien', (
+    testWidgets('limpia el formulario solo cuando la métrica queda guardada', (
       tester,
     ) async {
       ProgressCheckInDraft? submitted;
@@ -339,6 +339,7 @@ void main() {
           const ProgressPage(
             isSubmittingCheckIn: false,
             checkInFeedback: 'Check-in registrado correctamente.',
+            checkInSavedCount: 1,
           ),
         ),
       );

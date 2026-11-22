@@ -12,6 +12,8 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../settings/fakes.dart' show FakeConnectivityService;
+
 class _FakeWorkoutsApi implements WorkoutsApi {
   final created = <WorkoutSessionDraft>[];
 
@@ -32,6 +34,22 @@ class _FakeWorkoutsApi implements WorkoutsApi {
       notes: draft.notes,
       createdAt: draft.startedAt,
       updatedAt: draft.startedAt,
+    );
+  }
+
+  @override
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
+    final startedAt =
+        DateTime.tryParse('${payload['startedAt']}') ??
+        DateTime.utc(2026, 11, 10, 18);
+    return WorkoutSession(
+      id: 'nueva',
+      userId: 'u1',
+      startedAt: startedAt,
+      endedAt: null,
+      notes: payload['notes'] as String?,
+      createdAt: startedAt,
+      updatedAt: startedAt,
     );
   }
 }
@@ -127,7 +145,11 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: _FakeWorkoutsApi(), draft: _draft),
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          draft: _draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -156,7 +178,11 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: _FakeWorkoutsApi(), draft: draft),
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          draft: draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -168,7 +194,12 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(home: WorkoutsPage(api: _FakeWorkoutsApi())),
+      MaterialApp(
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          connectivityService: FakeConnectivityService(),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -182,7 +213,11 @@ void main() {
     final api = _FakeWorkoutsApi();
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: api, draft: _draft),
+        home: WorkoutsPage(
+          api: api,
+          draft: _draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -220,7 +255,11 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: api, draft: _draft),
+        home: WorkoutsPage(
+          api: api,
+          draft: _draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -291,6 +330,7 @@ void main() {
         GoRoute(
           path: '/app/entrenamientos',
           builder: (context, state) => WorkoutsPage(
+            connectivityService: FakeConnectivityService(),
             api: _FakeWorkoutsApi(),
             draft: state.extra as WorkoutSessionDraft?,
           ),
@@ -312,7 +352,12 @@ void main() {
 
   testWidgets('como pantalla raíz no muestra «Volver»', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(home: WorkoutsPage(api: _FakeWorkoutsApi())),
+      MaterialApp(
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          connectivityService: FakeConnectivityService(),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -324,6 +369,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WorkoutsPage(
+          connectivityService: FakeConnectivityService(),
           api: _FakeWorkoutsApi(),
           apiClientFactory: () {
             created++;
@@ -347,6 +393,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WorkoutsPage(
+          connectivityService: FakeConnectivityService(),
           apiClientFactory: () {
             final client = _CountingApiClient(
               MockClient((_) async => _json(<Object>[], 200)),

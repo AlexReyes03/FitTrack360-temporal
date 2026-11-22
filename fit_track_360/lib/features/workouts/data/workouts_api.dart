@@ -41,8 +41,11 @@ class WorkoutsApi {
   }
 
   /// Persiste el borrador; el mapeo al cuerpo vive en el dominio.
-  Future<WorkoutSession> create(WorkoutSessionDraft draft) async {
-    final payload = draft.toCreateWorkoutPayload();
+  Future<WorkoutSession> create(WorkoutSessionDraft draft) =>
+      createWithPayload(draft.toCreateWorkoutPayload());
+
+  /// Persiste un cuerpo ya armado (tracker live u otros flujos).
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
     final response = await _client.post('/api/v1/workouts', body: payload);
     if (response.statusCode != 201) {
       throw AuthApiException(apiErrorMessage(response));

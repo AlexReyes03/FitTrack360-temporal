@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Inject,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -42,7 +43,10 @@ export class FirebaseAuthGuard implements CanActivate {
     let verified;
     try {
       verified = await this.verifier.verifyIdToken(idToken);
-    } catch {
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
       throw new UnauthorizedException('Token invalido');
     }
 

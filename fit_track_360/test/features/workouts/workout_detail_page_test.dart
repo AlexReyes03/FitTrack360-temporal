@@ -411,6 +411,22 @@ class _RecordingWorkoutsApi implements WorkoutsApi {
       updatedAt: draft.startedAt,
     );
   }
+
+  @override
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
+    final startedAt =
+        DateTime.tryParse('${payload['startedAt']}') ??
+        DateTime.utc(2026, 11, 10, 18);
+    return WorkoutSession(
+      id: 'nueva',
+      userId: 'u1',
+      startedAt: startedAt,
+      endedAt: null,
+      notes: payload['notes'] as String?,
+      createdAt: startedAt,
+      updatedAt: startedAt,
+    );
+  }
 }
 
 Map<String, dynamic> _sessionJson() => {

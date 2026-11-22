@@ -6,6 +6,7 @@ class WorkoutSession {
   final DateTime startedAt;
   final DateTime? endedAt;
   final String? notes;
+  final String? location;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +22,7 @@ class WorkoutSession {
     required this.notes,
     required this.createdAt,
     required this.updatedAt,
+    this.location,
     this.sets = const [],
   });
 
@@ -34,6 +36,7 @@ class WorkoutSession {
           ? null
           : DateTime.parse(json['endedAt'] as String),
       notes: json['notes'] as String?,
+      location: json['location'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       sets: List.unmodifiable(

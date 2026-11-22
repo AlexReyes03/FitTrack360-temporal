@@ -34,8 +34,9 @@ export class MockFirebaseTokenVerifier implements FirebaseTokenVerifier {
     if (sep <= 0 || sep === rest.length - 1) {
       throw new Error('Token mock invalido');
     }
-    const uid = rest.slice(0, sep);
-    const email = rest.slice(sep + 1);
+    // mock:<uid>:<email> o mock:<uid>:<email>:<provider>; el proveedor se
+    // acepta para simular Google pero el backend no lo usa.
+    const [uid, email = ''] = rest.split(':');
     if (!uid || !email.includes('@')) {
       throw new Error('Token mock invalido');
     }

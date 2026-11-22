@@ -75,9 +75,8 @@ describe('GET /api/v1/dashboard/today (W12-06)', () => {
       .overrideProvider(FIREBASE_TOKEN_VERIFIER)
       .useValue(new MockFirebaseTokenVerifier())
       .compile();
-    app = moduleRef.createNestApplication<INestApplication<App>>(
-      APP_HTTP_OPTIONS,
-    );
+    app =
+      moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
     configureApp(app);
     await app.init();
     anaToken = 'mock:firebase-ana:ana@test.com';

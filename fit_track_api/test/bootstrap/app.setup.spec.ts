@@ -36,9 +36,8 @@ async function bootstrapProbeApp(): Promise<INestApplication<App>> {
   const moduleRef = await Test.createTestingModule({
     controllers: [ProbeController],
   }).compile();
-  const app = moduleRef.createNestApplication<INestApplication<App>>(
-    APP_HTTP_OPTIONS,
-  );
+  const app =
+    moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
   configureApp(app);
   await app.init();
   return app;

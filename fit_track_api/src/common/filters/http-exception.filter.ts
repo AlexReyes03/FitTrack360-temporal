@@ -113,6 +113,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Error interno del servidor';
     let validation = false;
+    let customCode: string | undefined;
 
     if (isPayloadTooLarge(exception)) {
       status = HttpStatus.PAYLOAD_TOO_LARGE;
@@ -123,6 +124,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       validation =
         status === HttpStatus.BAD_REQUEST && isValidationPayload(payload);
       message = extractMessage(payload, exception.message);
+      if (typeof payload === 'object' && payload !== null) {
+        const payloadCode = (payload as { code?: unknown }).code;
+        if (typeof payloadCode === 'string' && payloadCode.trim() !== '') {
+          customCode = payloadCode;
+        }
+      }
       if (status >= 500 && process.env.NODE_ENV === 'production') {
         message = 'Error interno del servidor';
       }
@@ -130,7 +137,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const requestId = resolveRequestId(request, response);
     const body: ApiErrorBody = {
-      code: mapStatusToCode(status, validation),
+      code: customCode ?? mapStatusToCode(status, validation),
       message,
       requestId,
     };

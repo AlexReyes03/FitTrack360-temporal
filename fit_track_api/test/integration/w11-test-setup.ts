@@ -672,9 +672,8 @@ export async function createW11TestingContext(): Promise<W11IntegrationContext> 
     .useValue(usdaMock)
     .compile();
 
-  const app = moduleRef.createNestApplication<INestApplication<App>>(
-    APP_HTTP_OPTIONS,
-  );
+  const app =
+    moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
   configureApp(app);
   await app.init();
 

@@ -397,9 +397,10 @@ describe('ExercisesModule · catálogo (W11-02)', () => {
         .useValue({ canActivate: () => true })
         .compile();
 
-      app = moduleRef.createNestApplication<INestApplication<App>>(
-        APP_HTTP_OPTIONS,
-      );
+      app =
+        moduleRef.createNestApplication<INestApplication<App>>(
+          APP_HTTP_OPTIONS,
+        );
       configureApp(app);
       await app.init();
     });

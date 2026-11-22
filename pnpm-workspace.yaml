@@ -1,6 +1,7 @@
 packages:
   - fit_track_api
 allowBuilds:
+  sharp: true
   '@parcel/watcher': true
   unrs-resolver: true
   prisma: true

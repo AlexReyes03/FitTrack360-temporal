@@ -141,6 +141,8 @@
 
 | 2026-11-21 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #177 (W12-FE-02.1, #129) | Atender la revisión de @AlexReyes03: ciclo de vida de `ApiClient` en rutinas, botón Volver y protección contra respuestas fuera de orden. | `fit_track_360/lib/features/routines/presentation/routines_page.dart`, `routine_detail_page.dart`, `fit_track_360/test/features/routines/` | Ajustado: `_ownedClient` solo con lector externo, pruebas de ciclo de vida, cambio de rutina y respuestas obsoletas. No se reutilizó `domain/routine.dart` porque exige campos no opcionales y rompería el editor e inicio desde rutina. | Rama `feat/w12-10-lista-detalle-rutinas` (sin commit) |
 
+| 2026-11-22 | MiguelSP040 | Codex | #166 | Corregir ciclo de vida de fotos, alias MIME y compilación de sharp en Docker. | `fit_track_api/src/photos/`, `fit_track_api/test/photos/`, `fit_track_api/Dockerfile`, `pnpm-workspace.yaml`, `docs/specs/04-arquitectura.md` | Se elimina primero la fila y se tolera archivo ausente; se documenta el posible archivo sin referencia tras fallo de almacenamiento. | Rama `fix/photos-lifecycle-166` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

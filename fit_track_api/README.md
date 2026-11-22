@@ -35,7 +35,21 @@ $ pnpm run prisma:migrate
 $ pnpm run prisma:seed
 ```
 
-> **Nota (W11-02):** El script `prisma/seed.ts` carga de forma idempotente el catálogo completo de `seed/exercises.es.json` (1 324 ejercicios). La media se sirve en `/static/exercises/images` y `/static/exercises/videos`.
+> **Nota (W11-02 / W12-14):** El script `prisma/seed.ts` carga de forma idempotente el catálogo completo de `seed/exercises.es.json` (1 324 ejercicios) y falla si el conteo no coincide. La media se sirve en `/static/exercises/images` y `/static/exercises/videos`.
+
+## Respaldo y restauración (PostgreSQL)
+
+Con el compose levantado desde `fit_track_api/`:
+
+```bash
+# Crear un dump custom en backups/ (carpeta ignorada por git)
+pnpm run db:backup
+
+# Restaurar un dump concreto
+pnpm run db:restore -- backups/fittrack-YYYYMMDD-HHMM.dump
+```
+
+También hay wrappers `scripts/backup-postgres.sh|.ps1` y `scripts/restore-postgres.sh|.ps1`. Los scripts no imprimen contraseñas; usan el servicio `postgres` del compose.
 
 ## Project setup
 
@@ -140,7 +154,7 @@ docker compose up -d
 | Mailpit SMTP | `1025`            | Correo local, sin TLS |
 | Mailpit UI   | `8025`            | http://localhost:8025 |
 
-El servicio `api` habla con Postgres por el hostname `postgres` y con Mailpit por `mailpit`. Esas direcciones solo existen dentro de la red del compose.
+El servicio `api` habla con Postgres por el hostname `postgres` y con Mailpit por `mailpit`. Esas direcciones solo existen dentro de la red del compose. Postgres usa `pg_isready` y el API sondea `GET /api/v1/health` como healthcheck.
 
 ## Auth (Firebase), correo local y archivos
 

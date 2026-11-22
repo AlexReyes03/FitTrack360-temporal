@@ -1,4 +1,5 @@
-/** Fila del dataset `seed/exercises.es.json` (nombres en snake_case). */
+export const EXPECTED_EXERCISE_COUNT = 1324;
+
 export interface RawExerciseJson {
   id: string;
   name: string;
@@ -19,7 +20,6 @@ export interface RawExerciseJson {
   attribution: string;
 }
 
-/** Registro listo para el upsert de Prisma. Los opcionales vacíos quedan en null. */
 export interface ExerciseSeedRecord {
   id: string;
   name: string;
@@ -70,7 +70,27 @@ export function toExerciseSeedRecord(
   };
 }
 
-/** Devuelve el catálogo completo. No recorta la muestra. */
 export function exercisesForSeed(all: RawExerciseJson[]): ExerciseSeedRecord[] {
   return all.map(toExerciseSeedRecord);
+}
+
+export function assertUniqueExerciseIds(records: { id: string }[]): void {
+  const seen = new Set<string>();
+  for (const record of records) {
+    if (seen.has(record.id)) {
+      throw new Error(`ID de ejercicio duplicado en el catálogo: ${record.id}`);
+    }
+    seen.add(record.id);
+  }
+}
+
+export function assertExerciseCount(
+  actual: number,
+  expected: number = EXPECTED_EXERCISE_COUNT,
+): void {
+  if (actual !== expected) {
+    throw new Error(
+      `Integridad del catálogo fallida: se esperaban ${expected} ejercicios y hay ${actual}`,
+    );
+  }
 }

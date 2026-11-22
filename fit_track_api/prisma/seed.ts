@@ -1,10 +1,10 @@
-// Seed idempotente del catálogo completo (Task W11-02).
-// nameEs, level y commonErrors se copian solo cuando el JSON los trae (W11-BE-02.4).
-
 import { PrismaClient } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  EXPECTED_EXERCISE_COUNT,
+  assertExerciseCount,
+  assertUniqueExerciseIds,
   exercisesForSeed,
   type ExerciseSeedRecord,
   type RawExerciseJson,
@@ -24,9 +24,8 @@ async function main() {
   const allExercises: RawExerciseJson[] = JSON.parse(fileData);
   const records = exercisesForSeed(allExercises);
 
-  if (records.length === 0) {
-    throw new Error('El catálogo de ejercicios está vacío');
-  }
+  assertUniqueExerciseIds(records);
+  assertExerciseCount(records.length);
 
   console.log(`Iniciando seed idempotente de ${records.length} ejercicios...`);
 
@@ -48,11 +47,11 @@ function upsertExercise(record: ExerciseSeedRecord) {
   });
 }
 
-/**
- * Confirma cuántas filas quedaron en la base. No vuelca el catálogo completo.
- */
-export async function verifyExercises(): Promise<number> {
+export async function verifyExercises(
+  expected: number = EXPECTED_EXERCISE_COUNT,
+): Promise<number> {
   const total = await prisma.exercise.count();
+  assertExerciseCount(total, expected);
   console.log('\n=== Verificación de ejercicios en DB ===');
   console.log(`Total de filas encontradas: ${total}`);
   return total;

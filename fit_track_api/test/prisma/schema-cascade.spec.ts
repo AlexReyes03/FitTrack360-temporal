@@ -452,4 +452,152 @@ describe('Prisma Schema, Migrations & Cascade Rules (Tasks W11-01 & W12-01)', ()
       expect(exercises).toHaveLength(1);
     });
   });
+
+  describe('W12-15 · Índices de consulta e integridad de orden en WorkoutSet (#158)', () => {
+    it('declara @@unique([sessionId, order]) en WorkoutSet dentro del DMMF de Prisma', () => {
+      const workoutSet = getModel('WorkoutSet');
+      expect(workoutSet.uniqueFields).toContainEqual(['sessionId', 'order']);
+    });
+
+    it('incluye una migración dedicada posterior a 20261116200000_add_photos con únicamente CREATE [UNIQUE] INDEX para los 4 modelos', () => {
+      const migrationsDir = path.resolve(process.cwd(), 'prisma/migrations');
+      const migrationName = '20261121042000_add_session_set_meal_indexes';
+      const migrationPath = path.join(
+        migrationsDir,
+        migrationName,
+        'migration.sql',
+      );
+
+      expect(migrationName > '20261116200000_add_photos').toBe(true);
+      expect(fs.existsSync(migrationPath)).toBe(true);
+
+      const sql = fs.readFileSync(migrationPath, 'utf-8');
+      const statements = sql
+        .split(';')
+        .map((chunk) =>
+          chunk
+            .split('\n')
+            .filter((line) => !line.trim().startsWith('--'))
+            .join('\n')
+            .trim(),
+        )
+        .filter(Boolean);
+
+      expect(statements).toHaveLength(5);
+      for (const stmt of statements) {
+        expect(stmt).toMatch(/^CREATE (UNIQUE )?INDEX /);
+      }
+
+      expect(sql).toContain(
+        'CREATE INDEX "WorkoutSession_userId_startedAt_idx" ON "WorkoutSession"("userId", "startedAt" DESC);',
+      );
+      expect(sql).toContain(
+        'CREATE INDEX "WorkoutSet_sessionId_idx" ON "WorkoutSet"("sessionId");',
+      );
+      expect(sql).toContain(
+        'CREATE UNIQUE INDEX "WorkoutSet_sessionId_order_key" ON "WorkoutSet"("sessionId", "order");',
+      );
+      expect(sql).toContain(
+        'CREATE INDEX "MealLog_userId_eatenAt_idx" ON "MealLog"("userId", "eatenAt");',
+      );
+      expect(sql).toContain(
+        'CREATE INDEX "MealItem_mealLogId_idx" ON "MealItem"("mealLogId");',
+      );
+    });
+
+    it('rechaza insertar un order duplicado dentro del mismo sessionId con error P2002 y permite repetir order en sesiones distintas', () => {
+      interface WorkoutSetRow {
+        id: string;
+        sessionId: string;
+        exerciseId: string;
+        order: number;
+        weight: number;
+        reps: number;
+      }
+
+      const uniqueConstraints = getModel('WorkoutSet').uniqueFields;
+      const rows: WorkoutSetRow[] = [];
+
+      const insertWorkoutSet = (candidate: WorkoutSetRow): WorkoutSetRow => {
+        for (const constraint of uniqueConstraints) {
+          const duplicate = rows.some((existing) =>
+            constraint.every(
+              (field) =>
+                existing[field as keyof WorkoutSetRow] ===
+                candidate[field as keyof WorkoutSetRow],
+            ),
+          );
+          if (duplicate) {
+            throw new Prisma.PrismaClientKnownRequestError(
+              `Unique constraint failed on the fields: (${constraint.join(',')})`,
+              {
+                code: 'P2002',
+                clientVersion: Prisma.prismaVersion.client,
+                meta: { target: [...constraint] },
+              },
+            );
+          }
+        }
+        rows.push(candidate);
+        return candidate;
+      };
+
+      // Inserciones válidas dentro de session-1 con orders distintos
+      insertWorkoutSet({
+        id: 'set-1',
+        sessionId: 'session-1',
+        exerciseId: '0001',
+        order: 1,
+        weight: 60,
+        reps: 10,
+      });
+      insertWorkoutSet({
+        id: 'set-2',
+        sessionId: 'session-1',
+        exerciseId: '0001',
+        order: 2,
+        weight: 65,
+        reps: 8,
+      });
+
+      // Mismo sessionId + mismo order -> debe fallar con P2002
+      let caughtError: unknown;
+      try {
+        insertWorkoutSet({
+          id: 'set-dup',
+          sessionId: 'session-1',
+          exerciseId: '0002',
+          order: 1,
+          weight: 70,
+          reps: 8,
+        });
+      } catch (error) {
+        caughtError = error;
+      }
+
+      expect(caughtError).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+      expect((caughtError as Prisma.PrismaClientKnownRequestError).code).toBe(
+        'P2002',
+      );
+      expect(
+        (caughtError as Prisma.PrismaClientKnownRequestError).meta,
+      ).toEqual({
+        target: ['sessionId', 'order'],
+      });
+
+      // Mismo order en una sesión distinta (session-2) -> permitido
+      expect(() =>
+        insertWorkoutSet({
+          id: 'set-other-session',
+          sessionId: 'session-2',
+          exerciseId: '0001',
+          order: 1,
+          weight: 60,
+          reps: 10,
+        }),
+      ).not.toThrow();
+
+      expect(rows).toHaveLength(3);
+    });
+  });
 });

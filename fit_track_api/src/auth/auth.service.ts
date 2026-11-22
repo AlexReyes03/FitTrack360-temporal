@@ -2,8 +2,10 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthUserDto } from './dto/auth-response.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -46,16 +48,27 @@ export class AuthService {
       throw new ConflictException('El usuario ya esta registrado');
     }
 
-    const user = await this.prisma.user.create({
-      data: {
-        firebaseUid: verified.uid,
-        email: verified.email,
-        username: dto.username,
-        displayName: dto.displayName,
-        privacyConsentAt: new Date(),
-        privacyNoticeVersion: dto.privacyNoticeVersion,
-      },
-    });
+    let user;
+    try {
+      user = await this.prisma.user.create({
+        data: {
+          firebaseUid: verified.uid,
+          email: verified.email,
+          username: dto.username,
+          displayName: dto.displayName,
+          privacyConsentAt: new Date(),
+          privacyNoticeVersion: dto.privacyNoticeVersion,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('El usuario ya esta registrado');
+      }
+      throw error;
+    }
 
     return this.toDto(user);
   }
@@ -83,7 +96,10 @@ export class AuthService {
   private async verify(idToken: string): Promise<VerifiedFirebaseToken> {
     try {
       return await this.verifier.verifyIdToken(idToken);
-    } catch {
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) {
+        throw error;
+      }
       throw new UnauthorizedException('Token invalido');
     }
   }

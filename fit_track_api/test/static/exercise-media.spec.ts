@@ -67,7 +67,7 @@ async function bootstrapMediaApp(
 
   const app = await NestFactory.create<INestApplication<App>>(
     MediaProbeModule,
-    { logger: false },
+    { logger: false, bodyParser: false },
   );
   configureApp(app);
   await app.init();

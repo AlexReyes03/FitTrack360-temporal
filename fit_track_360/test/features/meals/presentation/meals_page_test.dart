@@ -10,11 +10,13 @@ import 'package:fit_track_360/features/meals/domain/meal_type.dart';
 import 'package:fit_track_360/features/meals/domain/meals_repository.dart';
 import 'package:fit_track_360/features/meals/presentation/food_search_page.dart';
 import 'package:fit_track_360/features/meals/presentation/food_search_view_model.dart';
+import 'package:fit_track_360/core/widgets/remote_state_views.dart';
 import 'package:fit_track_360/features/meals/presentation/meals_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../settings/fakes.dart' show FakeConnectivityService;
 import '../fakes.dart';
 
 Finder _field(String key) =>
@@ -51,28 +53,13 @@ MealEntry _lunch(List<MealItem> items, {bool legacy = false}) => MealEntry(
   isLegacy: legacy,
 );
 
-Future<void> _pumpPage(
-  WidgetTester tester,
-  FakeMealsRepository meals,
-  FakeFoodSearchRepository foods,
-) async {
-  tester.view.physicalSize = const Size(1080, 2400);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-  await tester.pumpWidget(
-    MaterialApp(
-      home: MealsPage(mealsRepository: meals, foodsRepository: foods),
-    ),
-  );
-  await tester.pumpAndSettle();
-}
-
-/// MealsPage dentro de GoRouter, como en la app (`/app/comidas`).
+/// MealsPage dentro de GoRouter, como en la app (`/app/comidas` + buscar).
 Future<void> _pumpRouted(
   WidgetTester tester,
   FakeMealsRepository meals,
   FakeFoodSearchRepository foods, {
   String initialLocation = '/app/comidas',
+  FakeConnectivityService? connectivity,
 }) async {
   tester.view.physicalSize = const Size(1080, 2400);
   tester.view.devicePixelRatio = 1;
@@ -82,11 +69,14 @@ Future<void> _pumpRouted(
     routes: [
       GoRoute(
         path: '/app/comidas',
-        builder: (context, state) =>
-            MealsPage(mealsRepository: meals, foodsRepository: foods),
+        builder: (context, state) => MealsPage(
+          mealsRepository: meals,
+          foodsRepository: foods,
+          connectivityService: connectivity ?? FakeConnectivityService(),
+        ),
       ),
       GoRoute(
-        path: '/app/comidas/agregar',
+        path: '/app/comidas/buscar',
         builder: (context, state) => FoodSearchPage(repository: foods),
       ),
       GoRoute(path: '/login', builder: (context, state) => const Text('login')),
@@ -95,6 +85,27 @@ Future<void> _pumpRouted(
   await tester.pumpWidget(MaterialApp.router(routerConfig: router));
   await tester.pumpAndSettle();
 }
+
+Future<void> _pumpPage(
+  WidgetTester tester,
+  FakeMealsRepository meals,
+  FakeFoodSearchRepository foods, {
+  FakeConnectivityService? connectivity,
+}) => _pumpRouted(tester, meals, foods, connectivity: connectivity);
+
+/// «Reintentar» de la vista de error (el banner offline tiene el suyo).
+final _errorRetry = find.descendant(
+  of: find.byType(RemoteErrorView),
+  matching: find.text('Reintentar'),
+);
+
+NewMealEntry _rice() => NewMealEntry(
+  mealType: MealType.lunch,
+  eatenAt: DateTime.now(),
+  name: 'Arroz',
+  portionG: 150,
+  macros: const Macros(kcal: 195, proteinG: 4, carbsG: 42, fatG: 0.5),
+);
 
 Future<void> _addManually(WidgetTester tester, String name, String kcal) async {
   await tester.tap(find.text('Agregar alimento'));
@@ -310,7 +321,7 @@ void main() {
       tester,
       FakeMealsRepository(),
       FakeFoodSearchRepository(),
-      initialLocation: '/app/comidas/agregar',
+      initialLocation: '/app/comidas/buscar',
     );
 
     await tester.tap(find.byTooltip('Volver'));
@@ -638,5 +649,61 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(meals.deletes, ['m1']);
+  });
+
+  group('estados remotos y conectividad', () {
+    testWidgets('sin red muestra el banner offline', (tester) async {
+      await _pumpPage(
+        tester,
+        FakeMealsRepository(),
+        FakeFoodSearchRepository(),
+        connectivity: FakeConnectivityService(online: false),
+      );
+      expect(find.text('Sin conexión'), findsOneWidget);
+    });
+
+    testWidgets('Reintentar de la vista de error recarga y muestra datos', (
+      tester,
+    ) async {
+      final meals = FakeMealsRepository()..listError = Exception('red');
+      await _pumpPage(
+        tester,
+        meals,
+        FakeFoodSearchRepository(),
+        connectivity: FakeConnectivityService(online: false),
+      );
+      // Banner offline y vista de error muestran «Reintentar» a la vez.
+      expect(find.text('Reintentar'), findsNWidgets(2));
+
+      meals.listError = null;
+      await meals.add(_rice());
+      await tester.tap(_errorRetry);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RemoteErrorView), findsNothing);
+      expect(find.text('Comida · 195 kcal'), findsOneWidget);
+    });
+
+    testWidgets('al recuperar la red tras un fallo recarga sola', (
+      tester,
+    ) async {
+      final connectivity = FakeConnectivityService(online: false);
+      final meals = FakeMealsRepository()..listError = Exception('red');
+      await _pumpPage(
+        tester,
+        meals,
+        FakeFoodSearchRepository(),
+        connectivity: connectivity,
+      );
+      expect(find.byType(RemoteErrorView), findsOneWidget);
+
+      meals.listError = null;
+      await meals.add(_rice());
+      connectivity.emit(true);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RemoteErrorView), findsNothing);
+      expect(find.text('Comida · 195 kcal'), findsOneWidget);
+    });
   });
 }

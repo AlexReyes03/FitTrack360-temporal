@@ -10,8 +10,10 @@ import '../../../core/widgets/offline_banner.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
-import '../../../design_system/widgets/app_background.dart';
 import '../../auth/data/logout_service.dart';
+import 'widgets/glass_bottom_nav_bar.dart';
+import 'widgets/home_navigation_shell.dart';
+import 'widgets/quick_actions_row.dart';
 
 /// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion
 /// (Firebase + revocacion Nest), volviendo a login.
@@ -86,130 +88,154 @@ class _HomeShellPageState extends State<HomeShellPage> {
     context.go('/login');
   }
 
+  static const List<GlassNavDestination> _destinations = [
+    GlassNavDestination(
+      label: 'Inicio',
+      icon: Icons.home_outlined,
+      selectedIcon: Icons.home_rounded,
+    ),
+    GlassNavDestination(
+      label: 'Entrenos',
+      icon: Icons.fitness_center_outlined,
+      selectedIcon: Icons.fitness_center_rounded,
+    ),
+    GlassNavDestination(
+      label: 'Comidas',
+      icon: Icons.restaurant_outlined,
+      selectedIcon: Icons.restaurant_rounded,
+    ),
+    GlassNavDestination(
+      label: 'Ejercicios',
+      icon: Icons.sports_gymnastics_outlined,
+      selectedIcon: Icons.sports_gymnastics_rounded,
+    ),
+    GlassNavDestination(
+      label: 'Progreso',
+      icon: Icons.photo_camera_outlined,
+      selectedIcon: Icons.photo_camera_rounded,
+    ),
+    GlassNavDestination(
+      label: 'Perfil',
+      icon: Icons.person_outline_rounded,
+      selectedIcon: Icons.person_rounded,
+    ),
+  ];
+
+  void _onDestinationSelected(int index) {
+    switch (index) {
+      case 0:
+        return;
+      case 1:
+        context.push('/app/entrenamientos');
+      case 2:
+        context.push('/app/comidas');
+      case 3:
+        context.push('/app/ejercicios');
+      case 4:
+        context.push('/app/foto');
+      case 5:
+        context.push('/app/perfil');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
+    return HomeNavigationShell(
+      topBanner: OfflineBanner(service: _connectivity, onRetry: _loadProfile),
+      header: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+        child: _Header(onProfileTap: () => context.push('/app/perfil')),
+      ),
+      destinations: _destinations,
+      selectedIndex: 0,
+      onDestinationSelected: _onDestinationSelected,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GlassSurface(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  OfflineBanner(service: _connectivity, onRetry: _loadProfile),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                    child: _Header(
-                      onProfileTap: () => context.push('/app/perfil'),
+                  Text(
+                    _displayName == null
+                        ? 'Hola, bienvenido'
+                        : 'Hola, $_displayName',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: GlassSurface(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              _displayName == null
-                                  ? 'Hola, bienvenido'
-                                  : 'Hola, $_displayName',
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Aqui va tu resumen de entrenamientos, comidas y progreso.',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Container(
-                              height: 160,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                color: Colors.white.withValues(alpha: 0.035),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'Contenido proximo',
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Aqui va tu resumen de entrenamientos, comidas y progreso.',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      color: Colors.white.withValues(alpha: 0.035),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.08),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    // Wrap evita el desborde del Row con tres accesos en
-                    // pantallas estrechas.
-                    child: Wrap(
-                      children: [
-                        TextButton(
-                          onPressed: () => context.push('/app/foto'),
-                          child: const Text(
-                            'Agregar foto',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
+                    child: const Center(
+                      child: Text(
+                        'Contenido proximo',
+                        style: TextStyle(
+                          color: AppColors.textMuted,
+                          fontSize: 14,
                         ),
-                        TextButton(
-                          onPressed: () => context.push('/app/entrenamientos'),
-                          child: const Text(
-                            'Entrenamientos',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/ejercicios'),
-                          child: const Text(
-                            'Ejercicios',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/comidas'),
-                          child: const Text(
-                            'Comidas',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/perfil'),
-                          child: const Text(
-                            'Perfil',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: PrimaryButton(
-                      label: _loggingOut ? 'Cerrando...' : 'Cerrar sesión',
-                      onPressed: _loggingOut ? null : _logout,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
+            const SizedBox(height: 18),
+            QuickActionsRow(
+              actions: [
+                QuickActionItem(
+                  label: 'Nuevo entreno',
+                  subtitle: 'Registrar sesión',
+                  icon: Icons.fitness_center_rounded,
+                  onTap: () => context.push('/app/entrenamientos'),
+                ),
+                QuickActionItem(
+                  label: 'Registrar comida',
+                  subtitle: 'Calorías y macros',
+                  icon: Icons.restaurant_rounded,
+                  onTap: () => context.push('/app/comidas'),
+                ),
+                QuickActionItem(
+                  label: 'Foto progreso',
+                  subtitle: 'Guardar avance',
+                  icon: Icons.photo_camera_outlined,
+                  onTap: () => context.push('/app/foto'),
+                ),
+                QuickActionItem(
+                  label: 'Tracker diario',
+                  subtitle: 'Próximamente',
+                  icon: Icons.insights_rounded,
+                  onTap: () => context.push('/app/tracker'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      footer: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 6),
+        child: PrimaryButton(
+          label: _loggingOut ? 'Cerrando...' : 'Cerrar sesión',
+          onPressed: _loggingOut ? null : _logout,
         ),
       ),
     );

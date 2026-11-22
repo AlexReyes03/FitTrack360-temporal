@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/async_state.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
@@ -28,30 +31,95 @@ class NotificationsPage extends StatefulWidget {
 class _NotificationsPageState extends State<NotificationsPage> {
   NotificationsViewModel? _viewModel;
   bool _ownsViewModel = false;
+  bool _didTriggerInitialLoad = false;
+  bool _showingMutationError = false;
+  final Set<String> _pendingDismissIds = <String>{};
 
   @override
   void initState() {
     super.initState();
-    _viewModel = widget.viewModel;
+    final injected = widget.viewModel;
+    if (injected != null) {
+      _attachViewModel(injected);
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_viewModel != null) return;
-    final scope = NotificationsScope.maybeOf(context);
-    if (scope != null) {
-      _viewModel = scope;
-    } else {
-      _viewModel = NotificationsViewModel();
-      _ownsViewModel = true;
+    if (_viewModel == null) {
+      final scope = NotificationsScope.maybeOf(context);
+      if (scope != null) {
+        _attachViewModel(scope);
+      } else {
+        _ownsViewModel = true;
+        _attachViewModel(NotificationsViewModel());
+      }
     }
+    final viewModel = _viewModel;
+    if (viewModel != null && !_didTriggerInitialLoad && !viewModel.hasLoaded) {
+      _didTriggerInitialLoad = true;
+      scheduleMicrotask(() {
+        if (mounted) unawaited(viewModel.load());
+      });
+    }
+    _handleViewModelChanged();
   }
 
   @override
   void dispose() {
+    _viewModel?.removeListener(_handleViewModelChanged);
     if (_ownsViewModel) _viewModel?.dispose();
     super.dispose();
+  }
+
+  void _attachViewModel(NotificationsViewModel viewModel) {
+    if (identical(_viewModel, viewModel)) return;
+    _viewModel?.removeListener(_handleViewModelChanged);
+    _viewModel = viewModel;
+    viewModel.addListener(_handleViewModelChanged);
+  }
+
+  void _handleViewModelChanged() {
+    final viewModel = _viewModel;
+    if (viewModel == null || !mounted) return;
+    final error = viewModel.mutationError;
+    if (error == null || _showingMutationError) return;
+    _showingMutationError = true;
+    scheduleMicrotask(() {
+      if (!mounted) return;
+      viewModel.clearMutationError();
+      _showingMutationError = false;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              error,
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+            backgroundColor: AppColors.bgMid,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+    });
+  }
+
+  /// Permite desmontar el [Dismissible] en el frame actual aunque el API falle
+  /// de inmediato y restaure la notificación en el mismo microtask.
+  void _onDismissNotification(String id) {
+    final viewModel = _viewModel;
+    if (viewModel == null) return;
+    setState(() => _pendingDismissIds.add(id));
+    unawaited(viewModel.deleteNotification(id));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_pendingDismissIds.remove(id)) {
+        setState(() {});
+      }
+    });
   }
 
   void _goBack() {
@@ -82,7 +150,13 @@ class _NotificationsPageState extends State<NotificationsPage> {
                 children: [
                   _Header(onBack: _goBack),
                   _FilterControls(viewModel: viewModel),
-                  Expanded(child: _NotificationList(viewModel: viewModel)),
+                  Expanded(
+                    child: _NotificationList(
+                      viewModel: viewModel,
+                      pendingDismissIds: _pendingDismissIds,
+                      onDismissNotification: _onDismissNotification,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -368,12 +442,36 @@ class _ActionPillButton extends StatelessWidget {
 }
 
 class _NotificationList extends StatelessWidget {
-  const _NotificationList({required this.viewModel});
+  const _NotificationList({
+    required this.viewModel,
+    required this.pendingDismissIds,
+    required this.onDismissNotification,
+  });
 
   final NotificationsViewModel viewModel;
+  final Set<String> pendingDismissIds;
+  final ValueChanged<String> onDismissNotification;
 
   @override
   Widget build(BuildContext context) {
+    if (viewModel.state is AsyncLoading<List<AppNotification>> &&
+        viewModel.notifications.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.accentWhite),
+      );
+    }
+
+    if (viewModel.state is AsyncError<List<AppNotification>> &&
+        viewModel.notifications.isEmpty) {
+      return _EmptyState(
+        icon: Icons.cloud_off_rounded,
+        title: 'No pudimos cargar tus notificaciones',
+        message: 'Verifica tu conexión e intenta nuevamente.',
+        actionLabel: 'Reintentar',
+        onAction: viewModel.load,
+      );
+    }
+
     if (viewModel.isEmpty) {
       return const _EmptyState(
         icon: Icons.notifications_off_outlined,
@@ -395,6 +493,14 @@ class _NotificationList extends StatelessWidget {
       );
     }
 
+    final visibleNotifications = pendingDismissIds.isEmpty
+        ? notifications
+        : notifications
+              .where(
+                (notification) => !pendingDismissIds.contains(notification.id),
+              )
+              .toList(growable: false);
+
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -402,10 +508,10 @@ class _NotificationList extends StatelessWidget {
         AppSpacing.md,
         AppSpacing.lg,
       ),
-      itemCount: notifications.length,
+      itemCount: visibleNotifications.length,
       separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
       itemBuilder: (context, index) {
-        final notification = notifications[index];
+        final notification = visibleNotifications[index];
         return Dismissible(
           key: ValueKey(notification.id),
           direction: DismissDirection.endToStart,
@@ -441,7 +547,7 @@ class _NotificationList extends StatelessWidget {
               ],
             ),
           ),
-          onDismissed: (_) => viewModel.deleteNotification(notification.id),
+          onDismissed: (_) => onDismissNotification(notification.id),
           child: _NotificationCard(
             notification: notification,
             onToggleRead: () => viewModel.toggleRead(notification.id),

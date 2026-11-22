@@ -183,6 +183,15 @@ class _ProgressPageState extends State<ProgressPage> {
     _selectedRange = widget.initialRange;
   }
 
+  @override
+  void didUpdateWidget(covariant ProgressPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialRange != oldWidget.initialRange &&
+        widget.initialRange != _selectedRange) {
+      _selectedRange = widget.initialRange;
+    }
+  }
+
   void _handleRangeSelected(ProgressRange range) {
     if (_selectedRange == range) return;
     setState(() => _selectedRange = range);
@@ -256,6 +265,21 @@ class _ProgressPageState extends State<ProgressPage> {
                   onCompareFullScreen: widget.onComparePhotos,
                   onAddPhoto: widget.onAddPhoto,
                   onRetry: widget.onRetryComparison,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                  ),
+                  child: Text(
+                    'Seguimiento personal orientativo. No sustituye valoración ni diagnóstico médico.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.caption.copyWith(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
                 ),
               ],
             ),

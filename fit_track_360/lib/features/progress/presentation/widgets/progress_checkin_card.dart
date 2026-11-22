@@ -9,12 +9,14 @@ import '../../domain/body_weight_validation.dart';
 import '../state/progress_view_state.dart';
 import 'progress_section_shell.dart';
 
-/// Formulario Liquid Glass de check-in diario: peso, notas y slot de foto P1.
+/// Formulario Liquid Glass de check-in diario: peso, medidas opcionales, notas y foto P1.
 class ProgressCheckInCard extends StatefulWidget {
   const ProgressCheckInCard({
     super.key,
     this.status = ProgressSectionStatus.data,
     this.initialWeightText = '',
+    this.initialBodyFatText = '',
+    this.initialWaistText = '',
     this.initialNotesText = '',
     this.selectedPhotoLabel,
     this.isSubmitting = false,
@@ -26,12 +28,13 @@ class ProgressCheckInCard extends StatefulWidget {
 
   final ProgressSectionStatus status;
   final String initialWeightText;
+  final String initialBodyFatText;
+  final String initialWaistText;
   final String initialNotesText;
   final String? selectedPhotoLabel;
   final bool isSubmitting;
 
-  /// Resultado del último envío (lo decide el ViewModel, p. ej. que el peso
-  /// aún no se guarda por #122).
+  /// Resultado del último envío (éxito o error decidido por el ViewModel).
   final String? feedbackMessage;
   final VoidCallback? onSelectPhoto;
   final ValueChanged<ProgressCheckInDraft>? onSubmit;
@@ -42,33 +45,112 @@ class ProgressCheckInCard extends StatefulWidget {
 }
 
 class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
+  static final RegExp _decimal = RegExp(r'^\d+([.,]\d+)?$');
+
   late final TextEditingController _weightController;
+  late final TextEditingController _bodyFatController;
+  late final TextEditingController _waistController;
   late final TextEditingController _notesController;
   String? _weightError;
+  String? _bodyFatError;
+  String? _waistError;
+  bool _awaitingSubmitResult = false;
 
   @override
   void initState() {
     super.initState();
     _weightController = TextEditingController(text: widget.initialWeightText);
+    _bodyFatController = TextEditingController(text: widget.initialBodyFatText);
+    _waistController = TextEditingController(text: widget.initialWaistText);
     _notesController = TextEditingController(text: widget.initialNotesText);
+  }
+
+  @override
+  void didUpdateWidget(covariant ProgressCheckInCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final finishedSubmit =
+        (oldWidget.isSubmitting || _awaitingSubmitResult) &&
+        !widget.isSubmitting;
+    if (!finishedSubmit) return;
+
+    if (_isSuccessFeedback(widget.feedbackMessage)) {
+      _weightController.clear();
+      _bodyFatController.clear();
+      _waistController.clear();
+      _notesController.clear();
+      _weightError = null;
+      _bodyFatError = null;
+      _waistError = null;
+      _awaitingSubmitResult = false;
+    } else if (widget.feedbackMessage != null) {
+      _awaitingSubmitResult = false;
+    }
   }
 
   @override
   void dispose() {
     _weightController.dispose();
+    _bodyFatController.dispose();
+    _waistController.dispose();
     _notesController.dispose();
     super.dispose();
   }
 
-  void _handleSubmit() {
-    final validation = validateBodyWeightKg(_weightController.text);
-    final weightKg = validation.weightKg;
-    setState(() => _weightError = validation.error);
-    if (weightKg == null) return;
+  static bool _isSuccessFeedback(String? message) {
+    if (message == null) return false;
+    return message.trim().toLowerCase().startsWith('check-in registrado');
+  }
 
+  static ({double? value, String? error}) _validateBodyFat(String input) {
+    final text = input.trim();
+    if (text.isEmpty) return (value: null, error: null);
+    if (!_decimal.hasMatch(text)) {
+      return (value: null, error: 'Ingresa un valor entre 0 y 100.');
+    }
+    final value = double.tryParse(text.replaceAll(',', '.'));
+    if (value == null || !value.isFinite || value < 0 || value > 100) {
+      return (value: null, error: 'Ingresa un valor entre 0 y 100.');
+    }
+    return (value: value, error: null);
+  }
+
+  static ({double? value, String? error}) _validateWaist(String input) {
+    final text = input.trim();
+    if (text.isEmpty) return (value: null, error: null);
+    if (!_decimal.hasMatch(text)) {
+      return (value: null, error: 'Ingresa un valor mayor a 0.');
+    }
+    final value = double.tryParse(text.replaceAll(',', '.'));
+    if (value == null || !value.isFinite || value <= 0) {
+      return (value: null, error: 'Ingresa un valor mayor a 0.');
+    }
+    return (value: value, error: null);
+  }
+
+  void _handleSubmit() {
+    final weightValidation = validateBodyWeightKg(_weightController.text);
+    final bodyFatValidation = _validateBodyFat(_bodyFatController.text);
+    final waistValidation = _validateWaist(_waistController.text);
+    setState(() {
+      _weightError = weightValidation.error;
+      _bodyFatError = bodyFatValidation.error;
+      _waistError = waistValidation.error;
+    });
+    final weightKg = weightValidation.weightKg;
+    if (weightKg == null ||
+        bodyFatValidation.error != null ||
+        waistValidation.error != null) {
+      return;
+    }
+
+    if (widget.onSubmit != null) {
+      _awaitingSubmitResult = true;
+    }
     widget.onSubmit?.call(
       ProgressCheckInDraft(
         weightKg: weightKg,
+        bodyFatPercent: bodyFatValidation.value,
+        waistCm: waistValidation.value,
         notesText: _notesController.text.trim(),
         hasPhotoSelected: widget.selectedPhotoLabel != null,
       ),
@@ -92,6 +174,7 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DsTextField(
+            key: const Key('checkin-weight-field'),
             controller: _weightController,
             label: 'Peso corporal (kg)',
             hint: 'Ej. 74.2',
@@ -105,7 +188,51 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
             },
           ),
           const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: DsTextField(
+                  key: const Key('checkin-body-fat-field'),
+                  controller: _bodyFatController,
+                  label: '% grasa corporal (opcional)',
+                  hint: 'Ej. 18.5',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  enabled: !widget.isSubmitting,
+                  errorText: _bodyFatError,
+                  onChanged: (_) {
+                    if (_bodyFatError != null) {
+                      setState(() => _bodyFatError = null);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: DsTextField(
+                  key: const Key('checkin-waist-field'),
+                  controller: _waistController,
+                  label: 'Cintura en cm (opcional)',
+                  hint: 'Ej. 82.0',
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  enabled: !widget.isSubmitting,
+                  errorText: _waistError,
+                  onChanged: (_) {
+                    if (_waistError != null) {
+                      setState(() => _waistError = null);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
           DsTextField(
+            key: const Key('checkin-notes-field'),
             controller: _notesController,
             label: 'Notas del día (opcional)',
             hint: 'Ej. Medición en ayunas, buen descanso',

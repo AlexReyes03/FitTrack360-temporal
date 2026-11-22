@@ -37,6 +37,20 @@ void main() {
     expect(find.text('Comparación de fotos'), findsOneWidget);
     expect(find.text('Inicial'), findsOneWidget);
     expect(find.text('Actual'), findsWidgets);
+
+    await tester.scrollUntilVisible(
+      find.text(
+        'Seguimiento personal orientativo. No sustituye valoración ni diagnóstico médico.',
+      ),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.text(
+        'Seguimiento personal orientativo. No sustituye valoración ni diagnóstico médico.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('cambiar rango actualiza la vista y dispara onRangeChanged', (
@@ -53,6 +67,22 @@ void main() {
 
     expect(selected, ProgressRange.d90);
     expect(find.text('Últimos 90 días'), findsOneWidget);
+  });
+
+  testWidgets('sincroniza el rango cuando initialRange cambia desde el padre', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(const ProgressPage(initialRange: ProgressRange.d30)),
+    );
+    expect(find.text('Últimos 30 días'), findsOneWidget);
+
+    await tester.pumpWidget(
+      wrap(const ProgressPage(initialRange: ProgressRange.y1)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Último año'), findsOneWidget);
   });
 
   testWidgets('renderiza estados loading, empty y error con reintentar', (
@@ -76,6 +106,8 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('Reintentar'));
+    await tester.pumpAndSettle();
     expect(
       find.text('No se pudo cargar el historial de progreso.'),
       findsOneWidget,
@@ -117,10 +149,36 @@ void main() {
     );
     expect(submitted, isNull);
 
-    await tester.ensureVisible(find.byType(TextField).first);
+    await tester.ensureVisible(find.byKey(const Key('checkin-weight-field')));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).first, '73.8');
-    await tester.enterText(find.byType(TextField).at(1), 'Buen descanso');
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('checkin-weight-field')),
+        matching: find.byType(TextField),
+      ),
+      '73.8',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('checkin-body-fat-field')),
+        matching: find.byType(TextField),
+      ),
+      '18.5',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('checkin-waist-field')),
+        matching: find.byType(TextField),
+      ),
+      '82.0',
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('checkin-notes-field')),
+        matching: find.byType(TextField),
+      ),
+      'Buen descanso',
+    );
 
     await tester.ensureVisible(find.text('Agregar foto de progreso'));
     await tester.pumpAndSettle();
@@ -134,6 +192,8 @@ void main() {
     await tester.pump();
     expect(submitted, isNotNull);
     expect(submitted!.weightKg, 73.8);
+    expect(submitted!.bodyFatPercent, 18.5);
+    expect(submitted!.waistCm, 82.0);
     expect(submitted!.notesText, 'Buen descanso');
   });
 
@@ -192,6 +252,105 @@ void main() {
       expect(submitted, isNotNull);
       expect(submitted!.weightKg, 73.8);
       expect(find.textContaining('listo para guardar'), findsNothing);
+    });
+  });
+
+  group('validación de medidas opcionales y limpieza del check-in', () {
+    Finder fieldFor(String key) => find.descendant(
+      of: find.byKey(Key(key)),
+      matching: find.byType(TextField),
+    );
+
+    testWidgets('rechaza % grasa corporal y cintura fuera de rango', (
+      tester,
+    ) async {
+      ProgressCheckInDraft? submitted;
+      await tester.pumpWidget(
+        wrap(ProgressPage(onSubmitCheckIn: (draft) => submitted = draft)),
+      );
+
+      await tester.ensureVisible(fieldFor('checkin-weight-field'));
+      await tester.pumpAndSettle();
+      await tester.enterText(fieldFor('checkin-weight-field'), '74.0');
+      await tester.enterText(fieldFor('checkin-body-fat-field'), '105');
+      await tester.enterText(fieldFor('checkin-waist-field'), '0');
+
+      await tester.ensureVisible(find.text('Guardar check-in'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guardar check-in'));
+      await tester.pump();
+
+      expect(submitted, isNull);
+      expect(find.text('Ingresa un valor entre 0 y 100.'), findsOneWidget);
+      expect(find.text('Ingresa un valor mayor a 0.'), findsOneWidget);
+    });
+
+    testWidgets('limpia el formulario solo cuando el check-in guarda bien', (
+      tester,
+    ) async {
+      ProgressCheckInDraft? submitted;
+      await tester.pumpWidget(
+        wrap(
+          ProgressPage(
+            isSubmittingCheckIn: false,
+            onSubmitCheckIn: (draft) => submitted = draft,
+          ),
+        ),
+      );
+
+      await tester.ensureVisible(fieldFor('checkin-weight-field'));
+      await tester.pumpAndSettle();
+      await tester.enterText(fieldFor('checkin-weight-field'), '73,5');
+      await tester.enterText(fieldFor('checkin-body-fat-field'), '17,2');
+      await tester.enterText(fieldFor('checkin-waist-field'), '80,5');
+      await tester.enterText(fieldFor('checkin-notes-field'), 'En ayunas');
+
+      await tester.ensureVisible(find.text('Guardar check-in'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Guardar check-in'));
+      await tester.pump();
+      expect(submitted?.bodyFatPercent, 17.2);
+      expect(submitted?.waistCm, 80.5);
+
+      await tester.pumpWidget(
+        wrap(const ProgressPage(isSubmittingCheckIn: true)),
+      );
+      await tester.pumpWidget(
+        wrap(
+          const ProgressPage(
+            isSubmittingCheckIn: false,
+            checkInFeedback: 'No se pudo completar el check-in.',
+          ),
+        ),
+      );
+      expect(
+        tester
+            .widget<TextField>(fieldFor('checkin-weight-field'))
+            .controller!
+            .text,
+        '73,5',
+      );
+
+      await tester.pumpWidget(
+        wrap(const ProgressPage(isSubmittingCheckIn: true)),
+      );
+      await tester.pumpWidget(
+        wrap(
+          const ProgressPage(
+            isSubmittingCheckIn: false,
+            checkInFeedback: 'Check-in registrado correctamente.',
+          ),
+        ),
+      );
+
+      for (final key in [
+        'checkin-weight-field',
+        'checkin-body-fat-field',
+        'checkin-waist-field',
+        'checkin-notes-field',
+      ]) {
+        expect(tester.widget<TextField>(fieldFor(key)).controller!.text, '');
+      }
     });
   });
 

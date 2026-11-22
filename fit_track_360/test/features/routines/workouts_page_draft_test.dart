@@ -15,6 +15,11 @@ import 'package:http/testing.dart';
 import '../settings/fakes.dart' show FakeConnectivityService;
 
 class _FakeWorkoutsApi implements WorkoutsApi {
+  @override
+  Future<WorkoutSession> update(String id, Map<String, dynamic> payload) =>
+      throw UnimplementedError();
+  @override
+  Future<void> delete(String id) => throw UnimplementedError();
   final created = <WorkoutSessionDraft>[];
 
   @override
@@ -222,6 +227,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Crear sesión'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workout-form-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.drag(
+      find.byKey(const Key('workout-form-scroll')),
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Crear sesión'));
     await tester.pumpAndSettle();
 
@@ -230,6 +251,22 @@ void main() {
     expect(find.text('Sentadilla'), findsNothing);
     expect(find.text('Sesión guardada'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('Crear sesión'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workout-form-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.drag(
+      find.byKey(const Key('workout-form-scroll')),
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Crear sesión'));
     await tester.pumpAndSettle();
 
@@ -263,7 +300,36 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Hecha desde la rutina');
+    await tester.scrollUntilVisible(
+      find.widgetWithText(TextField, 'Opcional'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workout-form-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Opcional'),
+      'Hecha desde la rutina',
+    );
+    await tester.scrollUntilVisible(
+      find.text('Crear sesión'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workout-form-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.drag(
+      find.byKey(const Key('workout-form-scroll')),
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Crear sesión'));
     await tester.pumpAndSettle();
 
@@ -298,6 +364,22 @@ void main() {
       MaterialApp(
         home: WorkoutsPage(api: api, draft: _repeatedDraft),
       ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Crear sesión'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workout-form-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.drag(
+      find.byKey(const Key('workout-form-scroll')),
+      const Offset(0, -120),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Crear sesión'));

@@ -15,6 +15,8 @@ Este documento establece la arquitectura global del sistema FitTrack360, detalla
 | **A-03** | **Aislamiento por identidad con respuesta 404 (Regla S4):** Toda consulta a un recurso que pertenezca a otro usuario responde `404 Not Found` en lugar de `403 Forbidden`. | Devolver código de error `403 Forbidden` ante intentos de acceso no autorizados. | Responder `403` revela a un atacante que el recurso existe en la base de datos (fuga de metadatos); responder `404` oculta totalmente la existencia del registro ajeno. | 2026-10-22 |
 | **A-04** | **Sanitización de imágenes en el servidor:** Las fotos de progreso corporal y comidas subidas por el usuario son procesadas con la biblioteca `sharp` para eliminar metadatos EXIF y coordenadas GPS antes de almacenarlas. | Guardar las imágenes directamente en el sistema de archivos tal como llegan desde el dispositivo móvil. | Protege la privacidad física del usuario eliminando la ubicación geográfica exacta donde se tomó la fotografía y reduce el tamaño de almacenamiento en disco. | 2026-10-22 |
 
+| **A-05** | **Edición de sesiones con ejercicios del catálogo:** el formulario usa identificadores del catálogo y muestra el descanso de preferencias como referencia temporal, sin guardarlo en la sesión. | Nombre libre o descanso por serie sin modelo persistente. | Respeta la clave foránea existente y evita simular persistencia de un dato que el contrato aún no soporta. | 2026-11-22 |
+
 ---
 
 ## 3. Cómo se compone el sistema

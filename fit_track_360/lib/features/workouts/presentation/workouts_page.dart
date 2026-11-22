@@ -13,6 +13,8 @@ import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
+import '../../settings/data/profile_api_repository.dart';
+import 'session_exercise_editor.dart';
 import '../data/workout_session.dart';
 import '../data/workouts_api.dart';
 import '../domain/workout_session_draft.dart';
@@ -22,11 +24,15 @@ class WorkoutsPage extends StatefulWidget {
     super.key,
     this.api,
     this.draft,
+    this.editingSession,
+    this.profileClient,
     this.apiClientFactory = ApiClient.new,
     this.connectivityService,
   });
 
   final WorkoutsApi? api;
+  final WorkoutSession? editingSession;
+  final ApiClient? profileClient;
 
   /// Crea el cliente HTTP propio solo cuando no se inyecta [api].
   final ApiClient Function() apiClientFactory;
@@ -47,15 +53,71 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       widget.connectivityService ?? ConnectivityService();
   StreamSubscription<bool>? _connectivitySubscription;
   late final TextEditingController _notesController = TextEditingController(
-    text: widget.draft?.notes,
+    text: widget.editingSession?.notes ?? widget.draft?.notes,
   );
 
   /// Borrador pendiente de guardar; se descarta al crear la sesión.
-  late WorkoutSessionDraft? _draft = widget.draft;
+  late WorkoutSessionDraft? _draft =
+      widget.draft ?? _draftFromSession(widget.editingSession);
+  List<PlannedExercise>? _editedExercises;
+  List<PlannedSet>? _editedSets;
+  final _restController = TextEditingController(text: '90');
+  int _editorKey = 0;
+
+  WorkoutSessionDraft? _draftFromSession(WorkoutSession? session) {
+    if (session == null) return null;
+    final groups = <String, List<dynamic>>{};
+    for (final set in session.sets) {
+      if (set.exerciseId != null) {
+        groups.putIfAbsent(set.exerciseId!, () => []).add(set);
+      }
+    }
+    return WorkoutSessionDraft(
+      startedAt: session.startedAt,
+      notes: session.notes,
+      exercises: [
+        for (final e in groups.entries)
+          PlannedExercise(
+            exerciseId: e.key,
+            exerciseName: e.value.first.exerciseName as String,
+            position: groups.keys.toList().indexOf(e.key),
+            targetSets: e.value.length,
+            targetReps: e.value.first.reps as int,
+          ),
+      ],
+      sets: [
+        for (final set in session.sets)
+          if (set.exerciseId != null)
+            PlannedSet(
+              exerciseId: set.exerciseId!,
+              order: set.order ?? 1,
+              weightKg: set.weightKg ?? 0,
+              reps: set.reps,
+            ),
+      ],
+    );
+  }
+
+  Future<void> _loadRest() async {
+    final client = _ownClient ?? widget.profileClient;
+    if (client == null) return;
+    try {
+      final profile = await ProfileApiRepository(client).fetchProfile();
+      if (mounted && profile != null) {
+        setState(
+          () => _restController.text = '${profile.preferences.restSeconds}',
+        );
+      }
+    } catch (_) {
+      /* El valor por defecto funciona sin perfil disponible. */
+    }
+  }
 
   AsyncState<List<WorkoutSession>> _state = const AsyncLoading();
   late DateTime _startedAt =
-      widget.draft?.startedAt.toLocal() ?? DateTime.now();
+      widget.editingSession?.startedAt.toLocal() ??
+      widget.draft?.startedAt.toLocal() ??
+      DateTime.now();
   bool _creating = false;
   bool _saved = false;
   String? _formError;
@@ -68,12 +130,14 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
     );
     _load();
+    if (widget.api == null || widget.profileClient != null) _loadRest();
   }
 
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
     _notesController.dispose();
+    _restController.dispose();
     _ownClient?.dispose();
     super.dispose();
   }
@@ -122,6 +186,18 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   }
 
   Future<void> _create() async {
+    final rest = int.tryParse(_restController.text);
+    if (rest == null ||
+        rest < 0 ||
+        (_editedSets?.any(
+              (s) => s.reps < 1 || s.weightKg < 0 || !s.weightKg.isFinite,
+            ) ??
+            false)) {
+      setState(
+        () => _formError = 'Revisa las repeticiones, el peso y el descanso.',
+      );
+      return;
+    }
     setState(() {
       _creating = true;
       _saved = false;
@@ -130,13 +206,28 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
     final base =
         _draft ?? WorkoutSessionDraft(startedAt: _startedAt, exercises: []);
     try {
-      await _api.create(
-        base.edited(startedAt: _startedAt, notes: _notesController.text),
+      final draft = base.edited(
+        startedAt: _startedAt,
+        notes: _notesController.text,
+        exercises: _editedExercises,
+        sets: _editedSets,
       );
+      if (widget.editingSession case final session?) {
+        final payload = draft.toCreateWorkoutPayload()..remove('routineId');
+        payload['notes'] = _notesController.text.trim();
+        payload['sets'] ??= <Object>[];
+        await _api.update(session.id, payload);
+        if (mounted) Navigator.of(context).pop(true);
+        return;
+      }
+      await _api.create(draft);
       if (!mounted) return;
       _notesController.clear();
       setState(() {
         _draft = null;
+        _editedExercises = null;
+        _editedSets = null;
+        _editorKey++;
         _saved = true;
         _startedAt = DateTime.now();
       });
@@ -164,40 +255,12 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
     return '$day/$month/${local.year} $hour:$minute';
   }
 
-  List<Widget> _draftSection(WorkoutSessionDraft draft) => [
-    if (draft.routineName != null)
-      Text('Rutina: ${draft.routineName}', style: AppTypography.body),
-    const SizedBox(height: 8),
-    for (final exercise in draft.exercises)
-      Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                exercise.exerciseName.isEmpty
-                    ? 'Ejercicio ${exercise.exerciseId}'
-                    : exercise.exerciseName,
-                style: AppTypography.body,
-              ),
-            ),
-            Text(
-              '${exercise.targetSets} series × ${exercise.targetReps} reps',
-              style: AppTypography.body.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    const SizedBox(height: 16),
-  ];
-
   @override
   Widget build(BuildContext context) {
     return AppScaffoldTemplate(
       body: SafeArea(
         child: ListView(
+          key: const Key('workout-form-scroll'),
           padding: const EdgeInsets.all(24),
           children: [
             OfflineBanner(service: _connectivity, onRetry: _load),
@@ -212,11 +275,35 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                       color: AppColors.textSecondary,
                     ),
                   ),
-                Text('Entrenamientos', style: AppTypography.pageTitle),
+                Text(
+                  widget.editingSession == null
+                      ? 'Entrenamientos'
+                      : 'Editar sesión',
+                  style: AppTypography.pageTitle,
+                ),
               ],
             ),
             const SizedBox(height: 16),
-            if (_draft case final draft?) ..._draftSection(draft),
+            if (_draft?.routineName case final name?)
+              Text('Rutina: $name', style: AppTypography.body),
+            SessionExerciseEditor(
+              key: ValueKey(_editorKey),
+              initial: _draft,
+              onChanged: (exercises, sets) {
+                _editedExercises = exercises;
+                _editedSets = sets;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _restController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Descanso entre series (segundos)',
+                helperText: 'Referencia para esta sesión; no se guarda en el historial.',
+              ),
+            ),
+            const SizedBox(height: 16),
             Text('Notas', style: AppTypography.body),
             const SizedBox(height: 8),
             TextField(
@@ -236,7 +323,7 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  _format(_startedAt),
+                  'Fecha y hora: ${_format(_startedAt)}',
                   style: const TextStyle(color: AppColors.textPrimary),
                 ),
               ),
@@ -259,55 +346,65 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
             ],
             const SizedBox(height: 16),
             PrimaryButton(
-              label: _creating ? 'Creando...' : 'Crear sesión',
+              label: _creating
+                  ? 'Guardando...'
+                  : widget.editingSession == null
+                  ? 'Crear sesión'
+                  : 'Guardar cambios',
               onPressed: _creating ? null : _create,
             ),
-            const SizedBox(height: 32),
-            AsyncStateView<List<WorkoutSession>>(
-              state: _state,
-              onRetry: _load,
-              loadingMessage: 'Cargando sesiones...',
-              emptyTitle: 'Aún no tienes sesiones',
-              emptyMessage: 'Crea una sesión para empezar el historial.',
-              errorBuilder: (error, _) => RemoteErrorView(
-                title: 'No se pudo cargar',
-                message: error is AuthApiException
-                    ? error.message
-                    : 'No se pudo conectar',
+            if (widget.editingSession == null) ...[
+              const SizedBox(height: 32),
+              AsyncStateView<List<WorkoutSession>>(
+                state: _state,
                 onRetry: _load,
-              ),
-              dataBuilder: (sessions) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final session in sessions)
-                    InkWell(
-                      onTap: () =>
-                          context.push('/app/entrenamientos/${session.id}'),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _format(session.startedAt),
-                              style: AppTypography.body,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              session.notes == null || session.notes!.isEmpty
-                                  ? 'Sin notas'
-                                  : session.notes!,
-                              style: AppTypography.body.copyWith(
-                                color: AppColors.textSecondary,
+                loadingMessage: 'Cargando sesiones...',
+                emptyTitle: 'Aún no tienes sesiones',
+                emptyMessage: 'Crea una sesión para empezar el historial.',
+                errorBuilder: (error, _) => RemoteErrorView(
+                  title: 'No se pudo cargar',
+                  message: error is AuthApiException
+                      ? error.message
+                      : 'No se pudo conectar',
+                  onRetry: _load,
+                ),
+                dataBuilder: (sessions) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final session in sessions)
+                      InkWell(
+                        onTap: () async {
+                          await context.push(
+                            '/app/entrenamientos/${session.id}',
+                          );
+                          if (mounted) await _load();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _format(session.startedAt),
+                                style: AppTypography.body,
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              Text(
+                                session.notes == null || session.notes!.isEmpty
+                                    ? 'Sin notas'
+                                    : session.notes!,
+                                style: AppTypography.body.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

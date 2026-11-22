@@ -11,6 +11,8 @@ import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
 import '../data/workouts_api.dart';
+import '../data/workout_session.dart';
+import 'workouts_page.dart';
 import '../data/workouts_repository_impl.dart';
 import '../domain/workout_summary.dart';
 import '../domain/workout_summary_sharer.dart';
@@ -26,11 +28,13 @@ class WorkoutDetailPage extends StatefulWidget {
     required this.sessionId,
     this.repository,
     this.sharer,
+    this.api,
   });
 
   final String sessionId;
   final WorkoutsRepository? repository;
   final WorkoutSummarySharer? sharer;
+  final WorkoutsApi? api;
 
   @override
   State<WorkoutDetailPage> createState() => _WorkoutDetailPageState();
@@ -41,6 +45,66 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   final _shareKey = GlobalKey();
   late final WorkoutDetailViewModel _viewModel;
   bool _repeating = false;
+  bool _deleting = false;
+  String? _editError;
+  late final WorkoutsApi _api =
+      widget.api ?? WorkoutsApi(_client ??= ApiClient());
+
+  Future<void> _editSession() async {
+    final session = _viewModel.session;
+    if (session == null) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WorkoutsPage(
+          api: _api,
+          editingSession: session,
+          profileClient: _client,
+        ),
+      ),
+    );
+    if (changed == true && mounted) await _viewModel.load();
+  }
+
+  Future<void> _deleteSession() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar sesión'),
+        content: const Text('¿Deseas eliminar esta sesión?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() {
+      _deleting = true;
+      _editError = null;
+    });
+    try {
+      await _api.delete(widget.sessionId);
+      if (mounted) _goBack();
+    } on SessionExpiredException {
+      if (mounted) context.go('/login');
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _editError = error is AuthApiException
+              ? error.message
+              : 'No se pudo eliminar la sesión.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
 
   @override
   void initState() {
@@ -143,6 +207,11 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                     ),
                     data: (summary) => _DetailContent(
                       summary: summary,
+                      session: _viewModel.session!,
+                      editingError: _editError,
+                      deleting: _deleting,
+                      onEdit: _editSession,
+                      onDelete: _deleteSession,
                       comparison: _viewModel.comparison,
                       actionError: _viewModel.actionError,
                       sharing: _viewModel.sharing,
@@ -175,6 +244,11 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
 class _DetailContent extends StatelessWidget {
   const _DetailContent({
     required this.summary,
+    required this.session,
+    required this.editingError,
+    required this.deleting,
+    required this.onEdit,
+    required this.onDelete,
     required this.comparison,
     required this.actionError,
     required this.sharing,
@@ -185,6 +259,11 @@ class _DetailContent extends StatelessWidget {
   });
 
   final WorkoutSummary summary;
+  final WorkoutSession session;
+  final String? editingError;
+  final bool deleting;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
   final AsyncState<WorkoutComparison> comparison;
   final String? actionError;
   final bool sharing;
@@ -196,77 +275,106 @@ class _DetailContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final notes = summary.notes;
-    return ListView(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.md),
-      children: [
-        Text(
-          formatDateTime(summary.startedAt),
-          style: AppTypography.body.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        PrimaryButton(
-          key: shareKey,
-          label: sharing ? 'Compartiendo...' : 'Compartir',
-          onPressed: sharing ? null : onShare,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        OutlinedButton(
-          onPressed: repeating ? null : onRepeat,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.textPrimary,
-            side: const BorderSide(color: AppColors.glassBorderStrong),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            minimumSize: const Size.fromHeight(48),
-          ),
-          child: const Text('Repetir como borrador'),
-        ),
-        if (actionError != null) ...[
-          const SizedBox(height: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Text(
-            actionError!,
-            style: AppTypography.body.copyWith(color: AppColors.dangerText),
+            formatDateTime(summary.startedAt),
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
           ),
-        ],
-        const SizedBox(height: AppSpacing.md),
-        GlassSurface(
-          child: Row(
+          const SizedBox(height: AppSpacing.md),
+          PrimaryButton(
+            key: shareKey,
+            label: sharing ? 'Compartiendo...' : 'Compartir',
+            onPressed: sharing ? null : onShare,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          OutlinedButton(
+            onPressed: repeating ? null : onRepeat,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.glassBorderStrong),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              minimumSize: const Size.fromHeight(48),
+            ),
+            child: const Text('Repetir como borrador'),
+          ),
+          Row(
             children: [
-              _Metric(
-                label: 'Duración',
-                value: formatDuration(summary.duration),
+              Expanded(
+                child: TextButton(
+                  onPressed: deleting ? null : onEdit,
+                  child: const Text('Editar'),
+                ),
               ),
-              _Metric(label: 'Volumen', value: formatKg(summary.volumeKg)),
-              _Metric(label: 'Series', value: '${summary.setCount}'),
+              Expanded(
+                child: TextButton(
+                  onPressed: deleting ? null : onDelete,
+                  child: Text(deleting ? 'Eliminando...' : 'Eliminar'),
+                ),
+              ),
             ],
           ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _Section(
-          title: 'Ejercicios',
-          children: summary.exercises.isEmpty
-              ? [const _Muted('Sin ejercicios registrados')]
-              : [
-                  for (final exercise in summary.exercises)
-                    Text(
-                      '$exercise · '
-                      '${formatSetCount(summary.setsPerExercise[exercise]!)}',
-                      style: AppTypography.body,
-                    ),
-                ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _Section(
-          title: 'Notas',
-          children: [
-            if (notes == null || notes.trim().isEmpty)
-              const _Muted('Sin notas')
-            else
-              Text(notes, style: AppTypography.body),
+          if (editingError != null)
+            Text(
+              editingError!,
+              style: AppTypography.body.copyWith(color: AppColors.dangerText),
+            ),
+          if (actionError != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              actionError!,
+              style: AppTypography.body.copyWith(color: AppColors.dangerText),
+            ),
           ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _ComparisonSection(state: comparison),
-      ],
+          const SizedBox(height: AppSpacing.md),
+          GlassSurface(
+            child: Row(
+              children: [
+                _Metric(
+                  label: 'Duración',
+                  value: formatDuration(summary.duration),
+                ),
+                _Metric(label: 'Volumen', value: formatKg(summary.volumeKg)),
+                _Metric(label: 'Series', value: '${summary.setCount}'),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _Section(
+            title: 'Ejercicios',
+            children: summary.exercises.isEmpty
+                ? [const _Muted('Sin ejercicios registrados')]
+                : [
+                    for (final exercise in summary.exercises)
+                      Text(
+                        '$exercise · '
+                        '${formatSetCount(summary.setsPerExercise[exercise]!)}',
+                        style: AppTypography.body,
+                      ),
+                    for (final set in session.sets)
+                      Text(
+                        '${set.exerciseName}: ${set.reps} reps, ${set.weightKg ?? 0} kg',
+                        style: AppTypography.body,
+                      ),
+                  ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _Section(
+            title: 'Notas',
+            children: [
+              if (notes == null || notes.trim().isEmpty)
+                const _Muted('Sin notas')
+              else
+                Text(notes, style: AppTypography.body),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _ComparisonSection(state: comparison),
+        ],
+      ),
     );
   }
 }

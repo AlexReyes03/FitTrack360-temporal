@@ -97,4 +97,28 @@ void main() {
       ),
     );
   });
+  test('update y delete llaman rutas de sesión y envían series', () async {
+    final requests = <http.Request>[];
+    final client = MockClient((request) async {
+      requests.add(request);
+      return request.method == 'PATCH'
+          ? http.Response.bytes(utf8.encode(jsonEncode(_created)), 200)
+          : http.Response('', 204);
+    });
+    final api = WorkoutsApi(ApiClient(storage: _Storage(), httpClient: client));
+    final payload = {
+      'startedAt': '2026-11-10T18:00:00.000Z',
+      'sets': [
+        {'exerciseId': '0001', 'order': 1, 'weight': 0, 'reps': 12},
+      ],
+    };
+    await api.update('nueva', payload);
+    await api.delete('nueva');
+    expect(requests.map((r) => r.method), ['PATCH', 'DELETE']);
+    expect(
+      requests.every((r) => r.url.path == '/api/v1/workouts/nueva'),
+      isTrue,
+    );
+    expect(jsonDecode(requests.first.body), payload);
+  });
 }

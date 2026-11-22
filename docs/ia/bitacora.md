@@ -141,6 +141,8 @@
 
 | 2026-11-21 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #177 (W12-FE-02.1, #129) | Atender la revisión de @AlexReyes03: ciclo de vida de `ApiClient` en rutinas, botón Volver y protección contra respuestas fuera de orden. | `fit_track_360/lib/features/routines/presentation/routines_page.dart`, `routine_detail_page.dart`, `fit_track_360/test/features/routines/` | Ajustado: `_ownedClient` solo con lector externo, pruebas de ciclo de vida, cambio de rutina y respuestas obsoletas. No se reutilizó `domain/routine.dart` porque exige campos no opcionales y rompería el editor e inicio desde rutina. | Rama `feat/w12-10-lista-detalle-rutinas` (sin commit) |
 
+| 2026-11-22 | MiguelSP040 | Codex | #205 | Implementar CRUD móvil de sesiones, selector de ejercicios y edición de series con pruebas. | `fit_track_360/lib/features/workouts/`, `fit_track_360/test/features/workouts/`, `fit_track_360/test/features/routines/`, `docs/specs/04-arquitectura.md` | Se usa catálogo existente; descanso como referencia temporal inicializada desde preferencias, sin persistencia por serie. Se conservaron series exactas y se ajustaron pruebas al formulario con desplazamiento. | Rama `feat/w13-10-crud-entrenamientos` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

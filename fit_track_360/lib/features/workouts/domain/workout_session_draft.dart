@@ -26,13 +26,15 @@ class WorkoutSessionDraft {
   WorkoutSessionDraft edited({
     required DateTime startedAt,
     required String notes,
+    List<PlannedExercise>? exercises,
+    List<PlannedSet>? sets,
   }) => WorkoutSessionDraft(
     routineId: routineId,
     routineName: routineName,
     startedAt: startedAt,
     notes: notes,
-    exercises: exercises,
-    sets: sets,
+    exercises: exercises ?? this.exercises,
+    sets: sets ?? this.sets,
   );
 
   /// Cuerpo de `POST /workouts` según `CreateWorkoutDto` del API.

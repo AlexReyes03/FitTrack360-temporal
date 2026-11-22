@@ -43,6 +43,73 @@ Future<void> _scrollTo(WidgetTester tester, Finder target) async {
 }
 
 void main() {
+  testWidgets('edita una sesión y envía las series existentes', (tester) async {
+    final api = _RecordingWorkoutsApi();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WorkoutsPage(api: api, editingSession: repeatableSession()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Guardar cambios'),
+      300,
+      scrollable: find
+          .descendant(
+            of: find.byKey(const Key('workout-form-scroll')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.drag(
+      find.byKey(const Key('workout-form-scroll')),
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guardar cambios'));
+    await tester.pumpAndSettle();
+    expect(api.updates.single['sets'], [
+      {'exerciseId': 'ej-a', 'order': 1, 'weight': 100.0, 'reps': 5},
+      {'exerciseId': 'ej-a', 'order': 2, 'weight': 110.0, 'reps': 3},
+      {'exerciseId': 'ej-b', 'order': 3, 'weight': 60.0, 'reps': 10},
+    ]);
+  });
+
+  testWidgets('pide confirmación antes de eliminar', (tester) async {
+    final api = _RecordingWorkoutsApi();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => WorkoutDetailPage(
+                    sessionId: 'actual',
+                    repository: FakeWorkoutsRepository(
+                      sessions: [repeatableSession()],
+                    ),
+                    api: api,
+                  ),
+                ),
+              ),
+              child: const Text('Abrir'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Abrir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, isEmpty);
+    await tester.tap(find.text('Eliminar').last);
+    await tester.pumpAndSettle();
+    expect(api.deleted, ['actual']);
+  });
+
   testWidgets('muestra duración, volumen, series, ejercicios y notas', (
     tester,
   ) async {
@@ -296,6 +363,22 @@ void main() {
       expect(find.text('Sentadilla'), findsOneWidget);
       expect(find.text('Press banca'), findsOneWidget);
 
+      await tester.scrollUntilVisible(
+        find.text('Crear sesión'),
+        300,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const Key('workout-form-scroll')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.ensureVisible(find.text('Crear sesión'));
+      await tester.drag(
+        find.byKey(const Key('workout-form-scroll')),
+        const Offset(0, -120),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Crear sesión'));
       await tester.pumpAndSettle();
 
@@ -390,6 +473,19 @@ void main() {
 }
 
 class _RecordingWorkoutsApi implements WorkoutsApi {
+  @override
+  Future<WorkoutSession> update(String id, Map<String, dynamic> payload) async {
+    updates.add(payload);
+    return repeatableSession();
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    deleted.add(id);
+  }
+
+  final updates = <Map<String, dynamic>>[];
+  final deleted = <String>[];
   final created = <WorkoutSessionDraft>[];
 
   @override

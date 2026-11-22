@@ -13,6 +13,8 @@ import '../features/meals/presentation/meals_page.dart';
 import '../features/progress/domain/progress_photo.dart';
 import '../features/progress/presentation/photo_comparison_page.dart';
 import '../features/progress/presentation/progress_photo_page.dart';
+import '../features/routines/presentation/routine_detail_page.dart';
+import '../features/routines/presentation/routines_page.dart';
 import '../features/settings/presentation/profile_page.dart';
 import '../features/workouts/domain/workout_session_draft.dart';
 import '../features/workouts/presentation/workout_detail_page.dart';
@@ -89,6 +91,15 @@ final appRouter = GoRouter(
       path: '/app/ejercicios/:id',
       builder: (context, state) =>
           ExerciseDetailPage(exerciseId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/app/rutinas',
+      builder: (context, state) => const RoutinesPage(),
+    ),
+    GoRoute(
+      path: '/app/rutinas/:id',
+      builder: (context, state) =>
+          RoutineDetailPage(routineId: state.pathParameters['id']!),
     ),
   ],
 );

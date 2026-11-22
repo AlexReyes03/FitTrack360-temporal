@@ -21,8 +21,10 @@ import '../data/meals_api_repository.dart';
 import '../domain/daily_summary.dart';
 import '../domain/food_search_repository.dart';
 import '../domain/meal_entry.dart';
+import '../domain/meal_item.dart';
 import '../domain/meals_repository.dart';
 import 'meal_format.dart';
+import 'meal_item_form_page.dart';
 import 'meals_view_model.dart';
 
 /// Vista 2: resumen diario de consumidos por tipo de comida.
@@ -76,7 +78,7 @@ class _MealsPageState extends State<MealsPage> {
     super.dispose();
   }
 
-  /// Sesión expirada al cargar o al agregar: a `/login`, como en Perfil.
+  /// Sesión expirada al cargar o escribir: a `/login`, como en Perfil.
   void _onChange() {
     if (_viewModel.sessionExpired && mounted) context.go('/login');
   }
@@ -103,6 +105,114 @@ class _MealsPageState extends State<MealsPage> {
     }
   }
 
+  Future<void> _editItem(MealEntry entry, int index) async {
+    if (!entry.canEdit) {
+      await _showLegacyMessage();
+      return;
+    }
+    final result = await Navigator.of(context).push<MealMutationResult>(
+      MaterialPageRoute(
+        builder: (_) => MealItemFormPage(
+          item: entry.items[index],
+          onSave: (item) => _viewModel.updateItem(entry, index, item),
+        ),
+      ),
+    );
+    if (!mounted || result != MealMutationResult.notFound) return;
+    _showMessage('El alimento ya no existe');
+  }
+
+  Future<void> _deleteItem(MealEntry entry, int index) async {
+    final item = entry.items[index];
+    if (!await _confirmDelete(entry, item) || !mounted) return;
+    final result = await _viewModel.removeItem(entry, index);
+    if (!mounted) return;
+    switch (result) {
+      case MealMutationResult.success:
+        _showMessage('Alimento eliminado');
+        break;
+      case MealMutationResult.notFound:
+        _showMessage('El alimento ya no existe');
+        break;
+      case MealMutationResult.failure:
+        if (!_viewModel.sessionExpired) {
+          _showMessage('No se pudo eliminar el alimento');
+        }
+        break;
+      case MealMutationResult.busy:
+        break;
+    }
+  }
+
+  Future<bool> _confirmDelete(MealEntry entry, MealItem item) async {
+    final last = entry.items.length == 1;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.bgMid,
+        title: const Text(
+          'Eliminar alimento',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          last
+              ? '«${item.name}» es el último alimento de esta comida. '
+                    'Se eliminará el registro completo.'
+              : '¿Eliminar «${item.name}»? Esta acción no se puede deshacer.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text(
+              'Eliminar',
+              style: TextStyle(color: AppColors.dangerText),
+            ),
+          ),
+        ],
+      ),
+    );
+    return confirmed ?? false;
+  }
+
+  Future<void> _showLegacyMessage() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: AppColors.bgMid,
+      title: const Text(
+        'No se puede editar',
+        style: TextStyle(color: AppColors.textPrimary),
+      ),
+      content: const Text(
+        'Este registro antiguo no guarda porción ni macros separadas. '
+        'Editarlo podría convertir sus valores en cero. Puedes eliminarlo y '
+        'registrarlo de nuevo.',
+        style: TextStyle(color: AppColors.textSecondary),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            'Entendido',
+            style: TextStyle(color: AppColors.textPrimary),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffoldTemplate(
@@ -115,7 +225,18 @@ class _MealsPageState extends State<MealsPage> {
               OfflineBanner(service: _connectivity, onRetry: _load),
               Text('Comidas de hoy', style: AppTypography.pageTitle),
               const SizedBox(height: AppSpacing.sm),
-              PrimaryButton(label: 'Agregar alimento', onPressed: _openSearch),
+              PrimaryButton(
+                label: 'Agregar alimento',
+                onPressed: _viewModel.busy ? null : _openSearch,
+              ),
+              if (_viewModel.busy) ...[
+                const SizedBox(height: AppSpacing.sm),
+                const LinearProgressIndicator(
+                  key: Key('meals-busy'),
+                  color: AppColors.accentWhite,
+                  backgroundColor: Colors.transparent,
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               AsyncStateView<DailySummary>(
                 state: _viewModel.state,
@@ -131,7 +252,12 @@ class _MealsPageState extends State<MealsPage> {
                       : 'No se pudo cargar tus comidas',
                   onRetry: _load,
                 ),
-                dataBuilder: (summary) => _SummaryView(summary: summary),
+                dataBuilder: (summary) => _SummaryView(
+                  summary: summary,
+                  actionsEnabled: !_viewModel.busy,
+                  onEdit: _editItem,
+                  onDelete: _deleteItem,
+                ),
               ),
             ],
           ),
@@ -142,9 +268,17 @@ class _MealsPageState extends State<MealsPage> {
 }
 
 class _SummaryView extends StatelessWidget {
-  const _SummaryView({required this.summary});
+  const _SummaryView({
+    required this.summary,
+    required this.actionsEnabled,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   final DailySummary summary;
+  final bool actionsEnabled;
+  final void Function(MealEntry entry, int index) onEdit;
+  final void Function(MealEntry entry, int index) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -191,13 +325,59 @@ class _SummaryView extends StatelessWidget {
                   Text('Sin alimentos', style: secondary)
                 else
                   for (final entry in section.entries)
-                    for (final item in entry.items)
+                    for (final (index, item) in entry.items.indexed)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                        child: Text(
-                          '${item.name} · ${formatAmount(item.servingG)} g\n'
-                          '${formatMacros(item.macros)}',
-                          style: secondary,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                '${item.name} · '
+                                '${formatAmount(item.servingG)} g\n'
+                                '${formatMacros(item.macros)}',
+                                style: secondary,
+                              ),
+                            ),
+                            PopupMenuButton<_ItemAction>(
+                              key: Key('item-menu-${entry.id}-$index'),
+                              enabled: actionsEnabled,
+                              tooltip: 'Opciones de ${item.name}',
+                              color: AppColors.bgMid,
+                              iconSize: 20,
+                              icon: const Icon(
+                                Icons.more_vert,
+                                color: AppColors.textSecondary,
+                              ),
+                              onSelected: (action) {
+                                if (action == _ItemAction.edit) {
+                                  onEdit(entry, index);
+                                } else {
+                                  onDelete(entry, index);
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: _ItemAction.edit,
+                                  child: Text(
+                                    'Editar',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: _ItemAction.delete,
+                                  child: Text(
+                                    'Eliminar',
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
               ],
@@ -208,3 +388,5 @@ class _SummaryView extends StatelessWidget {
     );
   }
 }
+
+enum _ItemAction { edit, delete }

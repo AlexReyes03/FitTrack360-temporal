@@ -24,6 +24,11 @@ class MealEntry {
   /// Registro anterior a MealItem: el alimento se leyó de `notes`. El API no
   /// lo cuenta en sus totales porque no tiene items.
   final bool isLegacy;
+
+  /// El legacy sin porción decodificable no se puede convertir sin perder los
+  /// valores originales.
+  bool get canEdit =>
+      !isLegacy || (items.length == 1 && items.single.servingG > 0);
 }
 
 /// Datos para agregar un alimento a la comida de destino.

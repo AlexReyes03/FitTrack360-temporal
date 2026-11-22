@@ -113,6 +113,9 @@ class ApiClient {
     if (method == 'GET') {
       return _http.get(uri, headers: headers);
     }
+    if (method == 'DELETE') {
+      return _http.delete(uri, headers: headers);
+    }
     if (method == 'PATCH') {
       return _http.patch(
         uri,

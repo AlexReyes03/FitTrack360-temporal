@@ -4,6 +4,7 @@ import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import 'state/progress_view_state.dart';
 import 'widgets/progress_checkin_card.dart';
 import 'widgets/progress_history_card.dart';
@@ -203,66 +204,68 @@ class _ProgressPageState extends State<ProgressPage> {
     final currentPhoto =
         widget.currentPhotoSlot ?? (preview ? _previewCurrentPhoto : null);
 
-    return AppScaffoldTemplate(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.contentMaxWidth,
-            ),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.lg,
-              ),
-              children: [
-                _Header(onBack: widget.onBack),
-                const SizedBox(height: 18),
-                ProgressRangeSelector(
-                  selected: _selectedRange,
-                  onSelected: _handleRangeSelected,
-                ),
-                const SizedBox(height: 18),
-                ProgressWeightChartCard(
-                  range: _selectedRange,
-                  status: widget.chartStatus,
-                  data: chartData,
-                  onRetry: widget.onRetryChart,
-                ),
-                const SizedBox(height: 16),
-                ProgressCheckInCard(
-                  status: widget.checkInStatus,
-                  selectedPhotoLabel: widget.selectedCheckInPhotoLabel,
-                  isSubmitting: widget.isSubmittingCheckIn,
-                  feedbackMessage: widget.checkInFeedback,
-                  onSelectPhoto: widget.onSelectCheckInPhoto,
-                  onSubmit: widget.onSubmitCheckIn,
-                  onRetry: widget.onRetryCheckIn,
-                ),
-                const SizedBox(height: 16),
-                ProgressHistoryCard(
-                  status: widget.historyStatus,
-                  entries: historyEntries,
-                  onEntryTap: widget.onHistoryEntryTap,
-                  onRetry: widget.onRetryHistory,
-                ),
-                const SizedBox(height: 16),
-                ProgressPhotoComparisonCard(
-                  status: widget.comparisonStatus,
-                  initialSlot: initialPhoto,
-                  currentSlot: currentPhoto,
-                  onCompareFullScreen: widget.onComparePhotos,
-                  onAddPhoto: widget.onAddPhoto,
-                  onRetry: widget.onRetryComparison,
-                ),
-              ],
-            ),
+    final embedded = HomeNavigationShell.isEmbedded(context);
+    final showBack =
+        widget.onBack != null && (!embedded || Navigator.of(context).canPop());
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppSpacing.contentMaxWidth),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.md,
+            embedded ? AppSpacing.sm : AppSpacing.md,
+            AppSpacing.md,
+            AppSpacing.lg,
           ),
+          children: [
+            _Header(onBack: showBack ? widget.onBack : null),
+            const SizedBox(height: 18),
+            ProgressRangeSelector(
+              selected: _selectedRange,
+              onSelected: _handleRangeSelected,
+            ),
+            const SizedBox(height: 18),
+            ProgressWeightChartCard(
+              range: _selectedRange,
+              status: widget.chartStatus,
+              data: chartData,
+              onRetry: widget.onRetryChart,
+            ),
+            const SizedBox(height: 16),
+            ProgressCheckInCard(
+              status: widget.checkInStatus,
+              selectedPhotoLabel: widget.selectedCheckInPhotoLabel,
+              isSubmitting: widget.isSubmittingCheckIn,
+              feedbackMessage: widget.checkInFeedback,
+              onSelectPhoto: widget.onSelectCheckInPhoto,
+              onSubmit: widget.onSubmitCheckIn,
+              onRetry: widget.onRetryCheckIn,
+            ),
+            const SizedBox(height: 16),
+            ProgressHistoryCard(
+              status: widget.historyStatus,
+              entries: historyEntries,
+              onEntryTap: widget.onHistoryEntryTap,
+              onRetry: widget.onRetryHistory,
+            ),
+            const SizedBox(height: 16),
+            ProgressPhotoComparisonCard(
+              status: widget.comparisonStatus,
+              initialSlot: initialPhoto,
+              currentSlot: currentPhoto,
+              onCompareFullScreen: widget.onComparePhotos,
+              onAddPhoto: widget.onAddPhoto,
+              onRetry: widget.onRetryComparison,
+            ),
+          ],
         ),
       ),
     );
+
+    if (embedded) {
+      return Scaffold(backgroundColor: Colors.transparent, body: content);
+    }
+    return AppScaffoldTemplate(body: SafeArea(child: content));
   }
 }
 

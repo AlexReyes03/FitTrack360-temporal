@@ -219,37 +219,40 @@ void main() {
       expect(viewModel.actionError, workoutRepeatUnavailableMessage);
     });
 
-    test('si falta el identificador en una serie no repite parcialmente', () async {
-      final viewModel = WorkoutDetailViewModel(
-        repository: FakeWorkoutsRepository(
-          sessions: [
-            fakeSession(
-              sets: const [
-                WorkoutSet(
-                  exerciseId: 'ej-a',
-                  exerciseName: 'Sentadilla',
-                  order: 1,
-                  weightKg: 100,
-                  reps: 5,
-                ),
-                WorkoutSet(
-                  exerciseName: 'Sentadilla',
-                  order: 2,
-                  weightKg: 100,
-                  reps: 5,
-                ),
-              ],
-            ),
-          ],
-        ),
-        sessionId: 'actual',
-      );
+    test(
+      'si falta el identificador en una serie no repite parcialmente',
+      () async {
+        final viewModel = WorkoutDetailViewModel(
+          repository: FakeWorkoutsRepository(
+            sessions: [
+              fakeSession(
+                sets: const [
+                  WorkoutSet(
+                    exerciseId: 'ej-a',
+                    exerciseName: 'Sentadilla',
+                    order: 1,
+                    weightKg: 100,
+                    reps: 5,
+                  ),
+                  WorkoutSet(
+                    exerciseName: 'Sentadilla',
+                    order: 2,
+                    weightKg: 100,
+                    reps: 5,
+                  ),
+                ],
+              ),
+            ],
+          ),
+          sessionId: 'actual',
+        );
 
-      await viewModel.load();
+        await viewModel.load();
 
-      expect(viewModel.repeatDraft(), isNull);
-      expect(viewModel.actionError, workoutRepeatUnavailableMessage);
-    });
+        expect(viewModel.repeatDraft(), isNull);
+        expect(viewModel.actionError, workoutRepeatUnavailableMessage);
+      },
+    );
   });
 
   group('sesión no disponible', () {

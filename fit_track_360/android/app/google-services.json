@@ -12,7 +12,20 @@
           "package_name": "com.example.fit_track_360"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "789152481670-mdiqfskhkdcad0891gqgvvhol2giu36h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fit_track_360",
+            "certificate_hash": "1b095c2c1fb629a419243909de47d174b233c3ea"
+          }
+        },
+        {
+          "client_id": "789152481670-o562ljhsenh315tspt65vn3ngqh411i9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDqOMDV3QxmO62yG6LfPJGWddRwsw8NoDE"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "789152481670-o562ljhsenh315tspt65vn3ngqh411i9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "789152481670-66iaj9seukv91d1d8dc8c5p11c46jk26.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.fitTrack360"
+              }
+            }
+          ]
         }
       }
     }

@@ -8,6 +8,7 @@ import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 
 import '../../../core/network/api_client.dart';
+import '../data/progress_metrics_api.dart';
 import '../data/progress_photos_api.dart';
 import '../domain/progress_photo.dart';
 import 'progress_page.dart';
@@ -17,7 +18,7 @@ import 'state/progress_view_state.dart';
 /// Abre el selector de fotos; sustituible en pruebas.
 typedef PickCheckInPhoto = Future<XFile?> Function();
 
-/// Host de [ProgressPage]: cablea fotos `/photos` y deja métricas bloqueadas.
+/// Host de [ProgressPage]: cablea fotos `/photos` y métricas `/progress`.
 class ProgressShellPage extends StatefulWidget {
   const ProgressShellPage({
     super.key,
@@ -58,10 +59,14 @@ class _ProgressShellPageState extends State<ProgressShellPage> {
     } else {
       final client = widget.apiClient ?? ApiClient();
       _ownedClient = widget.apiClient == null ? client : null;
-      _vm = ProgressViewModel(photos: ProgressPhotosApi(client));
+      _vm = ProgressViewModel(
+        photos: ProgressPhotosApi(client),
+        metrics: ProgressMetricsApi(client),
+      );
       _ownsVm = true;
     }
     _vm.addListener(_onVm);
+    _vm.reloadMetrics();
   }
 
   void _onVm() {
@@ -128,6 +133,7 @@ class _ProgressShellPageState extends State<ProgressShellPage> {
           selectedCheckInPhotoLabel: _vm.selectedCheckInPhotoLabel,
           isSubmittingCheckIn: _vm.isSubmittingCheckIn,
           checkInFeedback: _vm.checkInFeedback,
+          checkInSavedCount: _vm.checkInSavedCount,
           onBack: () {
             if (context.canPop()) {
               context.pop();

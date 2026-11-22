@@ -141,6 +141,8 @@
 
 | 2026-11-21 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #177 (W12-FE-02.1, #129) | Atender la revisión de @AlexReyes03: ciclo de vida de `ApiClient` en rutinas, botón Volver y protección contra respuestas fuera de orden. | `fit_track_360/lib/features/routines/presentation/routines_page.dart`, `routine_detail_page.dart`, `fit_track_360/test/features/routines/` | Ajustado: `_ownedClient` solo con lector externo, pruebas de ciclo de vida, cambio de rutina y respuestas obsoletas. No se reutilizó `domain/routine.dart` porque exige campos no opcionales y rompería el editor e inicio desde rutina. | Rama `feat/w12-10-lista-detalle-rutinas` (sin commit) |
 
+| 2026-11-22 | MiguelSP040 | Codex | #165 | Validar rutinas y acotar consultas de métricas de entrenamientos. | `fit_track_api/src/routines/`, `src/workouts/`, `prisma/`, `test/` | Se limita el historial de métricas a las 1000 sesiones previas, manteniendo el orden de la última serie dentro de esa ventana. | Rama `fix/issue-165-rutinas-historial` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

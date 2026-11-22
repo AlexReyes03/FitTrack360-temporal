@@ -1,9 +1,22 @@
 import 'app_notification.dart';
 
-/// Persistencia mínima del centro de notificaciones. La implementación en
-/// memoria permite sustituirla por una API sin cambiar el ViewModel.
+/// Persistencia del centro de notificaciones.
+///
+/// La implementación en memoria permite pruebas sin red; en producción la
+/// sustituye `NotificationsApiRepository` sobre `ApiClient`.
 abstract interface class NotificationsRepository {
-  List<AppNotification> read();
+  Future<List<AppNotification>> fetchNotifications({
+    bool? isRead,
+    AppNotificationType? type,
+  });
 
-  void write(List<AppNotification> notifications);
+  Future<int> fetchUnreadCount();
+
+  Future<AppNotification?> updateRead(String id, {required bool isRead});
+
+  Future<void> markAllAsRead();
+
+  Future<void> deleteNotification(String id);
+
+  Future<void> deleteAll();
 }

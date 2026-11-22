@@ -13,4 +13,8 @@ class ApiWorkoutsRepository implements WorkoutsRepository {
 
   @override
   Future<List<WorkoutSession>> list() => _api.list();
+
+  @override
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) =>
+      _api.createWithPayload(payload);
 }

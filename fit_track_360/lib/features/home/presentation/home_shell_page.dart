@@ -3,31 +3,44 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/session_storage.dart';
 import '../../../core/widgets/offline_banner.dart';
-import '../../../design_system/components/glass_surface.dart';
-import '../../../design_system/components/primary_button.dart';
-import '../../../design_system/tokens/app_colors.dart';
-import '../../../design_system/widgets/app_background.dart';
-import '../../auth/data/logout_service.dart';
+import '../data/dashboard_api_repository.dart';
+import '../data/pedometer_steps_sensor.dart';
+import '../domain/steps_sensor.dart';
+import 'home_dashboard_view_model.dart';
+import 'widgets/dashboard_block_shell.dart';
+import 'widgets/dashboard_metric_card.dart';
+import 'widgets/dashboard_nutrition_card.dart';
+import 'widgets/dashboard_session_card.dart';
+import 'widgets/dashboard_steps_card.dart';
+import 'widgets/home_dashboard_content.dart';
+import 'widgets/quick_actions_row.dart';
 
-/// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion
-/// (Firebase + revocacion Nest), volviendo a login.
-/// Muestra [OfflineBanner] sin red y recarga el perfil al recuperarla.
+/// Vista de Inicio dentro del shell persistente.
+///
+/// Carga el perfil con el cliente HTTP y muestra el dashboard. El cierre de
+/// sesión vive en Perfil. Muestra [OfflineBanner] sin red y recarga el perfil
+/// y el dashboard al recuperarla.
 class HomeShellPage extends StatefulWidget {
   const HomeShellPage({
     super.key,
     this.apiClient,
     this.sessionStorage,
     this.connectivityService,
+    this.dashboardViewModel,
+    this.stepsSensor,
   });
 
   /// Dependencias sustituibles en pruebas; por defecto usa las reales.
   final ApiClient? apiClient;
   final SessionStorage? sessionStorage;
   final ConnectivityService? connectivityService;
+  final HomeDashboardViewModel? dashboardViewModel;
+  final StepsSensor? stepsSensor;
 
   @override
   State<HomeShellPage> createState() => _HomeShellPageState();
@@ -39,39 +52,71 @@ class _HomeShellPageState extends State<HomeShellPage> {
   late final ApiClient _api = widget.apiClient ?? ApiClient(storage: _storage);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  late final HomeDashboardViewModel _dashboard;
+  late final bool _ownsDashboard;
   StreamSubscription<bool>? _connectivitySubscription;
 
   String? _displayName;
-  bool _loggingOut = false;
   bool _loadingProfile = false;
+
+  /// Evita navegar dos veces a login cuando perfil y dashboard expiran juntos.
+  bool _redirectingToLogin = false;
 
   @override
   void initState() {
     super.initState();
+    if (widget.dashboardViewModel != null) {
+      _dashboard = widget.dashboardViewModel!;
+      _ownsDashboard = false;
+    } else {
+      _dashboard = HomeDashboardViewModel(
+        repository: DashboardApiRepository.fromClient(_api),
+        stepsSensor: widget.stepsSensor ?? PedometerStepsSensor(),
+      );
+      _ownsDashboard = true;
+    }
+    _dashboard.addListener(_onDashboardChanged);
     _connectivitySubscription = _connectivity.onStatusChange.listen((online) {
-      if (online && _displayName == null) _loadProfile();
+      if (online) {
+        if (_displayName == null) _loadProfile();
+        unawaited(_dashboard.load());
+      }
     }, onError: (_) {});
     _loadProfile();
+    unawaited(_dashboard.load());
+  }
+
+  void _onDashboardChanged() {
+    if (_dashboard.sessionExpired) _goToLogin();
+  }
+
+  void _goToLogin() {
+    if (_redirectingToLogin || !mounted) return;
+    _redirectingToLogin = true;
+    context.go('/login');
   }
 
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _dashboard.removeListener(_onDashboardChanged);
+    if (_ownsDashboard) {
+      _dashboard.dispose();
+    }
     _api.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfile() async {
     // Dos cargas simultaneas con ID token vencido fuerzan un solo refresh.
-    if (_loadingProfile || _loggingOut) return;
+    if (_loadingProfile) return;
     _loadingProfile = true;
     try {
       final profile = await _api.me();
       if (!mounted) return;
       setState(() => _displayName = profile.displayName);
     } on SessionExpiredException {
-      if (!mounted) return;
-      context.go('/login');
+      _goToLogin();
     } catch (_) {
       // Sin red o perfil no disponible: se mantiene el saludo generico.
     } finally {
@@ -79,183 +124,91 @@ class _HomeShellPageState extends State<HomeShellPage> {
     }
   }
 
-  Future<void> _logout() async {
-    setState(() => _loggingOut = true);
-    await LogoutService(storage: _storage).logout();
-    if (!mounted) return;
-    context.go('/login');
+  Future<void> _retryAll() async {
+    await Future.wait([_loadProfile(), _dashboard.load()]);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  OfflineBanner(service: _connectivity, onRetry: _loadProfile),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                    child: _Header(
-                      onProfileTap: () => context.push('/app/perfil'),
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: GlassSurface(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(
-                              _displayName == null
-                                  ? 'Hola, bienvenido'
-                                  : 'Hola, $_displayName',
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Aqui va tu resumen de entrenamientos, comidas y progreso.',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Container(
-                              height: 160,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                color: Colors.white.withValues(alpha: 0.035),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'Contenido proximo',
-                                  style: TextStyle(
-                                    color: AppColors.textMuted,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OfflineBanner(service: _connectivity, onRetry: _retryAll),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: _dashboard,
+              builder: (context, _) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      HomeDashboardContent(
+                        displayName: _displayName,
+                        nutritionStatus: _blockStatus(_dashboard.nutrition),
+                        nutritionData:
+                            _dashboard.nutrition.dataOrNull ??
+                            DashboardNutritionData.preview,
+                        onRetryNutrition: _dashboard.load,
+                        sessionStatus: _blockStatus(_dashboard.session),
+                        sessionData:
+                            _dashboard.session.dataOrNull ??
+                            DashboardSessionData.preview,
+                        onRetrySession: _dashboard.load,
+                        metricStatus: _blockStatus(_dashboard.metric),
+                        metricData:
+                            _dashboard.metric.dataOrNull ??
+                            DashboardMetricData.preview,
+                        onRetryMetric: _dashboard.load,
+                        stepsStatus: _blockStatus(_dashboard.steps),
+                        stepsData:
+                            _dashboard.steps.dataOrNull ??
+                            DashboardStepsData.preview,
+                        stepsUnavailable: _dashboard.stepsUnavailable,
+                        stepsUnavailableReason:
+                            _dashboard.stepsUnavailableReason,
+                        stepsNeedPermission: _dashboard.stepsNeedPermission,
+                        stepsCanOpenSettings: _dashboard.stepsCanOpenSettings,
+                        onRetrySteps: _dashboard.retrySteps,
+                        onEnableSteps: _dashboard.enableSteps,
+                        onOpenStepsSettings: () =>
+                            unawaited(_dashboard.openStepsSettings()),
+                        onOpenWorkout: () => context.go('/app/entrenamientos'),
+                        onOpenMeals: () => context.go('/app/comidas'),
+                        onOpenPhoto: () => context.push('/app/foto'),
                       ),
-                    ),
+                      const SizedBox(height: 18),
+                      // Acceso extra no cubierto por DashboardQuickActions.
+                      QuickActionsRow(
+                        title: null,
+                        actions: [
+                          QuickActionItem(
+                            label: 'Tracker diario',
+                            subtitle: 'Próximamente',
+                            icon: Icons.insights_rounded,
+                            onTap: () => context.push('/app/tracker'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
-                    // Wrap evita el desborde del Row con tres accesos en
-                    // pantallas estrechas.
-                    child: Wrap(
-                      children: [
-                        TextButton(
-                          onPressed: () => context.push('/app/foto'),
-                          child: const Text(
-                            'Agregar foto',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/entrenamientos'),
-                          child: const Text(
-                            'Entrenamientos',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/ejercicios'),
-                          child: const Text(
-                            'Ejercicios',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/comidas'),
-                          child: const Text(
-                            'Comidas',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => context.push('/app/perfil'),
-                          child: const Text(
-                            'Perfil',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: PrimaryButton(
-                      label: _loggingOut ? 'Cerrando...' : 'Cerrar sesión',
-                      onPressed: _loggingOut ? null : _logout,
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _Header extends StatelessWidget {
-  final VoidCallback onProfileTap;
-
-  const _Header({required this.onProfileTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [AppColors.accentWhite, AppColors.textSecondary],
-            ),
-            boxShadow: [BoxShadow(color: Color(0xCCFFFFFF), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(width: 10),
-        const Text(
-          'FITTRACK360',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.4,
-          ),
-        ),
-        const Spacer(),
-        IconButton(
-          tooltip: 'Perfil',
-          onPressed: onProfileTap,
-          icon: const Icon(
-            Icons.person_outline,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
+DashboardBlockStatus _blockStatus<T>(AsyncState<T> state) {
+  return switch (state) {
+    AsyncLoading<T>() => DashboardBlockStatus.loading,
+    AsyncError<T>() => DashboardBlockStatus.error,
+    AsyncEmpty<T>() => DashboardBlockStatus.empty,
+    AsyncData<T>() => DashboardBlockStatus.data,
+  };
 }

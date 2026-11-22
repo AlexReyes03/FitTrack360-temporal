@@ -2,7 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { configureApp } from '../../src/app.setup';
+import { APP_HTTP_OPTIONS, configureApp } from '../../src/app.setup';
 import { DatabaseProbe } from '../../src/health/database.probe';
 import { HealthModule } from '../../src/health/health.module';
 
@@ -30,7 +30,8 @@ async function bootstrapHealthApp(
     .overrideProvider(DatabaseProbe)
     .useValue(probe)
     .compile();
-  const app = moduleRef.createNestApplication<INestApplication<App>>();
+  const app =
+    moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
   configureApp(app);
   await app.init();
   return app;

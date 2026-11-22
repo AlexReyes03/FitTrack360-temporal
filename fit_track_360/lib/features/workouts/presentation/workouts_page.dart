@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/widgets/offline_banner.dart';
+import '../../../core/widgets/remote_state_views.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import '../data/workout_session.dart';
 import '../data/workouts_api.dart';
 import '../domain/workout_session_draft.dart';
@@ -18,6 +24,7 @@ class WorkoutsPage extends StatefulWidget {
     this.api,
     this.draft,
     this.apiClientFactory = ApiClient.new,
+    this.connectivityService,
   });
 
   final WorkoutsApi? api;
@@ -27,6 +34,7 @@ class WorkoutsPage extends StatefulWidget {
 
   /// Borrador precargado al iniciar desde una rutina; opcional.
   final WorkoutSessionDraft? draft;
+  final ConnectivityService? connectivityService;
 
   @override
   State<WorkoutsPage> createState() => _WorkoutsPageState();
@@ -36,6 +44,9 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   ApiClient? _ownClient;
   late final WorkoutsApi _api =
       widget.api ?? WorkoutsApi(_ownClient = widget.apiClientFactory());
+  late final ConnectivityService _connectivity =
+      widget.connectivityService ?? ConnectivityService();
+  StreamSubscription<bool>? _connectivitySubscription;
   late final TextEditingController _notesController = TextEditingController(
     text: widget.draft?.notes,
   );
@@ -53,11 +64,16 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   @override
   void initState() {
     super.initState();
+    _connectivitySubscription = _connectivity.onStatusChange.listen(
+      _onConnectivityChange,
+      onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
+    );
     _load();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _notesController.dispose();
     _ownClient?.dispose();
     super.dispose();
@@ -75,6 +91,11 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       if (!mounted) return;
       setState(() => _state = AsyncError(error, stackTrace));
     }
+  }
+
+  /// Al recuperar la red, recarga solo si la última carga falló.
+  void _onConnectivityChange(bool online) {
+    if (online && mounted && _state is AsyncError) _load();
   }
 
   Future<void> _pickStartedAt() async {
@@ -175,138 +196,121 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffoldTemplate(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
+    final embedded = HomeNavigationShell.isEmbedded(context);
+    final list = ListView(
+      padding: EdgeInsets.fromLTRB(24, embedded ? 12 : 24, 24, 28),
+      children: [
+        OfflineBanner(service: _connectivity, onRetry: _load),
+        Row(
           children: [
-            Row(
-              children: [
-                if (Navigator.of(context).canPop())
-                  IconButton(
-                    tooltip: 'Volver',
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                Text('Entrenamientos', style: AppTypography.pageTitle),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_draft case final draft?) ..._draftSection(draft),
-            Text('Notas', style: AppTypography.body),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _notesController,
-              enabled: !_creating,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'Opcional',
-                hintStyle: TextStyle(color: AppColors.textMuted),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Inicio', style: AppTypography.body),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _creating ? null : _pickStartedAt,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _format(_startedAt),
-                  style: const TextStyle(color: AppColors.textPrimary),
-                ),
-              ),
-            ),
-            if (_saved) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Sesión guardada',
-                style: AppTypography.body.copyWith(
+            if (Navigator.of(context).canPop())
+              IconButton(
+                tooltip: 'Volver',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(
+                  Icons.arrow_back,
                   color: AppColors.textSecondary,
                 ),
               ),
-            ],
-            if (_formError != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _formError!,
-                style: AppTypography.body.copyWith(color: AppColors.dangerText),
-              ),
-            ],
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: _creating ? 'Creando...' : 'Crear sesión',
-              onPressed: _creating ? null : _create,
-            ),
-            const SizedBox(height: 32),
-            _state.when(
-              loading: () => const Center(
-                child: CircularProgressIndicator(color: AppColors.accentWhite),
-              ),
-              data: (sessions) => Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final session in sessions)
-                    InkWell(
-                      onTap: () =>
-                          context.push('/app/entrenamientos/${session.id}'),
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _format(session.startedAt),
-                              style: AppTypography.body,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              session.notes == null || session.notes!.isEmpty
-                                  ? 'Sin notas'
-                                  : session.notes!,
-                              style: AppTypography.body.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              error: (error, _) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    error is AuthApiException
-                        ? error.message
-                        : 'No se pudo conectar',
-                    style: AppTypography.body.copyWith(
-                      color: AppColors.dangerText,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _load,
-                    child: const Text(
-                      'Reintentar',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ),
-                ],
-              ),
-              empty: () => Text(
-                'Aún no tienes sesiones',
-                style: AppTypography.body.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
+            Text('Entrenamientos', style: AppTypography.pageTitle),
           ],
         ),
-      ),
+        const SizedBox(height: 16),
+        if (_draft case final draft?) ..._draftSection(draft),
+        Text('Notas', style: AppTypography.body),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _notesController,
+          enabled: !_creating,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: const InputDecoration(
+            hintText: 'Opcional',
+            hintStyle: TextStyle(color: AppColors.textMuted),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('Inicio', style: AppTypography.body),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _creating ? null : _pickStartedAt,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _format(_startedAt),
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        ),
+        if (_saved) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Sesión guardada',
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+        if (_formError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _formError!,
+            style: AppTypography.body.copyWith(color: AppColors.dangerText),
+          ),
+        ],
+        const SizedBox(height: 16),
+        PrimaryButton(
+          label: _creating ? 'Creando...' : 'Registrar entrenamiento',
+          onPressed: _creating ? null : _create,
+        ),
+        const SizedBox(height: 32),
+        AsyncStateView<List<WorkoutSession>>(
+          state: _state,
+          onRetry: _load,
+          loadingMessage: 'Cargando sesiones...',
+          emptyTitle: 'Aún no tienes sesiones',
+          emptyMessage: 'Crea una sesión para empezar el historial.',
+          errorBuilder: (error, _) => RemoteErrorView(
+            title: 'No se pudo cargar',
+            message: error is AuthApiException
+                ? error.message
+                : 'No se pudo conectar',
+            onRetry: _load,
+          ),
+          dataBuilder: (sessions) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final session in sessions)
+                InkWell(
+                  onTap: () =>
+                      context.push('/app/entrenamientos/${session.id}'),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _format(session.startedAt),
+                          style: AppTypography.body,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          session.notes == null || session.notes!.isEmpty
+                              ? 'Sin notas'
+                              : session.notes!,
+                          style: AppTypography.body.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
+    if (embedded) {
+      return Scaffold(backgroundColor: Colors.transparent, body: list);
+    }
+    return AppScaffoldTemplate(body: SafeArea(child: list));
   }
 }

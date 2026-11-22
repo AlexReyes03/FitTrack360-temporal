@@ -30,6 +30,15 @@ class AppColors {
   static const Color glassBorderStrong = Color(0x47FFFFFF);
   static const Color glassRim = Color(0x3DFFFFFF);
   static const Color glassRimFaint = Color(0x08FFFFFF);
+  static const Color glassBorderPressed = Color(0x73FFFFFF);
+  static const Color glassHighlight = Color(0x59FFFFFF);
+  static const Color glassMarkBorder = Color(0x38FFFFFF);
+
+  // Relleno de botones secundarios glass (gradiente superior/inferior)
+  static const Color glassFillStrong = Color(0x1AFFFFFF);
+  static const Color glassFillSoft = Color(0x0AFFFFFF);
+  static const Color glassFillPressedStrong = Color(0x29FFFFFF);
+  static const Color glassFillPressedSoft = Color(0x14FFFFFF);
 
   // StatusBanner
   static const Color warningFill = Color(0x24F59E0B);
@@ -38,4 +47,12 @@ class AppColors {
   static const Color dangerFill = Color(0x29EF4444);
   static const Color dangerBorder = Color(0x73F87171);
   static const Color dangerText = Color(0xFFFECACA);
+
+  // Boton destructivo (Liquid Glass rojo)
+  static const Color dangerSolidTop = Color(0xFFEF4444);
+  static const Color dangerSolidMid = Color(0xFFDC2626);
+  static const Color dangerSolidBottom = Color(0xFFB91C1C);
+  static const Color dangerSolidPressedTop = Color(0xFFF87171);
+  static const Color dangerSolidRim = Color(0x99FCA5A5);
+  static const Color dangerSolidShadow = Color(0x4DEF4444);
 }

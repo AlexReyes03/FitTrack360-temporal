@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancela ejecuciones anteriores de la misma rama o PR para no gastar minutos.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (fit_track_api)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Valores dummy: las pruebas no se conectan a una base real.
+      DATABASE_URL: postgresql://fittrack:fittrack@localhost:5432/fittrack
+      PORT: '3000'
+      FIREBASE_AUTH_MODE: mock
+      SMTP_HOST: localhost
+      SMTP_PORT: '1025'
+      SMTP_SECURE: 'false'
+      SMTP_FROM: no-reply@fittrack360.local
+      UPLOAD_DIR: ./uploads
+      USDA_FDC_API_KEY: ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 12.3.4
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.11.1
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      # --ignore-scripts evita el postinstall raíz (`dart pub get`), que no
+      # aplica en este job sin Flutter. El cliente Prisma se genera abajo.
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generar cliente Prisma
+        run: pnpm --dir fit_track_api run prisma:generate
+
+      - name: Lint
+        run: pnpm --dir fit_track_api run lint:strict
+
+      - name: Formato
+        run: pnpm --dir fit_track_api run format:check
+
+      - name: Typecheck
+        run: pnpm --dir fit_track_api run typecheck
+
+      - name: Build
+        run: pnpm --dir fit_track_api run build
+
+      - name: Pruebas unitarias
+        run: pnpm --dir fit_track_api test
+
+  frontend:
+    name: Frontend (fit_track_360)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: fit_track_360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Formato
+        run: dart format --output=none --set-exit-if-changed lib
+
+      - name: Analisis estatico
+        run: dart analyze --fatal-infos --fatal-warnings .
+
+      - name: Pruebas
+        run: flutter test

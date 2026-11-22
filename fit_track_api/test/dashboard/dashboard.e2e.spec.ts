@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { configureApp } from '../../src/app.setup';
+import { APP_HTTP_OPTIONS, configureApp } from '../../src/app.setup';
 import {
   FIREBASE_TOKEN_VERIFIER,
   MockFirebaseTokenVerifier,
@@ -75,7 +75,8 @@ describe('GET /api/v1/dashboard/today (W12-06)', () => {
       .overrideProvider(FIREBASE_TOKEN_VERIFIER)
       .useValue(new MockFirebaseTokenVerifier())
       .compile();
-    app = moduleRef.createNestApplication<INestApplication<App>>();
+    app =
+      moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
     configureApp(app);
     await app.init();
     anaToken = 'mock:firebase-ana:ana@test.com';

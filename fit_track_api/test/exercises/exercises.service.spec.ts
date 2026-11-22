@@ -6,7 +6,7 @@ import { validate } from 'class-validator';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { JwtAuthGuard } from '../../src/auth/jwt-auth.guard';
-import { configureApp } from '../../src/app.setup';
+import { APP_HTTP_OPTIONS, configureApp } from '../../src/app.setup';
 import { ExerciseQueryDto } from '../../src/exercises/dto/exercise-query.dto';
 import { ExerciseResponseDto } from '../../src/exercises/dto/exercise-response.dto';
 import { ExercisesController } from '../../src/exercises/exercises.controller';
@@ -397,7 +397,10 @@ describe('ExercisesModule · catálogo (W11-02)', () => {
         .useValue({ canActivate: () => true })
         .compile();
 
-      app = moduleRef.createNestApplication<INestApplication<App>>();
+      app =
+        moduleRef.createNestApplication<INestApplication<App>>(
+          APP_HTTP_OPTIONS,
+        );
       configureApp(app);
       await app.init();
     });

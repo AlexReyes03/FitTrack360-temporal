@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../../core/network/api_client.dart';
 import '../../auth/data/auth_api.dart';
+import '../domain/workout_not_found_exception.dart';
 import '../domain/workout_session_draft.dart';
 import 'workout_session.dart';
 
@@ -28,6 +29,9 @@ class WorkoutsApi {
     final response = await _client.get(
       '/api/v1/workouts/${Uri.encodeComponent(id)}',
     );
+    if (response.statusCode == 404) {
+      throw const WorkoutNotFoundException();
+    }
     if (response.statusCode != 200) {
       throw AuthApiException(apiErrorMessage(response));
     }
@@ -37,8 +41,11 @@ class WorkoutsApi {
   }
 
   /// Persiste el borrador; el mapeo al cuerpo vive en el dominio.
-  Future<WorkoutSession> create(WorkoutSessionDraft draft) async {
-    final payload = draft.toCreateWorkoutPayload();
+  Future<WorkoutSession> create(WorkoutSessionDraft draft) =>
+      createWithPayload(draft.toCreateWorkoutPayload());
+
+  /// Persiste un cuerpo ya armado (tracker live u otros flujos).
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
     final response = await _client.post('/api/v1/workouts', body: payload);
     if (response.statusCode != 201) {
       throw AuthApiException(apiErrorMessage(response));

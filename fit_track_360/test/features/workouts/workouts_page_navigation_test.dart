@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../settings/fakes.dart' show FakeConnectivityService;
 import 'fake_workouts_repository.dart';
 
 void main() {
@@ -39,7 +40,10 @@ void main() {
       routes: [
         GoRoute(
           path: '/app/entrenamientos',
-          builder: (context, state) => WorkoutsPage(api: api),
+          builder: (context, state) => WorkoutsPage(
+            api: api,
+            connectivityService: FakeConnectivityService(),
+          ),
         ),
         GoRoute(
           path: '/app/entrenamientos/:id',

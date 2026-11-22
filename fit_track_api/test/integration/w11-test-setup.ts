@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { MealType, Prisma, type Exercise, type MealLog } from '@prisma/client';
 import { App } from 'supertest/types';
-import { configureApp } from '../../src/app.setup';
+import { APP_HTTP_OPTIONS, configureApp } from '../../src/app.setup';
 import { AuthModule } from '../../src/auth/auth.module';
 import {
   FIREBASE_TOKEN_VERIFIER,
@@ -672,7 +672,8 @@ export async function createW11TestingContext(): Promise<W11IntegrationContext> 
     .useValue(usdaMock)
     .compile();
 
-  const app = moduleRef.createNestApplication<INestApplication<App>>();
+  const app =
+    moduleRef.createNestApplication<INestApplication<App>>(APP_HTTP_OPTIONS);
   configureApp(app);
   await app.init();
 

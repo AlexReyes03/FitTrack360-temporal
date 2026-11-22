@@ -12,6 +12,8 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../settings/fakes.dart' show FakeConnectivityService;
+
 class _FakeWorkoutsApi implements WorkoutsApi {
   final created = <WorkoutSessionDraft>[];
 
@@ -32,6 +34,22 @@ class _FakeWorkoutsApi implements WorkoutsApi {
       notes: draft.notes,
       createdAt: draft.startedAt,
       updatedAt: draft.startedAt,
+    );
+  }
+
+  @override
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
+    final startedAt =
+        DateTime.tryParse('${payload['startedAt']}') ??
+        DateTime.utc(2026, 11, 10, 18);
+    return WorkoutSession(
+      id: 'nueva',
+      userId: 'u1',
+      startedAt: startedAt,
+      endedAt: null,
+      notes: payload['notes'] as String?,
+      createdAt: startedAt,
+      updatedAt: startedAt,
     );
   }
 }
@@ -82,6 +100,31 @@ final _draft = WorkoutSessionDraft(
   ],
 );
 
+final _repeatedDraft = WorkoutSessionDraft(
+  startedAt: DateTime.utc(2026, 11, 11, 19),
+  exercises: const [
+    PlannedExercise(
+      exerciseId: 'ej-a',
+      exerciseName: 'Sentadilla',
+      position: 0,
+      targetSets: 2,
+      targetReps: 5,
+    ),
+    PlannedExercise(
+      exerciseId: 'ej-b',
+      exerciseName: 'Press banca',
+      position: 1,
+      targetSets: 1,
+      targetReps: 10,
+    ),
+  ],
+  sets: const [
+    PlannedSet(exerciseId: 'ej-a', order: 1, weightKg: 100, reps: 5),
+    PlannedSet(exerciseId: 'ej-a', order: 2, weightKg: 110, reps: 3),
+    PlannedSet(exerciseId: 'ej-b', order: 3, weightKg: 60, reps: 10),
+  ],
+);
+
 const _createdJson = {
   'id': 'nueva',
   'userId': 'u1',
@@ -102,7 +145,11 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: _FakeWorkoutsApi(), draft: _draft),
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          draft: _draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -131,7 +178,11 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: _FakeWorkoutsApi(), draft: draft),
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          draft: draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -143,12 +194,17 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(home: WorkoutsPage(api: _FakeWorkoutsApi())),
+      MaterialApp(
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          connectivityService: FakeConnectivityService(),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Rutina:'), findsNothing);
-    expect(find.text('Crear sesión'), findsOneWidget);
+    expect(find.text('Registrar entrenamiento'), findsOneWidget);
   });
 
   testWidgets('tras crear, el borrador desaparece y no se reenvía', (
@@ -157,12 +213,16 @@ void main() {
     final api = _FakeWorkoutsApi();
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: api, draft: _draft),
+        home: WorkoutsPage(
+          api: api,
+          draft: _draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     expect(api.created.single.routineId, 'rutina-1');
@@ -170,7 +230,7 @@ void main() {
     expect(find.text('Sentadilla'), findsNothing);
     expect(find.text('Sesión guardada'), findsOneWidget);
 
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     expect(api.created, hasLength(2));
@@ -195,12 +255,16 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: api, draft: _draft),
+        home: WorkoutsPage(
+          api: api,
+          draft: _draft,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
     );
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Hecha desde la rutina');
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     final body = posted.single;
@@ -213,6 +277,40 @@ void main() {
     ]);
     expect(find.text('Rutina: Pierna'), findsNothing);
     expect(find.text('Hecha desde la rutina'), findsOneWidget);
+  });
+
+  testWidgets('un borrador repetido envía sus series exactas sin routineId', (
+    tester,
+  ) async {
+    final posted = <Map<String, dynamic>>[];
+    var created = false;
+    final client = MockClient((request) async {
+      if (request.method == 'POST') {
+        posted.add(jsonDecode(request.body) as Map<String, dynamic>);
+        created = true;
+        return _json(_createdJson, 201);
+      }
+      return _json(created ? [_createdJson] : <Object>[], 200);
+    });
+    final api = WorkoutsApi(ApiClient(storage: _Storage(), httpClient: client));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WorkoutsPage(api: api, draft: _repeatedDraft),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Registrar entrenamiento'));
+    await tester.pumpAndSettle();
+
+    final body = posted.single;
+    expect(body.containsKey('routineId'), isFalse);
+    expect(body['startedAt'], '2026-11-11T19:00:00.000Z');
+    expect(body['sets'], [
+      {'exerciseId': 'ej-a', 'order': 1, 'weight': 100, 'reps': 5},
+      {'exerciseId': 'ej-a', 'order': 2, 'weight': 110, 'reps': 3},
+      {'exerciseId': 'ej-b', 'order': 3, 'weight': 60, 'reps': 10},
+    ]);
   });
 
   testWidgets('abierta con push muestra «Volver» y regresa', (tester) async {
@@ -232,6 +330,7 @@ void main() {
         GoRoute(
           path: '/app/entrenamientos',
           builder: (context, state) => WorkoutsPage(
+            connectivityService: FakeConnectivityService(),
             api: _FakeWorkoutsApi(),
             draft: state.extra as WorkoutSessionDraft?,
           ),
@@ -253,7 +352,12 @@ void main() {
 
   testWidgets('como pantalla raíz no muestra «Volver»', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(home: WorkoutsPage(api: _FakeWorkoutsApi())),
+      MaterialApp(
+        home: WorkoutsPage(
+          api: _FakeWorkoutsApi(),
+          connectivityService: FakeConnectivityService(),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -265,6 +369,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WorkoutsPage(
+          connectivityService: FakeConnectivityService(),
           api: _FakeWorkoutsApi(),
           apiClientFactory: () {
             created++;
@@ -288,6 +393,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: WorkoutsPage(
+          connectivityService: FakeConnectivityService(),
           apiClientFactory: () {
             final client = _CountingApiClient(
               MockClient((_) async => _json(<Object>[], 200)),

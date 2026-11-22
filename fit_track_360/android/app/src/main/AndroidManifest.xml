@@ -1,12 +1,20 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- P2: ubicacion aproximada al cerrar sesion. Sin fine location. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        tools:node="remove"/>
     <!-- P3: recordatorio local. Programación inexacta: sin SCHEDULE_EXACT_ALARM. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- O1: biometría. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- O5: pasos del día (ACTIVITY_RECOGNITION / pedometer). -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <application
-        android:label="fit_track_360"
+        android:label="Fit Track 360"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

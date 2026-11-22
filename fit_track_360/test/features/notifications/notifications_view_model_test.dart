@@ -273,6 +273,140 @@ void main() {
       expect(viewModel.sessionExpired, isTrue);
     });
 
+    test(
+      'load con sesión expirada descarta los avisos de la cuenta previa',
+      () async {
+        final repository = _FakeNotificationsRepository(seed: _seed())
+          ..fetchError = const SessionExpiredException();
+        final viewModel = NotificationsViewModel(
+          repository: repository,
+          initialNotifications: _seed(),
+        );
+        addTearDown(viewModel.dispose);
+        expect(viewModel.notifications, hasLength(3));
+
+        await viewModel.load();
+
+        expect(viewModel.notifications, isEmpty);
+        expect(viewModel.unreadCount, 0);
+        expect(viewModel.hasLoaded, isFalse);
+        expect(viewModel.sessionExpired, isTrue);
+        expect(viewModel.state, isA<AsyncError<List<AppNotification>>>());
+      },
+    );
+
+    test(
+      'refreshUnreadCount con sesión expirada limpia lista y badge',
+      () async {
+        final repository = _FakeNotificationsRepository(seed: _seed())
+          ..unread = 4
+          ..unreadError = const SessionExpiredException();
+        final viewModel = NotificationsViewModel(repository: repository);
+        addTearDown(viewModel.dispose);
+        await viewModel.load();
+        expect(viewModel.notifications, hasLength(3));
+
+        await viewModel.refreshUnreadCount();
+
+        expect(viewModel.notifications, isEmpty);
+        expect(viewModel.unreadCount, 0);
+        expect(viewModel.hasLoaded, isFalse);
+        expect(viewModel.sessionExpired, isTrue);
+      },
+    );
+
+    test('una mutación con sesión expirada no restaura el snapshot', () async {
+      final repository = _FakeNotificationsRepository(seed: _seed())
+        ..updateError = const SessionExpiredException();
+      final viewModel = NotificationsViewModel(repository: repository);
+      addTearDown(viewModel.dispose);
+      await viewModel.load();
+      expect(viewModel.notifications, hasLength(3));
+
+      await viewModel.markAsRead('login');
+
+      expect(viewModel.notifications, isEmpty);
+      expect(viewModel.unreadCount, 0);
+      expect(viewModel.hasLoaded, isFalse);
+      expect(viewModel.sessionExpired, isTrue);
+      expect(viewModel.mutationError, isNull);
+    });
+
+    test(
+      'deleteNotification con sesión expirada descarta la cuenta previa',
+      () async {
+        final repository = _FakeNotificationsRepository(seed: _seed())
+          ..deleteError = const SessionExpiredException();
+        final viewModel = NotificationsViewModel(repository: repository);
+        addTearDown(viewModel.dispose);
+        await viewModel.load();
+
+        await viewModel.deleteNotification('password');
+
+        expect(viewModel.notifications, isEmpty);
+        expect(viewModel.unreadCount, 0);
+        expect(viewModel.hasLoaded, isFalse);
+        expect(viewModel.sessionExpired, isTrue);
+      },
+    );
+
+    test(
+      'tras clearOnLogout la cuenta B refresca su badge y carga sus avisos',
+      () async {
+        final repository = _FakeNotificationsRepository(seed: _seed())
+          ..unread = 2;
+        final viewModel = NotificationsViewModel(repository: repository);
+        addTearDown(viewModel.dispose);
+        await viewModel.load();
+        expect(viewModel.unreadCount, 2);
+
+        viewModel.clearOnLogout();
+        expect(viewModel.unreadCount, 0);
+
+        repository._items
+          ..clear()
+          ..add(
+            AppNotification(
+              id: 'b-reminder',
+              title: 'Recordatorio de la cuenta B',
+              message: 'Solo visible para la cuenta B.',
+              type: AppNotificationType.reminder,
+              createdAt: DateTime(2026, 11, 23, 8),
+            ),
+          );
+        repository.unread = 1;
+
+        await viewModel.refreshUnreadCount();
+        expect(viewModel.unreadCount, 1);
+        expect(viewModel.notifications, isEmpty);
+
+        await viewModel.load();
+        expect(viewModel.notifications.map((n) => n.id), ['b-reminder']);
+        expect(viewModel.unreadCount, 1);
+      },
+    );
+
+    test(
+      'clearOnLogout seguido de expiración no revive la cuenta previa',
+      () async {
+        final repository = _FakeNotificationsRepository(seed: _seed())
+          ..fetchError = const SessionExpiredException();
+        final viewModel = NotificationsViewModel(
+          repository: repository,
+          initialNotifications: _seed(),
+        );
+        addTearDown(viewModel.dispose);
+
+        viewModel.clearOnLogout();
+        await viewModel.load();
+
+        expect(viewModel.notifications, isEmpty);
+        expect(viewModel.unreadCount, 0);
+        expect(viewModel.hasLoaded, isFalse);
+        expect(viewModel.sessionExpired, isTrue);
+      },
+    );
+
     test('refreshUnreadCount alimenta el badge antes de cargar', () async {
       final repository = _FakeNotificationsRepository()..unread = 5;
       final viewModel = NotificationsViewModel(repository: repository);

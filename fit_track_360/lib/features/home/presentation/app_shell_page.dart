@@ -68,7 +68,13 @@ class _AppShellPageState extends State<AppShellPage> {
     _didRefreshUnreadCount = true;
     final notifications = NotificationsScope.maybeOf(context);
     if (notifications != null) {
-      unawaited(notifications.refreshUnreadCount());
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        if (notifications.sessionExpired) {
+          notifications.clearOnLogout();
+        }
+        unawaited(notifications.refreshUnreadCount());
+      });
     }
   }
 

@@ -91,8 +91,9 @@ class NotificationsViewModel extends ChangeNotifier {
   /// Antes de cargar la lista se usa el conteo remoto del badge; después se
   /// calcula sobre la lista ya filtrada por el backend.
   int get unreadCount {
-    if (state is AsyncData<List<AppNotification>> ||
-        state is AsyncEmpty<List<AppNotification>>) {
+    if (_hasLoaded &&
+        (state is AsyncData<List<AppNotification>> ||
+            state is AsyncEmpty<List<AppNotification>>)) {
       return _countUnread(_notifications);
     }
     return _remoteUnreadCount ?? 0;
@@ -142,8 +143,7 @@ class NotificationsViewModel extends ChangeNotifier {
       state = _stateFor(_notifications);
     } on SessionExpiredException {
       if (_disposed || epoch != _sessionEpoch) return;
-      _hasLoaded = true;
-      sessionExpired = true;
+      _expireSession();
       state = const AsyncError<List<AppNotification>>(
         SessionExpiredException(),
       );
@@ -169,7 +169,7 @@ class NotificationsViewModel extends ChangeNotifier {
       if (changed) _notify();
     } on SessionExpiredException {
       if (_disposed || epoch != _sessionEpoch) return;
-      sessionExpired = true;
+      _expireSession();
       _notify();
     } catch (_) {
       // Silencioso: el badge no debe romper la navegación sin red.
@@ -338,12 +338,29 @@ class NotificationsViewModel extends ChangeNotifier {
     int? remoteSnapshot, {
     bool expired = false,
   }) {
+    if (expired) {
+      _expireSession();
+      _notify();
+      return;
+    }
     _notifications = snapshot;
     _remoteUnreadCount = remoteSnapshot;
-    if (expired) sessionExpired = true;
     mutationError = notificationMutationErrorMessage;
     _syncLoadedState();
     _notify();
+  }
+
+  /// La sesión ya no se puede renovar: se descarta todo lo de la cuenta
+  /// anterior para que la siguiente sesión no herede avisos ni conteos.
+  void _expireSession() {
+    _sessionEpoch++;
+    _loading = false;
+    _notifications = const <AppNotification>[];
+    _remoteUnreadCount = 0;
+    _hasLoaded = false;
+    mutationError = null;
+    sessionExpired = true;
+    state = const AsyncEmpty<List<AppNotification>>();
   }
 
   void _syncLoadedState() {

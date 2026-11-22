@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/network/api_client.dart';
+import '../core/session_storage.dart';
 import '../design_system/tokens/app_colors.dart';
 import '../features/notifications/data/notifications_api_repository.dart';
 import '../features/notifications/presentation/notifications_scope.dart';
@@ -40,17 +41,22 @@ class _FitTrackAppState extends State<FitTrackApp> {
     _ownsNotifications = injected == null;
     if (injected != null) {
       _notifications = injected;
-      return;
+    } else {
+      final client = ApiClient();
+      _apiClient = client;
+      _notifications = NotificationsViewModel(
+        repository: NotificationsApiRepository(client),
+      );
     }
-    final client = ApiClient();
-    _apiClient = client;
-    _notifications = NotificationsViewModel(
-      repository: NotificationsApiRepository(client),
-    );
+    appSessionInvalidations.addListener(_onSessionInvalidated);
   }
+
+  /// Una sesión expirada o cerrada no debe dejar avisos de la cuenta anterior.
+  void _onSessionInvalidated() => _notifications.clearOnLogout();
 
   @override
   void dispose() {
+    appSessionInvalidations.removeListener(_onSessionInvalidated);
     if (_ownsNotifications) _notifications.dispose();
     _apiClient?.dispose();
     super.dispose();

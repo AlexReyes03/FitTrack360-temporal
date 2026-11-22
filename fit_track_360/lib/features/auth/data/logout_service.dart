@@ -16,6 +16,7 @@ class LogoutService {
   Future<void> logout() async {
     if (firebaseAuth != null) {
       await firebaseAuth!.logout();
+      notifySessionCleared();
       return;
     }
 
@@ -30,6 +31,7 @@ class LogoutService {
       // Si el API falla, la sesión local se limpia igual.
     } finally {
       await _storage.clear();
+      notifySessionCleared();
     }
   }
 }

@@ -57,10 +57,16 @@ class _NotificationsPageState extends State<NotificationsPage> {
       }
     }
     final viewModel = _viewModel;
-    if (viewModel != null && !_didTriggerInitialLoad && !viewModel.hasLoaded) {
+    if (viewModel != null &&
+        !_didTriggerInitialLoad &&
+        (!viewModel.hasLoaded || viewModel.sessionExpired)) {
       _didTriggerInitialLoad = true;
       scheduleMicrotask(() {
-        if (mounted) unawaited(viewModel.load());
+        if (!mounted) return;
+        if (viewModel.sessionExpired) {
+          viewModel.clearOnLogout();
+        }
+        unawaited(viewModel.load());
       });
     }
     _handleViewModelChanged();
@@ -454,8 +460,9 @@ class _NotificationList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (viewModel.state is AsyncLoading<List<AppNotification>> &&
-        viewModel.notifications.isEmpty) {
+    if (viewModel.notifications.isEmpty &&
+        (viewModel.state is AsyncLoading<List<AppNotification>> ||
+            !viewModel.hasLoaded)) {
       return const Center(
         child: CircularProgressIndicator(color: AppColors.accentWhite),
       );

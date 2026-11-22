@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/async_state.dart';
@@ -12,7 +11,6 @@ import '../features/exercises/presentation/exercise_detail_page.dart';
 import '../features/exercises/presentation/exercises_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
 import '../features/exercises/data/exercise.dart';
-import '../features/home/presentation/widgets/nav_placeholder_page.dart';
 import '../features/meals/data/foods_api_repository.dart';
 import '../features/meals/domain/food_search_repository.dart';
 import '../features/meals/presentation/food_search_page.dart';
@@ -108,20 +106,6 @@ final appRouter = GoRouter(
             : null;
         return TrackerSessionPage(args: args);
       },
-      builder: (context, state) => NavPlaceholderPage(
-        title: 'Tracker',
-        subtitle:
-            'El tracker diario se implementara en la tarea W11-09. '
-            'Esta ruta ya queda registrada para la navegacion de W11.',
-        icon: Icons.insights_rounded,
-        onBack: () {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/app');
-          }
-        },
-      ),
     ),
     GoRoute(
       path: '/app/perfil',

@@ -1,11 +1,17 @@
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { AuthService } from '../../src/auth/auth.service';
 import { RegisterDto } from '../../src/auth/dto/register.dto';
 import {
   FIREBASE_TOKEN_VERIFIER,
   MockFirebaseTokenVerifier,
+  type FirebaseTokenVerifier,
 } from '../../src/auth/firebase-token.verifier';
 
 const anaRegistration: RegisterDto = {
@@ -58,6 +64,17 @@ function createInMemoryStore() {
         accounts.push(account);
         return Promise.resolve(account);
       },
+    },
+    /** Sustituye create para simular carrera de unicidad Prisma. */
+    failCreateWithP2002() {
+      this.user.create = () =>
+        Promise.reject(
+          new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+            code: 'P2002',
+            clientVersion: 'test',
+            meta: { target: ['email'] },
+          }),
+        );
     },
   };
 }
@@ -130,6 +147,15 @@ describe('AuthService (Firebase Auth)', () => {
         service.register('no-es-mock', anaRegistration),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
+
+    it('mapea P2002 de create a ConflictException (409)', async () => {
+      store.failCreateWithP2002();
+
+      await expect(
+        service.register(ANA_TOKEN, anaRegistration),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(store.accounts).toHaveLength(0);
+    });
   });
 
   describe('session', () => {
@@ -146,6 +172,31 @@ describe('AuthService (Firebase Auth)', () => {
     it('rechaza si Firebase existe pero no hay User en Postgres', async () => {
       await expect(service.session(BETO_TOKEN)).rejects.toBeInstanceOf(
         UnauthorizedException,
+      );
+    });
+  });
+
+  describe('disponibilidad Firebase', () => {
+    it('repropaga ServiceUnavailableException sin enmascarar como 401', async () => {
+      const unavailableVerifier: FirebaseTokenVerifier = {
+        verifyIdToken: async () => {
+          throw new ServiceUnavailableException(
+            'Firebase Admin no configurado',
+          );
+        },
+      };
+
+      const moduleRef = await Test.createTestingModule({
+        providers: [
+          AuthService,
+          { provide: PrismaService, useValue: store },
+          { provide: FIREBASE_TOKEN_VERIFIER, useValue: unavailableVerifier },
+        ],
+      }).compile();
+
+      const auth = moduleRef.get(AuthService);
+      await expect(auth.session(ANA_TOKEN)).rejects.toBeInstanceOf(
+        ServiceUnavailableException,
       );
     });
   });

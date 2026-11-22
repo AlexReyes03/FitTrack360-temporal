@@ -199,6 +199,12 @@ class FakeConnectivityService implements ConnectivityService {
   bool online;
   final _controller = StreamController<bool>.broadcast();
 
+  /// Simula un cambio de red: actualiza [online] y lo emite.
+  void emit(bool value) {
+    online = value;
+    _controller.add(value);
+  }
+
   @override
   Stream<bool> get onStatusChange => _controller.stream;
 

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/testing.dart';
 
+import '../settings/fakes.dart' show FakeConnectivityService;
 import 'support/exercise_test_support.dart';
 
 /// Router con las dos rutas reales del catálogo, como en `app/router.dart`.
@@ -19,7 +20,10 @@ GoRouter exerciseRouter(
     routes: [
       GoRoute(
         path: '/app/ejercicios',
-        builder: (context, state) => ExercisesPage(api: api),
+        builder: (context, state) => ExercisesPage(
+          api: api,
+          connectivityService: FakeConnectivityService(),
+        ),
       ),
       GoRoute(
         path: '/app/ejercicios/:id',

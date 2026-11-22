@@ -207,6 +207,7 @@ class FakePushDeviceLifecycle implements PushDeviceLifecycle {
   final syncCalls =
       <({bool notificationsEnabled, bool requestPermissionIfNeeded})>[];
   int revokeCalls = 0;
+  int disposeCalls = 0;
   Object? syncError;
   Object? revokeError;
 
@@ -226,6 +227,11 @@ class FakePushDeviceLifecycle implements PushDeviceLifecycle {
   Future<void> deactivateAndRevoke() async {
     revokeCalls++;
     if (revokeError != null) throw revokeError!;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
   }
 }
 

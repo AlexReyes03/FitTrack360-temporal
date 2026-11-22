@@ -290,4 +290,46 @@ void main() {
     await expectLater(service.deactivateAndRevoke(), completes);
     expect(api.revoked, isEmpty);
   });
+
+  test('dispose cancela la rotación y bloquea nuevos registros', () async {
+    await service.syncForActiveSession(notificationsEnabled: true);
+    expect(api.registrations, hasLength(1));
+
+    await service.dispose();
+    gateway.emitToken('tok-2');
+    await pumpEventQueue();
+
+    expect(api.registrations.map((registration) => registration.token), [
+      'tok-1',
+    ]);
+
+    await service.syncForActiveSession(notificationsEnabled: true);
+
+    expect(gateway.getTokenCalls, 1);
+    expect(api.registrations, hasLength(1));
+  });
+
+  test('dispose es idempotente y bloquea deactivateAndRevoke', () async {
+    await service.syncForActiveSession(notificationsEnabled: true);
+
+    await service.dispose();
+    await service.dispose();
+    await service.deactivateAndRevoke();
+
+    expect(api.revoked, isEmpty);
+  });
+
+  test('tras deactivateAndRevoke un refresh posterior no registra', () async {
+    await service.syncForActiveSession(notificationsEnabled: true);
+
+    await service.deactivateAndRevoke();
+    await service.syncForActiveSession(notificationsEnabled: false);
+    gateway.emitToken('tok-3');
+    await pumpEventQueue();
+
+    expect(api.registrations.map((registration) => registration.token), [
+      'tok-1',
+    ]);
+    expect(api.revoked, ['tok-1']);
+  });
 }

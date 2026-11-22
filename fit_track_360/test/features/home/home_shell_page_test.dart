@@ -3,16 +3,21 @@ import 'dart:convert';
 
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/network/connectivity_service.dart';
+import 'package:fit_track_360/core/notifications/fcm_messaging_gateway.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
 import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
+import 'package:fit_track_360/features/notifications/data/device_token_api.dart';
 import 'package:fit_track_360/features/notifications/data/push_device_lifecycle_service.dart';
+import 'package:fit_track_360/features/notifications/presentation/push_device_scope.dart';
+import 'package:fit_track_360/features/settings/presentation/profile_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../settings/fakes.dart' as settings_fakes;
 import 'fake_dashboard.dart';
 
 class FakeConnectivityService implements ConnectivityService {
@@ -64,6 +69,7 @@ class _FakePushDeviceLifecycle implements PushDeviceLifecycle {
   final syncCalls =
       <({bool notificationsEnabled, bool requestPermissionIfNeeded})>[];
   int revokeCalls = 0;
+  int disposeCalls = 0;
   Object? syncError;
   Object? revokeError;
 
@@ -83,6 +89,68 @@ class _FakePushDeviceLifecycle implements PushDeviceLifecycle {
   Future<void> deactivateAndRevoke() async {
     revokeCalls++;
     if (revokeError != null) throw revokeError!;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+  }
+}
+
+class _FakeFcmGateway implements FcmMessagingGateway {
+  _FakeFcmGateway({this.token = 'tok-initial'});
+
+  String? token;
+  final _refreshController = StreamController<String>.broadcast();
+
+  bool get hasRefreshListener => _refreshController.hasListener;
+
+  void emitRefresh(String nextToken) {
+    token = nextToken;
+    _refreshController.add(nextToken);
+  }
+
+  Future<void> close() => _refreshController.close();
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  String? get platformName => 'android';
+
+  @override
+  Future<FcmAuthorizationStatus> getNotificationSettings() async =>
+      FcmAuthorizationStatus.authorized;
+
+  @override
+  Future<FcmAuthorizationStatus> requestPermission() async =>
+      FcmAuthorizationStatus.authorized;
+
+  @override
+  Future<String?> getToken() async => token;
+
+  @override
+  Stream<String> get onTokenRefresh => _refreshController.stream;
+
+  @override
+  Future<void> deleteToken() async {}
+}
+
+class _FakeDeviceTokenClient implements DeviceTokenClient {
+  final registered = <({String token, String platform})>[];
+  final revoked = <String>[];
+
+  @override
+  Future<void> registerDeviceToken({
+    required String token,
+    required String platform,
+  }) async {
+    registered.add((token: token, platform: platform));
+  }
+
+  @override
+  Future<void> revokeDeviceToken({required String token}) async {
+    revoked.add(token);
   }
 }
 
@@ -687,6 +755,215 @@ void main() {
         expect(push.revokeCalls, 1);
         expect(storage.accessToken, isNull);
         expect(find.text('Pantalla login'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'HomeShellPage y ProfilePage comparten el mismo PushDeviceScope y apagar P3 detiene onTokenRefresh',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final gateway = _FakeFcmGateway(token: 'tok-initial');
+        final tokenApi = _FakeDeviceTokenClient();
+        final sharedPush = PushDeviceLifecycleService(
+          gateway: gateway,
+          api: tokenApi,
+          storage: storage,
+        );
+        addTearDown(() async {
+          await sharedPush.dispose();
+          await gateway.close();
+        });
+
+        final profileRepo = settings_fakes.FakeProfileRepository(
+          profile: settings_fakes.sampleProfileWithNotifications(true),
+        );
+        final router = GoRouter(
+          initialLocation: '/app',
+          routes: [
+            GoRoute(
+              path: '/app',
+              builder: (context, state) => HomeShellPage(
+                apiClient: ApiClient(
+                  storage: storage,
+                  httpClient: MockClient((request) async {
+                    if (request.url.path.endsWith('/users/me')) {
+                      return _profile(notificationsEnabled: true);
+                    }
+                    return _route(request);
+                  }),
+                ),
+                sessionStorage: storage,
+                connectivityService: FakeConnectivityService(online: true),
+                stepsSensor: FakeStepsSensor(
+                  snapshots: [StepsSnapshot.unavailableDevice],
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: profileRepo,
+                reminderService: settings_fakes.FakeReminderService(),
+                biometricService: settings_fakes.FakeBiometricService(),
+                exportSharer: settings_fakes.FakeExportSharer(),
+                connectivityService: settings_fakes.FakeConnectivityService(
+                  online: true,
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('Pantalla login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: sharedPush,
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tokenApi.registered, [
+          (token: 'tok-initial', platform: 'android'),
+        ]);
+        expect(gateway.hasRefreshListener, isTrue);
+
+        // Una rotación de token mientras P3 está encendido se registra.
+        gateway.emitRefresh('tok-rotated-1');
+        await tester.pumpAndSettle();
+        expect(tokenApi.registered.map((e) => e.token), [
+          'tok-initial',
+          'tok-rotated-1',
+        ]);
+
+        // Navega a Perfil y apaga el interruptor P3 usando el mismo servicio del scope.
+        await tester.tap(find.byTooltip('Perfil'));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('reminder-switch')), findsOneWidget);
+
+        expect(
+          PushDeviceScope.maybeOf(tester.element(find.byType(ProfilePage))),
+          same(sharedPush),
+        );
+        expect(gateway.hasRefreshListener, isTrue);
+
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+        await tester.pumpAndSettle();
+
+        expect(profileRepo.profile!.preferences.notificationsEnabled, isFalse);
+        expect(gateway.hasRefreshListener, isFalse);
+        expect(tokenApi.revoked, ['tok-rotated-1']);
+
+        // Desmonta ProfilePage volviendo al shell: un onTokenRefresh posterior no vuelve a registrar.
+        await tester.tap(find.byTooltip('Volver'));
+        await tester.pumpAndSettle();
+        expect(find.text('Hola, Ana'), findsOneWidget);
+
+        gateway.emitRefresh('tok-after-disable');
+        await tester.pumpAndSettle();
+        expect(tokenApi.registered.map((e) => e.token), [
+          'tok-initial',
+          'tok-rotated-1',
+        ]);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'consume PushDeviceScope sin llamar dispose() al desmontar el shell ni sobre servicio inyectado',
+      (tester) async {
+        final scopedPush = _FakePushDeviceLifecycle();
+        final router = GoRouter(
+          initialLocation: '/app',
+          routes: [
+            GoRoute(
+              path: '/app',
+              builder: (context, state) => HomeShellPage(
+                apiClient: ApiClient(
+                  storage: storage,
+                  httpClient: MockClient((request) async {
+                    if (request.url.path.endsWith('/users/me')) {
+                      return _profile(notificationsEnabled: true);
+                    }
+                    return _route(request);
+                  }),
+                ),
+                sessionStorage: storage,
+                connectivityService: FakeConnectivityService(online: true),
+                stepsSensor: FakeStepsSensor(
+                  snapshots: [StepsSnapshot.unavailableDevice],
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('Pantalla login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: scopedPush,
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(scopedPush.syncCalls, hasLength(1));
+
+        // Desmonta HomeShellPage: el dueño del servicio es PushDeviceScope, no el shell.
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(scopedPush.disposeCalls, 0);
+
+        // Tampoco dispone un servicio inyectado por parámetro.
+        final injectedPush = _FakePushDeviceLifecycle();
+        await _pumpShell(
+          tester,
+          connectivity: FakeConnectivityService(online: true),
+          storage: storage,
+          pushDeviceService: injectedPush,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/users/me')) {
+              return _profile(notificationsEnabled: true);
+            }
+            return _route(request);
+          }),
+        );
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(injectedPush.disposeCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'montado de forma aislada sin PushDeviceScope crea y libera su propia instancia sin errores',
+      (tester) async {
+        await _pumpShell(
+          tester,
+          connectivity: FakeConnectivityService(online: true),
+          storage: storage,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/users/me')) {
+              return _profile(notificationsEnabled: true);
+            }
+            return _route(request);
+          }),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
       },
     );

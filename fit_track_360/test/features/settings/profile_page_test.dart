@@ -5,6 +5,7 @@ import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/design_system/widgets/ds_text_field.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
+import 'package:fit_track_360/features/notifications/presentation/push_device_scope.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_page.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_view_model.dart';
@@ -465,6 +466,157 @@ void main() {
 
         expect(push.revokeCalls, 1);
         expect(find.text('login'), findsOneWidget);
+      },
+    );
+  });
+
+  group('ciclo de vida compartido PushDeviceScope (W13-7)', () {
+    testWidgets(
+      'consume PushDeviceScope para P3 y logout sin llamar dispose() al desmontar',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final previousStorage = appSessionStorage;
+        appSessionStorage = FakeSessionStorage()..accessToken = null;
+        addTearDown(() => appSessionStorage = previousStorage);
+
+        final scopedPush = FakePushDeviceLifecycle();
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: FakeProfileRepository(),
+                reminderService: FakeReminderService(),
+                biometricService: FakeBiometricService(),
+                exportSharer: FakeExportSharer(),
+                connectivityService: FakeConnectivityService(),
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: scopedPush,
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        expect(scopedPush.syncCalls, hasLength(1));
+
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        expect(scopedPush.revokeCalls, 1);
+
+        await tester.tap(find.text('Cerrar sesión'));
+        await tester.pumpAndSettle();
+        expect(scopedPush.revokeCalls, 2);
+        expect(find.text('login'), findsOneWidget);
+
+        // Desmontar ProfilePage no debe disponer el servicio del PushDeviceScope.
+        expect(scopedPush.disposeCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'no llama dispose() sobre pushDeviceService inyectado al desmontar',
+      (tester) async {
+        final injectedPush = FakePushDeviceLifecycle();
+        await _pump(tester, _Deps(push: injectedPush));
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(injectedPush.disposeCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'aislada sin PushDeviceScope ni pushDeviceService crea y libera su propia instancia sin errores',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: FakeProfileRepository(),
+                reminderService: FakeReminderService(),
+                biometricService: FakeBiometricService(),
+                exportSharer: FakeExportSharer(),
+                connectivityService: FakeConnectivityService(),
+              ),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('profile-name')), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'cambios de dependencias posteriores no reconstruyen ProfileViewModel ni limpian controllers',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final repo = FakeProfileRepository();
+        final scopedPush = FakePushDeviceLifecycle();
+        final textScale = ValueNotifier<double>(1.0);
+        addTearDown(textScale.dispose);
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: scopedPush,
+            child: ValueListenableBuilder<double>(
+              valueListenable: textScale,
+              builder: (context, scale, child) => MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              child: MaterialApp(
+                home: ProfilePage(
+                  repository: repo,
+                  reminderService: FakeReminderService(),
+                  biometricService: FakeBiometricService(),
+                  exportSharer: FakeExportSharer(),
+                  connectivityService: FakeConnectivityService(),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(repo.fetchCalls, 1);
+
+        await tester.enterText(_field('Nombre'), 'Ana Editada');
+        textScale.value = 1.2;
+        await tester.pumpAndSettle();
+
+        expect(repo.fetchCalls, 1);
+        expect(find.text('Ana Editada'), findsOneWidget);
+        expect(scopedPush.disposeCalls, 0);
       },
     );
   });

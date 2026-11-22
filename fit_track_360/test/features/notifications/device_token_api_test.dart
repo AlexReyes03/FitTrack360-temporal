@@ -87,80 +87,61 @@ void main() {
     );
   });
 
-  test('revoca con POST /notifications/devices/revoke', () async {
-    late http.Request captured;
+  test('revoca solo con POST /devices/revoke y el token en el body', () async {
+    final requests = <http.Request>[];
     final api = _api(
       MockClient((request) async {
-        captured = request;
+        requests.add(request);
         return http.Response('', 204);
       }),
     );
 
     await api.revokeDeviceToken(token: 'tok-1');
 
+    expect(requests, hasLength(1));
+    final captured = requests.single;
     expect(captured.method, 'POST');
     expect(captured.url.path, '/api/v1/notifications/devices/revoke');
     expect(jsonDecode(captured.body), {'token': 'tok-1'});
+    expect(captured.url.toString(), isNot(contains('tok-1')));
   });
 
-  test('si revoke responde 404 intenta DELETE del token', () async {
-    final methods = <String>[];
-    final paths = <String>[];
+  test('revoke acepta 200, 201 y 204', () async {
+    for (final status in [200, 201, 204]) {
+      final api = _api(
+        MockClient((request) async => http.Response('', status)),
+      );
+      await api.revokeDeviceToken(token: 'tok-1');
+    }
+  });
+
+  test('un 404 de revoke es éxito y no intenta DELETE con el token', () async {
+    final requests = <http.Request>[];
     final api = _api(
       MockClient((request) async {
-        methods.add(request.method);
-        paths.add(request.url.path);
-        if (request.method == 'POST') return http.Response('', 404);
-        return http.Response('', 204);
+        requests.add(request);
+        return http.Response('', 404);
       }),
     );
-
-    await api.revokeDeviceToken(token: 'tok-1');
-
-    expect(methods, ['POST', 'DELETE']);
-    expect(paths, [
-      '/api/v1/notifications/devices/revoke',
-      '/api/v1/notifications/devices/tok-1',
-    ]);
-  });
-
-  test('si revoke responde 405 intenta DELETE del token', () async {
-    final methods = <String>[];
-    final api = _api(
-      MockClient((request) async {
-        methods.add(request.method);
-        if (request.method == 'POST') return http.Response('', 405);
-        return http.Response('', 200);
-      }),
-    );
-
-    await api.revokeDeviceToken(token: 'tok-1');
-
-    expect(methods, ['POST', 'DELETE']);
-  });
-
-  test('si POST y DELETE responden 404 concluye en silencio', () async {
-    final api = _api(MockClient((request) async => http.Response('', 404)));
 
     await api.revokeDeviceToken(token: 'ajena');
+
+    expect(requests, hasLength(1));
+    expect(requests.single.method, 'POST');
+    expect(requests.single.url.path, '/api/v1/notifications/devices/revoke');
+    expect(requests.any((request) => request.method == 'DELETE'), isFalse);
   });
 
-  test('codifica el token al usar DELETE', () async {
-    late http.Request fallback;
-    final api = _api(
-      MockClient((request) async {
-        if (request.method == 'POST') return http.Response('', 404);
-        fallback = request;
-        return http.Response('', 204);
-      }),
+  test('un 401 al revocar lanza SessionExpiredException', () async {
+    final api = _api(MockClient((request) async => http.Response('', 401)));
+
+    await expectLater(
+      api.revokeDeviceToken(token: 'tok-1'),
+      throwsA(isA<SessionExpiredException>()),
     );
-
-    await api.revokeDeviceToken(token: 'tok:1/abc');
-
-    expect(fallback.url.toString(), contains('tok%3A1%2Fabc'));
   });
 
-  test('un error final al revocar lanza DeviceTokenApiException', () async {
+  test('un 500 al revocar lanza DeviceTokenApiException', () async {
     final api = _api(
       MockClient(
         (request) async => http.Response(
@@ -174,11 +155,9 @@ void main() {
     await expectLater(
       api.revokeDeviceToken(token: 'tok-1'),
       throwsA(
-        isA<DeviceTokenApiException>().having(
-          (error) => error.statusCode,
-          'statusCode',
-          500,
-        ),
+        isA<DeviceTokenApiException>()
+            .having((error) => error.message, 'message', 'fallo interno')
+            .having((error) => error.statusCode, 'statusCode', 500),
       ),
     );
   });

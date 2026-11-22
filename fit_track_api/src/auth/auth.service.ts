@@ -73,16 +73,30 @@ export class AuthService {
     return this.toDto(user);
   }
 
-  /** Resuelve el User existente por firebaseUid (post-login Firebase). */
+  /**
+   * Resuelve el User por firebaseUid (post-login Firebase / Google).
+   * Si el correo ya pertenece a otro firebaseUid, responde 409 (una cuenta
+   * por correo; AUTH-02). No crea filas aquí: el alta va por `register`.
+   */
   async session(idToken: string): Promise<AuthUserDto> {
     const verified = await this.verify(idToken);
     const user = await this.prisma.user.findUnique({
       where: { firebaseUid: verified.uid },
     });
-    if (!user) {
-      throw new UnauthorizedException('Usuario no sincronizado');
+    if (user) {
+      return this.toDto(user);
     }
-    return this.toDto(user);
+
+    const byEmail = await this.prisma.user.findUnique({
+      where: { email: verified.email },
+    });
+    if (byEmail) {
+      throw new ConflictException(
+        'El correo ya esta registrado con otra cuenta',
+      );
+    }
+
+    throw new UnauthorizedException('Usuario no sincronizado');
   }
 
   /** Revoca refresh tokens de Firebase para el UID del Bearer. */

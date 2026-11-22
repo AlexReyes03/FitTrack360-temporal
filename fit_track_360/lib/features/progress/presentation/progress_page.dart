@@ -31,6 +31,7 @@ class ProgressPage extends StatefulWidget {
     this.selectedCheckInPhotoLabel,
     this.isSubmittingCheckIn = false,
     this.checkInFeedback,
+    this.checkInSavedCount = 0,
     this.onBack,
     this.onRangeChanged,
     this.onSelectCheckInPhoto,
@@ -60,6 +61,9 @@ class ProgressPage extends StatefulWidget {
   final String? selectedCheckInPhotoLabel;
   final bool isSubmittingCheckIn;
   final String? checkInFeedback;
+
+  /// Métricas guardadas en esta sesión; limpia el formulario al cambiar.
+  final int checkInSavedCount;
   final VoidCallback? onBack;
   final ValueChanged<ProgressRange>? onRangeChanged;
   final VoidCallback? onSelectCheckInPhoto;
@@ -183,6 +187,15 @@ class _ProgressPageState extends State<ProgressPage> {
     _selectedRange = widget.initialRange;
   }
 
+  @override
+  void didUpdateWidget(covariant ProgressPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialRange != oldWidget.initialRange &&
+        widget.initialRange != _selectedRange) {
+      _selectedRange = widget.initialRange;
+    }
+  }
+
   void _handleRangeSelected(ProgressRange range) {
     if (_selectedRange == range) return;
     setState(() => _selectedRange = range);
@@ -237,6 +250,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   selectedPhotoLabel: widget.selectedCheckInPhotoLabel,
                   isSubmitting: widget.isSubmittingCheckIn,
                   feedbackMessage: widget.checkInFeedback,
+                  savedCount: widget.checkInSavedCount,
                   onSelectPhoto: widget.onSelectCheckInPhoto,
                   onSubmit: widget.onSubmitCheckIn,
                   onRetry: widget.onRetryCheckIn,
@@ -256,6 +270,21 @@ class _ProgressPageState extends State<ProgressPage> {
                   onCompareFullScreen: widget.onComparePhotos,
                   onAddPhoto: widget.onAddPhoto,
                   onRetry: widget.onRetryComparison,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.xs,
+                  ),
+                  child: Text(
+                    'Seguimiento personal orientativo. No sustituye valoración ni diagnóstico médico.',
+                    textAlign: TextAlign.center,
+                    style: AppTypography.caption.copyWith(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
                 ),
               ],
             ),

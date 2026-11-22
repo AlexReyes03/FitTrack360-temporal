@@ -38,6 +38,7 @@ class DefaultFirebaseOptions {
     projectId: 'fittrack360-98c44',
     storageBucket: 'fittrack360-98c44.firebasestorage.app',
     iosBundleId: 'com.example.fitTrack360',
+    iosClientId: '789152481670-66iaj9seukv91d1d8dc8c5p11c46jk26.apps.googleusercontent.com',
   );
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyD_02t3ykq7FHBTlUAX13s0Jd_EdobLFbg',

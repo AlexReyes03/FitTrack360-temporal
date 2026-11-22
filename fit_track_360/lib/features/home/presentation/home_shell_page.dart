@@ -192,7 +192,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
   @override
   Widget build(BuildContext context) {
     return HomeNavigationShell(
-      topBanner: OfflineBanner(service: _connectivity, onRetry: _loadProfile),
+      topBanner: OfflineBanner(service: _connectivity, onRetry: _retryAll),
       header: Padding(
         padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
         child: _Header(onProfileTap: () => context.push('/app/perfil')),
@@ -200,138 +200,64 @@ class _HomeShellPageState extends State<HomeShellPage> {
       destinations: _destinations,
       selectedIndex: 0,
       onDestinationSelected: _onDestinationSelected,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            GlassSurface(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  OfflineBanner(service: _connectivity, onRetry: _retryAll),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                    child: _Header(
-                      onProfileTap: () => context.push('/app/perfil'),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListenableBuilder(
-                      listenable: _dashboard,
-                      builder: (context, _) {
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.all(24),
-                          child: HomeDashboardContent(
-                            displayName: _displayName,
-                            nutritionStatus: _blockStatus(_dashboard.nutrition),
-                            nutritionData:
-                                _dashboard.nutrition.dataOrNull ??
-                                DashboardNutritionData.preview,
-                            onRetryNutrition: _dashboard.load,
-                            sessionStatus: _blockStatus(_dashboard.session),
-                            sessionData:
-                                _dashboard.session.dataOrNull ??
-                                DashboardSessionData.preview,
-                            onRetrySession: _dashboard.load,
-                            metricStatus: _blockStatus(_dashboard.metric),
-                            metricData:
-                                _dashboard.metric.dataOrNull ??
-                                DashboardMetricData.preview,
-                            onRetryMetric: _dashboard.load,
-                            stepsStatus: _blockStatus(_dashboard.steps),
-                            stepsData:
-                                _dashboard.steps.dataOrNull ??
-                                DashboardStepsData.preview,
-                            stepsUnavailable: _dashboard.stepsUnavailable,
-                            stepsUnavailableReason:
-                                _dashboard.stepsUnavailableReason,
-                            stepsNeedPermission: _dashboard.stepsNeedPermission,
-                            stepsCanOpenSettings:
-                                _dashboard.stepsCanOpenSettings,
-                            onRetrySteps: _dashboard.retrySteps,
-                            onEnableSteps: _dashboard.enableSteps,
-                            onOpenStepsSettings: () =>
-                                unawaited(_dashboard.openStepsSettings()),
-                            onOpenWorkout: () =>
-                                context.push('/app/entrenamientos'),
-                            onOpenMeals: () => context.push('/app/comidas'),
-                            onOpenPhoto: () => context.push('/app/foto'),
-                          ),
-                        );
-                      },
-                  Text(
-                    _displayName == null
-                        ? 'Hola, bienvenido'
-                        : 'Hola, $_displayName',
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Aqui va tu resumen de entrenamientos, comidas y progreso.',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    height: 120,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      color: Colors.white.withValues(alpha: 0.035),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
-                    child: const Center(
-                      child: Text(
-                        'Contenido proximo',
-                        style: TextStyle(
-                          color: AppColors.textMuted,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
-            QuickActionsRow(
-              actions: [
-                QuickActionItem(
-                  label: 'Nuevo entreno',
-                  subtitle: 'Registrar sesión',
-                  icon: Icons.fitness_center_rounded,
-                  onTap: () => context.push('/app/entrenamientos'),
+      body: ListenableBuilder(
+        listenable: _dashboard,
+        builder: (context, _) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                HomeDashboardContent(
+                  displayName: _displayName,
+                  nutritionStatus: _blockStatus(_dashboard.nutrition),
+                  nutritionData:
+                      _dashboard.nutrition.dataOrNull ??
+                      DashboardNutritionData.preview,
+                  onRetryNutrition: _dashboard.load,
+                  sessionStatus: _blockStatus(_dashboard.session),
+                  sessionData:
+                      _dashboard.session.dataOrNull ??
+                      DashboardSessionData.preview,
+                  onRetrySession: _dashboard.load,
+                  metricStatus: _blockStatus(_dashboard.metric),
+                  metricData:
+                      _dashboard.metric.dataOrNull ??
+                      DashboardMetricData.preview,
+                  onRetryMetric: _dashboard.load,
+                  stepsStatus: _blockStatus(_dashboard.steps),
+                  stepsData:
+                      _dashboard.steps.dataOrNull ??
+                      DashboardStepsData.preview,
+                  stepsUnavailable: _dashboard.stepsUnavailable,
+                  stepsUnavailableReason: _dashboard.stepsUnavailableReason,
+                  stepsNeedPermission: _dashboard.stepsNeedPermission,
+                  stepsCanOpenSettings: _dashboard.stepsCanOpenSettings,
+                  onRetrySteps: _dashboard.retrySteps,
+                  onEnableSteps: _dashboard.enableSteps,
+                  onOpenStepsSettings: () =>
+                      unawaited(_dashboard.openStepsSettings()),
+                  onOpenWorkout: () => context.push('/app/entrenamientos'),
+                  onOpenMeals: () => context.push('/app/comidas'),
+                  onOpenPhoto: () => context.push('/app/foto'),
                 ),
-                QuickActionItem(
-                  label: 'Registrar comida',
-                  subtitle: 'Calorías y macros',
-                  icon: Icons.restaurant_rounded,
-                  onTap: () => context.push('/app/comidas'),
-                ),
-                QuickActionItem(
-                  label: 'Foto progreso',
-                  subtitle: 'Guardar avance',
-                  icon: Icons.photo_camera_outlined,
-                  onTap: () => context.push('/app/foto'),
-                ),
-                QuickActionItem(
-                  label: 'Tracker diario',
-                  subtitle: 'Próximamente',
-                  icon: Icons.insights_rounded,
-                  onTap: () => context.push('/app/tracker'),
+                const SizedBox(height: 18),
+                // Acceso extra no cubierto por DashboardQuickActions (W11-12).
+                QuickActionsRow(
+                  title: null,
+                  actions: [
+                    QuickActionItem(
+                      label: 'Tracker diario',
+                      subtitle: 'Próximamente',
+                      icon: Icons.insights_rounded,
+                      onTap: () => context.push('/app/tracker'),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
-        ),
+          );
+        },
       ),
       footer: Padding(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 6),

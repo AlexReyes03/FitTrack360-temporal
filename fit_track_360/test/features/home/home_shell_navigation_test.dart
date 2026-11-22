@@ -53,6 +53,42 @@ http.Response _profile() => http.Response.bytes(
   200,
 );
 
+http.Response _dashboardEmpty() => http.Response.bytes(
+  utf8.encode(
+    jsonEncode({
+      'date': '2026-11-19',
+      'utcOffsetMinutes': -360,
+      'nutrition': {
+        'mealsLogged': 0,
+        'consumed': {'calories': 0, 'proteinG': 0, 'carbsG': 0, 'fatG': 0},
+        'goals': {
+          'dailyCalorieGoal': 2000,
+          'proteinGoalG': 150,
+          'carbsGoalG': 200,
+          'fatGoalG': 60,
+        },
+        'remaining': {
+          'calories': 2000,
+          'proteinG': 150,
+          'carbsG': 200,
+          'fatG': 60,
+        },
+      },
+      'session': null,
+      'latestMetric': null,
+    }),
+  ),
+  200,
+  headers: {'content-type': 'application/json'},
+);
+
+Future<http.Response> _route(http.Request request) async {
+  final path = request.url.path;
+  if (path.endsWith('/users/me')) return _profile();
+  if (path.contains('/dashboard/today')) return _dashboardEmpty();
+  return http.Response('not found', 404);
+}
+
 void main() {
   testWidgets('bottom nav y accesos rapidos llegan a las rutas principales', (
     tester,
@@ -71,7 +107,7 @@ void main() {
           builder: (context, state) => HomeShellPage(
             apiClient: ApiClient(
               storage: storage,
-              httpClient: MockClient((_) async => _profile()),
+              httpClient: MockClient(_route),
             ),
             sessionStorage: storage,
             connectivityService: _OnlineConnectivity(),

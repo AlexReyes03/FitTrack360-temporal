@@ -123,9 +123,6 @@ class ApiClient {
         body: body == null ? null : jsonEncode(body),
       );
     }
-    if (method == 'DELETE') {
-      return _http.delete(uri, headers: headers);
-    }
     return _http.post(
       uri,
       headers: headers,

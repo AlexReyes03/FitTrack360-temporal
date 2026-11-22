@@ -35,11 +35,16 @@ class FakeWorkoutsRepository implements WorkoutsRepository {
     required this.sessions,
     this.getError,
     this.listError,
+    this.createError,
   });
 
   final List<WorkoutSession> sessions;
   final Object? getError;
   final Object? listError;
+  final Object? createError;
+
+  /// Cuerpos recibidos por [createWithPayload], en orden.
+  final List<Map<String, dynamic>> createdPayloads = [];
 
   @override
   Future<WorkoutSession> getById(String id) async {
@@ -51,6 +56,13 @@ class FakeWorkoutsRepository implements WorkoutsRepository {
   Future<List<WorkoutSession>> list() async {
     if (listError != null) throw listError!;
     return sessions;
+  }
+
+  @override
+  Future<WorkoutSession> createWithPayload(Map<String, dynamic> payload) async {
+    createdPayloads.add(payload);
+    if (createError != null) throw createError!;
+    return fakeSession(id: 'created-${createdPayloads.length}');
   }
 }
 

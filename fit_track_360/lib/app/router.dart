@@ -11,6 +11,7 @@ import '../features/auth/presentation/splash_page.dart';
 import '../features/exercises/presentation/exercise_detail_page.dart';
 import '../features/exercises/presentation/exercises_page.dart';
 import '../features/home/presentation/home_shell_page.dart';
+import '../features/exercises/data/exercise.dart';
 import '../features/home/presentation/widgets/nav_placeholder_page.dart';
 import '../features/meals/data/foods_api_repository.dart';
 import '../features/meals/domain/food_search_repository.dart';
@@ -23,12 +24,13 @@ import '../features/routines/presentation/routine_detail_page.dart';
 import '../features/routines/presentation/routines_page.dart';
 import '../features/settings/presentation/profile_page.dart';
 import '../features/workouts/domain/workout_session_draft.dart';
+import '../features/workouts/presentation/tracker_session_page.dart';
 import '../features/workouts/presentation/workout_detail_page.dart';
 import '../features/workouts/presentation/workouts_page.dart';
 
 const _authRoutes = {'/login', '/register', '/forgot-password'};
 
-/// Path del placeholder del tracker diario (W11-09 lo llenara).
+/// Path del tracker de sesion activa (W11-09).
 const appTrackerPath = '/app/tracker';
 
 /// Path de busqueda USDA registrado en GoRouter (antes era Navigator.push).
@@ -92,6 +94,15 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: appTrackerPath,
+      builder: (context, state) {
+        final extra = state.extra;
+        final args = extra is TrackerSessionArgs
+            ? extra
+            : extra is Exercise
+            ? TrackerSessionArgs(exercise: extra)
+            : null;
+        return TrackerSessionPage(args: args);
+      },
       builder: (context, state) => NavPlaceholderPage(
         title: 'Tracker',
         subtitle:

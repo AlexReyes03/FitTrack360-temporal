@@ -49,6 +49,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>FitTrack360 usa Face ID para desbloquear tu sesión o confirmar una acción sensible, como borrar tu cuenta. Tu rostro nunca sale del dispositivo.</string>
 	<key>NSCameraUsageDescription</key>

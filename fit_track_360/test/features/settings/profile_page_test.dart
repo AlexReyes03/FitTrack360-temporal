@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
+import 'package:fit_track_360/design_system/components/primary_button.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/design_system/widgets/ds_text_field.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
@@ -370,6 +371,94 @@ void main() {
       await tester.tap(find.text('Cerrar sesión'));
       await tester.pumpAndSettle();
       expect(deps.storage.accessToken, isNull);
+      expect(find.text('login'), findsOneWidget);
+    });
+
+    testWidgets(
+      'el botón Cerrar sesión usa estilo rojo destructivo y texto claro',
+      (tester) async {
+        await _pump(tester, _Deps());
+
+        final buttonFinder = find.byKey(const Key('profile-logout-button'));
+        expect(buttonFinder, findsOneWidget);
+
+        final button = tester.widget<PrimaryButton>(buttonFinder);
+        expect(button.label, 'Cerrar sesión');
+        expect(button.variant, PrimaryButtonVariant.destructive);
+
+        final container = tester.widget<AnimatedContainer>(
+          find.descendant(
+            of: buttonFinder,
+            matching: find.byType(AnimatedContainer),
+          ),
+        );
+        final decoration = container.decoration! as BoxDecoration;
+        final gradient = decoration.gradient! as LinearGradient;
+        expect(
+          gradient.colors,
+          containsAll([
+            AppColors.dangerSolidTop,
+            AppColors.dangerSolidMid,
+            AppColors.dangerSolidBottom,
+          ]),
+        );
+
+        final labelText = tester.widget<Text>(
+          find.descendant(
+            of: buttonFinder,
+            matching: find.text('Cerrar sesión'),
+          ),
+        );
+        expect(labelText.style?.color, AppColors.accentWhite);
+      },
+    );
+
+    testWidgets('Cerrar sesión se deshabilita mientras cierra sesión', (
+      tester,
+    ) async {
+      final revokeCompleter = Completer<void>();
+      final deps = _Deps();
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final router = GoRouter(
+        initialLocation: '/app/perfil',
+        routes: [
+          GoRoute(
+            path: '/app/perfil',
+            builder: (context, state) => ProfilePage(
+              repository: deps.repository,
+              reminderService: deps.reminders,
+              biometricService: deps.biometrics,
+              exportSharer: deps.sharer,
+              connectivityService: deps.connectivity,
+              logoutService: LogoutService(
+                storage: deps.storage,
+                revoke: ({required idToken}) => revokeCompleter.future,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/login',
+            builder: (context, state) => const Text('login'),
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('profile-logout-button')));
+      await tester.pump();
+
+      final busyButton = tester.widget<PrimaryButton>(
+        find.byKey(const Key('profile-logout-button')),
+      );
+      expect(busyButton.label, 'Cerrando...');
+      expect(busyButton.onPressed, isNull);
+
+      revokeCompleter.complete();
+      await tester.pumpAndSettle();
       expect(find.text('login'), findsOneWidget);
     });
   });

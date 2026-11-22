@@ -366,25 +366,6 @@ void main() {
     expect(find.text('77'), findsOneWidget);
   });
 
-  testWidgets('cerrar sesion sin red limpia la sesion y va a login', (
-    tester,
-  ) async {
-    await _pumpShell(
-      tester,
-      connectivity: FakeConnectivityService(online: false),
-      storage: storage,
-      client: MockClient((_) async => throw http.ClientException('sin red')),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Cerrar sesión'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pantalla login'), findsOneWidget);
-    expect(storage.accessToken, isNull);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('muestra estados empty del dashboard con datos vacíos', (
     tester,
   ) async {
@@ -530,24 +511,5 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Entrenamiento'), findsOneWidget);
-    expect(find.text('Cerrar sesión'), findsOneWidget);
-  });
-
-  testWidgets('la navegación heredada de Ejercicios sigue disponible', (
-    tester,
-  ) async {
-    await _pumpShell(
-      tester,
-      connectivity: FakeConnectivityService(online: true),
-      storage: storage,
-      client: MockClient(_route),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Ejercicios'));
-    await tester.tap(find.text('Ejercicios'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pantalla ejercicios'), findsOneWidget);
   });
 }

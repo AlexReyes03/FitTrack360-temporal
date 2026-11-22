@@ -15,6 +15,7 @@ import '../../../design_system/tokens/app_typography.dart';
 import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/logout_service.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import '../data/profile_api_repository.dart';
 import '../data/share_plus_export_sharer.dart';
 import '../domain/export_sharer.dart';
@@ -186,67 +187,71 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+    final embedded = HomeNavigationShell.isEmbedded(context);
+    final showBack = !embedded || context.canPop();
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OfflineBanner(service: _connectivity, onRetry: _vm.load),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                showBack ? 8 : 24,
+                embedded ? 12 : 8,
+                24,
+                0,
+              ),
+              child: Row(
                 children: [
-                  OfflineBanner(service: _connectivity, onRetry: _vm.load),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          tooltip: 'Volver',
-                          onPressed: () => context.canPop()
-                              ? context.pop()
-                              : context.go('/app'),
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const Text('Perfil', style: AppTypography.pageTitle),
-                      ],
+                  if (showBack)
+                    IconButton(
+                      tooltip: 'Volver',
+                      onPressed: () =>
+                          context.canPop() ? context.pop() : context.go('/app'),
+                      icon: const Icon(
+                        Icons.arrow_back,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: _vm.state.when(
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.accentWhite,
-                        ),
-                      ),
-                      error: (_, _) => _StatusMessage(
-                        text: 'No pudimos cargar tu perfil.',
-                        onRetry: _vm.load,
-                      ),
-                      empty: () => _StatusMessage(
-                        text: 'Aún no hay datos de perfil.',
-                        onRetry: _vm.load,
-                      ),
-                      data: _content,
-                    ),
-                  ),
+                  const Text('Perfil', style: AppTypography.pageTitle),
                 ],
               ),
             ),
-          ),
+            Expanded(
+              child: _vm.state.when(
+                loading: () => const Center(
+                  child: CircularProgressIndicator(
+                    color: AppColors.accentWhite,
+                  ),
+                ),
+                error: (_, _) => _StatusMessage(
+                  text: 'No pudimos cargar tu perfil.',
+                  onRetry: _vm.load,
+                ),
+                empty: () => _StatusMessage(
+                  text: 'Aún no hay datos de perfil.',
+                  onRetry: _vm.load,
+                ),
+                data: (profile) => _content(profile, embedded: embedded),
+              ),
+            ),
+          ],
         ),
       ),
     );
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: embedded ? content : AppBackground(child: SafeArea(child: content)),
+    );
   }
 
-  Widget _content(UserProfile profile) {
+  Widget _content(UserProfile profile, {required bool embedded}) {
     final errors = _vm.fieldErrors;
     final prefs = profile.preferences;
     return ListView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.fromLTRB(24, embedded ? 12 : 24, 24, 32),
       children: [
         GlassSurface(
           child: Column(
@@ -454,7 +459,9 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         const SizedBox(height: 24),
         PrimaryButton(
+          key: const Key('profile-logout-button'),
           label: _loggingOut ? 'Cerrando...' : 'Cerrar sesión',
+          variant: PrimaryButtonVariant.destructive,
           onPressed: _loggingOut ? null : _logout,
         ),
       ],

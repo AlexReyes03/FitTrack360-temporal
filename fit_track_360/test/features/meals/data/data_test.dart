@@ -9,7 +9,9 @@ import 'package:fit_track_360/features/meals/domain/food_search_repository.dart'
 import 'package:fit_track_360/features/meals/domain/local_day.dart';
 import 'package:fit_track_360/features/meals/domain/macros.dart';
 import 'package:fit_track_360/features/meals/domain/meal_entry.dart';
+import 'package:fit_track_360/features/meals/domain/meal_item.dart';
 import 'package:fit_track_360/features/meals/domain/meal_type.dart';
+import 'package:fit_track_360/features/meals/domain/meals_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -209,6 +211,7 @@ void main() {
         expect(entry.eatenAt, DateTime.utc(2026, 11, 10, 15));
         expect(entry.isLegacy, isFalse);
         expect(entry.items.map((item) => item.name), ['Arroz', 'Frijoles']);
+        expect(entry.items.first.id, 'i-Arroz');
         expect(entry.items.first.fdcId, '168878');
         expect(entry.items.first.servingG, 150);
         expect(
@@ -450,5 +453,109 @@ void main() {
         );
       },
     );
+
+    test('PATCH envía el arreglo completo sin ids locales ni extra', () async {
+      late http.Request request;
+      final repo = _repo(
+        MockClient((r) async {
+          request = r;
+          final sent =
+              (jsonDecode(r.body) as Map<String, dynamic>)['items'] as List;
+          return _json(
+            _meal(
+              id: 'm1',
+              eatenAt: '2026-11-10T15:00:00.000Z',
+              mealType: 'LUNCH',
+              items: [
+                for (final item in sent.cast<Map<String, dynamic>>())
+                  _item(
+                    name: item['name'] as String,
+                    fdcId: item['fdcId'] as String?,
+                    servingG: item['servingG'] as num,
+                    kcal: item['kcal'] as num,
+                    proteinG: item['proteinG'] as num,
+                    carbsG: item['carbsG'] as num,
+                    fatG: item['fatG'] as num,
+                  ),
+              ],
+            ),
+            200,
+          );
+        }),
+      );
+
+      final updated = await repo.update('m1', const [
+        MealItem(
+          id: 'i1',
+          name: 'Arroz',
+          servingG: 200,
+          macros: Macros(kcal: 260, proteinG: 5.3, carbsG: 56, fatG: 0.7),
+        ),
+        MealItem(
+          fdcId: '171688',
+          name: 'Manzana',
+          servingG: 120,
+          macros: Macros(kcal: 62, proteinG: 0.3, carbsG: 17, fatG: 0.2),
+        ),
+      ]);
+
+      expect(request.method, 'PATCH');
+      expect(request.url.path, '/api/v1/meals/m1');
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      expect(body.keys.toSet(), {'items'});
+      final items = body['items'] as List;
+      expect(items, hasLength(2));
+      expect((items.first as Map).containsKey('id'), isFalse);
+      expect((items.first as Map)['name'], 'Arroz');
+      expect((items.last as Map)['fdcId'], '171688');
+      expect(updated.items.last.name, 'Manzana');
+    });
+
+    test('DELETE elimina la comida y acepta 204', () async {
+      late http.Request request;
+      final repo = _repo(
+        MockClient((r) async {
+          request = r;
+          return http.Response('', 204);
+        }),
+      );
+
+      await repo.delete('m1');
+
+      expect(request.method, 'DELETE');
+      expect(request.url.path, '/api/v1/meals/m1');
+    });
+
+    test('PATCH y DELETE inexistentes lanzan MealNotFoundException', () async {
+      final repo = _repo(MockClient((_) async => http.Response('', 404)));
+
+      await expectLater(
+        repo.update('m1', const [
+          MealItem(name: 'X', servingG: 1, macros: Macros.zero),
+        ]),
+        throwsA(isA<MealNotFoundException>()),
+      );
+      await expectLater(
+        repo.delete('m1'),
+        throwsA(isA<MealNotFoundException>()),
+      );
+    });
+
+    test('DELETE fallido reporta el mensaje del API', () async {
+      final repo = _repo(
+        MockClient((_) async => _json({'message': 'No se pudo eliminar'}, 500)),
+      );
+
+      await expectLater(
+        repo.delete('m1'),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'mensaje',
+            contains('No se pudo eliminar'),
+          ),
+        ),
+      );
+    });
   });
 }

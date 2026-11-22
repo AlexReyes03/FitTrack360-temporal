@@ -58,7 +58,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>FitTrack360 usa tu ubicacion aproximada para registrar en que zona o gimnasio entrenaste al cerrar una sesion.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>FitTrack360 usa el movimiento del dispositivo para mostrar tus pasos del dia en el resumen del Home.</string>
+	<string>FitTrack360 usa el sensor de movimiento para mostrar tus pasos del día en el resumen de Inicio. Los pasos se quedan en el dispositivo.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -17,6 +17,11 @@ typedef PostRequest = Future<http.Response> Function(
   String path,
   Map<String, dynamic> body,
 );
+typedef PatchRequest = Future<http.Response> Function(
+  String path,
+  Map<String, dynamic> body,
+);
+typedef DeleteRequest = Future<http.Response> Function(String path);
 
 /// MealsRepository contra el contrato real de `fit_track_api/src/meals/`:
 /// - `POST /api/v1/meals` con CreateMealDto `{eatenAt, mealType, items}`;
@@ -27,18 +32,29 @@ typedef PostRequest = Future<http.Response> Function(
 /// - `GET /api/v1/meals/summary` con DailySummaryQueryDto. El API toma
 ///   `date` como día UTC, así que además se envían `from`/`to` con los
 ///   límites del día local; `date` queda como la fecha local explícita.
+/// - `PATCH /api/v1/meals/:id` reemplaza todos los `items` enviados.
+/// - `DELETE /api/v1/meals/:id` elimina la comida completa.
 ///
 /// [SessionExpiredException] de [ApiClient] se propaga sin envolver.
 class MealsApiRepository implements MealsRepository {
-  MealsApiRepository({required this._get, required this._post});
+  MealsApiRepository({
+    required this._get,
+    required this._post,
+    required this._patch,
+    required this._delete,
+  });
 
   factory MealsApiRepository.fromClient(ApiClient client) => MealsApiRepository(
     get: client.get,
     post: (path, body) => client.post(path, body: body),
+    patch: (path, body) => client.patch(path, body: body),
+    delete: client.delete,
   );
 
   final GetRequest _get;
   final PostRequest _post;
+  final PatchRequest _patch;
+  final DeleteRequest _delete;
 
   static const _path = '/api/v1/meals';
 
@@ -51,27 +67,38 @@ class MealsApiRepository implements MealsRepository {
 
   @override
   Future<MealEntry> add(NewMealEntry entry) async {
-    final item = entry.item;
     final response = await _post(_path, {
       'eatenAt': entry.eatenAt.toUtc().toIso8601String(),
       'mealType': entry.mealType.apiValue,
-      'items': [
-        {
-          'name': item.name.trim(),
-          if (item.fdcId != null) 'fdcId': item.fdcId,
-          'servingG': item.servingG,
-          'kcal': item.macros.kcal,
-          'proteinG': item.macros.proteinG,
-          'carbsG': item.macros.carbsG,
-          'fatG': item.macros.fatG,
-        },
-      ],
+      'items': [_itemToJson(entry.item)],
     });
     final body = _decode(response, 201);
     if (body is! Map<String, dynamic>) {
       throw const AuthApiException('No se pudo conectar');
     }
     return _fromJson(body);
+  }
+
+  @override
+  Future<MealEntry> update(String mealId, List<MealItem> items) async {
+    final response = await _patch('$_path/$mealId', {
+      'items': items.map(_itemToJson).toList(),
+    });
+    if (response.statusCode == 404) throw const MealNotFoundException();
+    final body = _decode(response, 200);
+    if (body is! Map<String, dynamic>) {
+      throw const AuthApiException('No se pudo conectar');
+    }
+    return _fromJson(body);
+  }
+
+  @override
+  Future<void> delete(String mealId) async {
+    final response = await _delete('$_path/$mealId');
+    if (response.statusCode == 404) throw const MealNotFoundException();
+    if (response.statusCode != 204) {
+      throw AuthApiException(apiErrorMessage(response));
+    }
   }
 
   @override
@@ -127,11 +154,23 @@ class MealsApiRepository implements MealsRepository {
   }
 
   static MealItem _itemFromJson(Map<String, dynamic> json) => MealItem(
+    id: json['id'] as String?,
     fdcId: json['fdcId'] as String?,
     name: json['name'] as String,
     servingG: (json['servingG'] as num).toDouble(),
     macros: _macros(json),
   );
+
+  /// Campos de CreateMealItemDto; el `id` no se envía.
+  static Map<String, dynamic> _itemToJson(MealItem item) => {
+    'name': item.name.trim(),
+    if (item.fdcId != null) 'fdcId': item.fdcId,
+    'servingG': item.servingG,
+    'kcal': item.macros.kcal,
+    'proteinG': item.macros.proteinG,
+    'carbsG': item.macros.carbsG,
+    'fatG': item.macros.fatG,
+  };
 
   static Macros _macros(Map<String, dynamic> json) {
     double n(String key) => (json[key] as num?)?.toDouble() ?? 0;

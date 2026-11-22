@@ -30,6 +30,15 @@ class AppColors {
   static const Color glassBorderStrong = Color(0x47FFFFFF);
   static const Color glassRim = Color(0x3DFFFFFF);
   static const Color glassRimFaint = Color(0x08FFFFFF);
+  static const Color glassBorderPressed = Color(0x73FFFFFF);
+  static const Color glassHighlight = Color(0x59FFFFFF);
+  static const Color glassMarkBorder = Color(0x38FFFFFF);
+
+  // Relleno de botones secundarios glass (gradiente superior/inferior)
+  static const Color glassFillStrong = Color(0x1AFFFFFF);
+  static const Color glassFillSoft = Color(0x0AFFFFFF);
+  static const Color glassFillPressedStrong = Color(0x29FFFFFF);
+  static const Color glassFillPressedSoft = Color(0x14FFFFFF);
 
   // StatusBanner
   static const Color warningFill = Color(0x24F59E0B);

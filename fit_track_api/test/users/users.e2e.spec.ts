@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { configureApp } from '../../src/app.setup';
+import { APP_HTTP_OPTIONS, configureApp } from '../../src/app.setup';
 import { FIREBASE_TOKEN_VERIFIER } from '../../src/auth/firebase-token.verifier';
 import { MockFirebaseTokenVerifier } from '../../src/auth/firebase-token.verifier';
 import { PrismaModule } from '../../src/prisma/prisma.module';
@@ -43,7 +43,9 @@ describe('GET y PATCH /api/v1/users/me (W12-05)', () => {
       .overrideProvider(FIREBASE_TOKEN_VERIFIER)
       .useValue(new MockFirebaseTokenVerifier())
       .compile();
-    app = moduleRef.createNestApplication<INestApplication<App>>();
+    app = moduleRef.createNestApplication<INestApplication<App>>(
+      APP_HTTP_OPTIONS,
+    );
     configureApp(app);
     await app.init();
   });

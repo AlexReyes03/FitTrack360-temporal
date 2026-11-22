@@ -9,24 +9,39 @@ import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../data/auth_api.dart';
 import '../data/firebase_auth_service.dart';
+import '../data/google_auth_gateway.dart';
 import '../domain/auth_validators.dart';
+import 'widgets/google_sign_in_section.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  final VoidCallback? onGooglePressed;
+  final bool googleLoading;
+  final FirebaseAuthService? authService;
+
+  const LoginPage({
+    super.key,
+    this.onGooglePressed,
+    this.googleLoading = false,
+    this.authService,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final FirebaseAuthService _auth = FirebaseAuthService();
+  late final FirebaseAuthService _auth =
+      widget.authService ?? FirebaseAuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
 
   bool _submitting = false;
+  bool _googleLoading = false;
   bool _emailTouched = false;
   String? _error;
+
+  bool get _anyGoogleLoading => widget.googleLoading || _googleLoading;
 
   @override
   void initState() {
@@ -86,6 +101,34 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _submitGoogle() async {
+    if (widget.onGooglePressed != null) {
+      widget.onGooglePressed!();
+      return;
+    }
+    if (_submitting || _anyGoogleLoading) return;
+
+    setState(() {
+      _error = null;
+      _googleLoading = true;
+    });
+    try {
+      await _auth.loginWithGoogle(allowAutoRegister: false);
+      if (!mounted) return;
+      context.go('/app');
+    } on GoogleSignInCancelledException {
+      // Cancelar deja la pantalla de login sin error fatal.
+    } on AuthApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'No se pudo conectar');
+    } finally {
+      if (mounted) setState(() => _googleLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FormPageTemplate(
@@ -124,7 +167,7 @@ class _LoginPageState extends State<LoginPage> {
               hint: 'ejemplo@correo.com',
               keyboardType: TextInputType.emailAddress,
               errorText: _emailError,
-              enabled: !_submitting,
+              enabled: !_submitting && !_anyGoogleLoading,
             ),
             const SizedBox(height: 16),
             DsTextField(
@@ -132,12 +175,18 @@ class _LoginPageState extends State<LoginPage> {
               label: 'Contraseña',
               hint: 'Minimo 8 caracteres',
               obscureText: true,
-              enabled: !_submitting,
+              enabled: !_submitting && !_anyGoogleLoading,
             ),
             const SizedBox(height: 24),
             PrimaryButton(
               label: 'Entrar',
-              onPressed: _submitting ? null : _submit,
+              onPressed: (_submitting || _anyGoogleLoading) ? null : _submit,
+            ),
+            const SizedBox(height: 16),
+            GoogleAuthSection(
+              onGooglePressed: _submitGoogle,
+              isLoading: _anyGoogleLoading,
+              enabled: !_submitting,
             ),
             if (_error != null) ...[
               const SizedBox(height: 16),

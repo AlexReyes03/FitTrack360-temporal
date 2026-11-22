@@ -95,6 +95,24 @@ void main() {
       expect(receipt.version, '2');
     });
 
+    test('registerConsent codifica el userId en la ruta', () async {
+      final requests = <http.Request>[];
+      final client = MockClient((request) async {
+        requests.add(request);
+        return _json({'privacyNoticeVersion': '2'}, 201);
+      });
+      final repo = PrivacyApiRepository(
+        ApiClient(storage: FakeSessionStorage(), httpClient: client),
+      );
+
+      await repo.registerConsent(userId: 'usuario 1/ana', version: '2');
+
+      expect(
+        requests.single.url.path,
+        '/api/v1/privacy/usuario%201%2Fana/consent',
+      );
+    });
+
     test('registerConsent rechaza una versión no confirmada', () async {
       final repo = PrivacyApiRepository(
         ApiClient(

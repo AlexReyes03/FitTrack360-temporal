@@ -228,15 +228,20 @@ class _ProfilePageState extends State<ProfilePage> {
     if (confirmed != true || !mounted) return;
 
     final deleted = await _vm.deleteAccount();
-    if (!mounted) return;
-    if (_vm.sessionExpired) {
-      await _promptLogin();
+    if (!deleted) {
+      if (!mounted) return;
+      if (_vm.sessionExpired) await _promptLogin();
       return;
     }
-    if (!deleted) return;
+
+    // Con el 204 confirmado, la sesión local se limpia de inmediato: no se
+    // espera a cerrar el diálogo y no depende de que la vista siga montada.
+    await _vm.logout();
+    if (!mounted) return;
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.bgMid,
         title: const Text(
@@ -260,7 +265,7 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
     if (!mounted) return;
-    await _logout();
+    context.go('/login');
   }
 
   Future<void> _promptLogin() async {

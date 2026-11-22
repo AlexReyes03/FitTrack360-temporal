@@ -70,13 +70,37 @@ void main() {
       expect(repo.noticeCalls, 2);
     });
 
-    testWidgets('sesión expirada se informa al cargar', (tester) async {
+    testWidgets('sesión expirada al cargar ofrece iniciar sesión', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 4000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final repo = FakePrivacyRepository()
         ..noticeError = const SessionExpiredException();
-      await _pump(tester, repo);
+      final router = GoRouter(
+        initialLocation: '/perfil',
+        routes: [
+          GoRoute(
+            path: '/perfil',
+            builder: (_, _) =>
+                PrivacyNoticePage(userId: 'u1', repository: repo),
+          ),
+          GoRoute(path: '/login', builder: (_, _) => const Text('login')),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await tester.pumpAndSettle();
 
       expect(find.text(privacySessionExpiredMessage), findsOneWidget);
+      expect(find.text('Iniciar sesión'), findsOneWidget);
+      expect(find.text('Reintentar'), findsNothing);
+      expect(find.byKey(const Key('privacy-load-login')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('privacy-load-login')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
     });
 
     testWidgets('aviso sin secciones queda en vacío con reintento', (

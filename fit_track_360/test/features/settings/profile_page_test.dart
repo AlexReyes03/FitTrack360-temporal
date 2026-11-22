@@ -411,28 +411,78 @@ void main() {
       expect(find.text('Cuenta eliminada'), findsNothing);
     });
 
-    testWidgets('eliminar cuenta confirmada: confirma y cierra sesión', (
+    testWidgets(
+      'eliminar cuenta confirmada: limpia la sesión antes del diálogo',
+      (tester) async {
+        final deps = _Deps();
+        await _pump(tester, deps);
+        await tester.tap(find.text('Eliminar mi cuenta'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Eliminar'));
+        await tester.pumpAndSettle();
+
+        expect(deps.repository.deleteCalls, 1);
+        expect(find.text('Cuenta eliminada'), findsOneWidget);
+        expect(
+          find.textContaining('El servidor confirmó la eliminación'),
+          findsOneWidget,
+        );
+
+        // El 204 ya limpió los tokens aunque el diálogo siga abierto.
+        expect(deps.storage.accessToken, isNull);
+        expect(deps.storage.refreshToken, isNull);
+
+        await tester.tap(find.text('Entendido'));
+        await tester.pumpAndSettle();
+
+        expect(deps.storage.accessToken, isNull);
+        expect(find.text('login'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'eliminar cuenta: la limpieza no depende de cerrar el diálogo',
+      (tester) async {
+        final deps = _Deps();
+        await _pump(tester, deps);
+        await tester.tap(find.text('Eliminar mi cuenta'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Eliminar'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Cuenta eliminada'), findsOneWidget);
+        expect(deps.storage.accessToken, isNull);
+
+        // Desmontar la vista con el diálogo abierto no restaura la sesión.
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+
+        expect(deps.storage.accessToken, isNull);
+        expect(deps.storage.refreshToken, isNull);
+      },
+    );
+
+    testWidgets('eliminar cuenta: la limpieza sigue si la vista se desmonta', (
       tester,
     ) async {
       final deps = _Deps();
+      final gate = Completer<void>();
+      deps.repository.deleteGate = gate.future;
       await _pump(tester, deps);
       await tester.tap(find.text('Eliminar mi cuenta'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Eliminar'));
-      await tester.pumpAndSettle();
+      await tester.pump();
 
-      expect(deps.repository.deleteCalls, 1);
-      expect(find.text('Cuenta eliminada'), findsOneWidget);
-      expect(
-        find.textContaining('El servidor confirmó la eliminación'),
-        findsOneWidget,
-      );
+      // La vista desaparece mientras el DELETE sigue en curso.
+      await tester.pumpWidget(const SizedBox());
+      expect(deps.storage.accessToken, 'access');
 
-      await tester.tap(find.text('Entendido'));
+      gate.complete();
       await tester.pumpAndSettle();
 
       expect(deps.storage.accessToken, isNull);
-      expect(find.text('login'), findsOneWidget);
+      expect(deps.storage.refreshToken, isNull);
     });
 
     testWidgets('eliminar cuenta con error HTTP no informa éxito', (

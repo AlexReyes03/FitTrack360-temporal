@@ -141,6 +141,8 @@
 
 | 2026-11-21 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #177 (W12-FE-02.1, #129) | Atender la revisión de @AlexReyes03: ciclo de vida de `ApiClient` en rutinas, botón Volver y protección contra respuestas fuera de orden. | `fit_track_360/lib/features/routines/presentation/routines_page.dart`, `routine_detail_page.dart`, `fit_track_360/test/features/routines/` | Ajustado: `_ownedClient` solo con lector externo, pruebas de ciclo de vida, cambio de rutina y respuestas obsoletas. No se reutilizó `domain/routine.dart` porque exige campos no opcionales y rompería el editor e inicio desde rutina. | Rama `feat/w12-10-lista-detalle-rutinas` (sin commit) |
 
+| 2026-11-22 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #181 (W12-13, #132) | Atender la revisión de @AlexReyes03: limpiar la sesión al confirmar la eliminación de cuenta, ofrecer «Iniciar sesión» ante sesión expirada en el aviso y codificar el `userId` en la ruta de consentimiento. | `fit_track_360/lib/features/settings/presentation/profile_page.dart`, `privacy_notice_page.dart`, `data/privacy_api_repository.dart`, `fit_track_360/test/features/settings/`, `api_client.dart` (conflicto) | Ajustado: tras el 204 se ejecuta `_vm.logout()` antes del diálogo y sin depender de `mounted`; se agregaron pruebas de limpieza inmediata, con el diálogo abierto y con la vista desmontada. Se integró `origin/main` resolviendo el conflicto y conservando DELETE y la carga multipart. | Rama `feat/w12-13-privacidad` (sin push) |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

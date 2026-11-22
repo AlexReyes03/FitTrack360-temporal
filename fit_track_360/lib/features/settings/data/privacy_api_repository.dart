@@ -27,7 +27,7 @@ class PrivacyApiRepository implements PrivacyRepository {
     required String version,
   }) async {
     final response = await _client.post(
-      '/api/v1/privacy/$userId/consent',
+      '/api/v1/privacy/${Uri.encodeComponent(userId)}/consent',
       body: {'consent': true, 'version': version},
     );
     if (response.statusCode != 200 && response.statusCode != 201) {

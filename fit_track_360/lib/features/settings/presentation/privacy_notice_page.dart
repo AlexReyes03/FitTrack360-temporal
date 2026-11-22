@@ -74,9 +74,17 @@ class _PrivacyNoticePageState extends State<PrivacyNoticePage> {
                     color: AppColors.accentWhite,
                   ),
                 ),
-                error: (_, _) => _RetryMessage(
+                error: (error, _) => _RetryMessage(
                   text: _vm.error ?? privacyUnavailableMessage,
-                  onRetry: _vm.load,
+                  onRetry: error is SessionExpiredException
+                      ? () => context.go('/login')
+                      : _vm.load,
+                  actionLabel: error is SessionExpiredException
+                      ? 'Iniciar sesión'
+                      : 'Reintentar',
+                  actionKey: error is SessionExpiredException
+                      ? const Key('privacy-load-login')
+                      : null,
                 ),
                 empty: () => _RetryMessage(
                   text: 'El aviso no tiene secciones para mostrar.',
@@ -223,10 +231,17 @@ class _PrivacyNoticePageState extends State<PrivacyNoticePage> {
 }
 
 class _RetryMessage extends StatelessWidget {
-  const _RetryMessage({required this.text, required this.onRetry});
+  const _RetryMessage({
+    required this.text,
+    required this.onRetry,
+    this.actionLabel = 'Reintentar',
+    this.actionKey,
+  });
 
   final String text;
   final VoidCallback onRetry;
+  final String actionLabel;
+  final Key? actionKey;
 
   @override
   Widget build(BuildContext context) {
@@ -245,7 +260,11 @@ class _RetryMessage extends StatelessWidget {
                 style: const TextStyle(color: AppColors.textPrimary),
               ),
               const SizedBox(height: 16),
-              PrimaryButton(label: 'Reintentar', onPressed: onRetry),
+              PrimaryButton(
+                key: actionKey,
+                label: actionLabel,
+                onPressed: onRetry,
+              ),
             ],
           ),
         ),

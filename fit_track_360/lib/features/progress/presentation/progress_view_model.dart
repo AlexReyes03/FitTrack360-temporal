@@ -4,33 +4,46 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../domain/body_metric.dart';
+import '../domain/progress_metric_errors.dart';
+import '../domain/progress_metrics_repository.dart';
 import '../domain/progress_photo.dart';
 import '../domain/progress_photo_errors.dart';
 import '../domain/progress_photo_meta.dart';
 import '../domain/progress_photos_repository.dart';
 import 'state/progress_view_state.dart';
 
-/// Motivo explícito del bloqueo de métricas (#122): el peso del check-in se
-/// valida pero todavía no se persiste.
+/// Mensaje de degradación cuando no se inyecta [ProgressMetricsRepository].
+/// La app real siempre lo inyecta desde `ProgressShellPage`; las pruebas de
+/// widgets previas a la conexión real conservan este comportamiento.
 const String kMetricsBlockedReason =
     'Tu peso aún no se guarda: las métricas se guardarán cuando el backend '
     'de métricas corporales esté disponible (#122).';
 
-/// ViewModel de Progreso: fotos vía [ProgressPhotosRepository]; métricas
-/// bloqueadas por #122.
+/// ViewModel de Progreso: fotos vía [ProgressPhotosRepository] y métricas
+/// biométricas vía [ProgressMetricsRepository].
 class ProgressViewModel extends ChangeNotifier {
-  ProgressViewModel({required this._photos});
+  ProgressViewModel({
+    required this._photos,
+    this._metrics,
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now;
 
   final ProgressPhotosRepository _photos;
+  final ProgressMetricsRepository? _metrics;
+  final DateTime Function() _clock;
 
   bool _disposed = false;
   ProgressRange _range = ProgressRange.d30;
+  int _metricsRequest = 0;
 
-  /// Bloques de métricas: vacíos hasta #122 (sin preview inventado).
   ProgressSectionStatus chartStatus = ProgressSectionStatus.empty;
   ProgressSectionStatus historyStatus = ProgressSectionStatus.empty;
   ProgressSectionStatus checkInStatus = ProgressSectionStatus.data;
   ProgressSectionStatus comparisonStatus = ProgressSectionStatus.empty;
+
+  Object? chartError;
+  Object? historyError;
 
   ProgressChartData chartData = const ProgressChartData(
     currentWeightKg: 0,
@@ -48,6 +61,12 @@ class ProgressViewModel extends ChangeNotifier {
 
   /// Fotos subidas en esta sesión (no hay GET list en el API).
   final List<ProgressPhotoMeta> _sessionPhotos = [];
+
+  /// Peso de la métrica vinculada a cada foto de la sesión.
+  final Map<String, String> _photoWeightsById = {};
+
+  /// Nota local del check-in asociada a la métrica (no se envía al API).
+  final Map<String, String> _notesByMetricId = {};
 
   ProgressPhotoPreviewSlot? initialPhotoSlot;
   ProgressPhotoPreviewSlot? currentPhotoSlot;
@@ -79,11 +98,50 @@ class ProgressViewModel extends ChangeNotifier {
     reloadMetrics();
   }
 
-  /// Recarga gráfica e historial del rango actual aunque no haya cambiado
-  /// (usado por «Reintentar»). Sin serie de métricas (#122) quedan vacíos.
-  void reloadMetrics() {
-    chartStatus = ProgressSectionStatus.empty;
-    historyStatus = ProgressSectionStatus.empty;
+  /// Recarga gráfica e historial del rango actual (también usado por
+  /// «Reintentar»). Sin repositorio de métricas quedan vacíos.
+  Future<void> reloadMetrics() async {
+    final metrics = _metrics;
+    final request = ++_metricsRequest;
+
+    if (metrics == null) {
+      chartStatus = ProgressSectionStatus.empty;
+      historyStatus = ProgressSectionStatus.empty;
+      chartError = null;
+      historyError = null;
+      _notify();
+      return;
+    }
+
+    chartStatus = ProgressSectionStatus.loading;
+    historyStatus = ProgressSectionStatus.loading;
+    chartError = null;
+    historyError = null;
+    _notify();
+
+    final range = _rangeFor(_range);
+    try {
+      final results = await Future.wait<Object>([
+        metrics.getSeries(from: range.from, to: range.to),
+        metrics.listHistory(from: range.from, to: range.to),
+      ]);
+      if (_disposed || request != _metricsRequest) return;
+      _applySeries(results[0] as ProgressSeries);
+      _applyHistory(results[1] as List<BodyMetric>);
+    } on SessionExpiredException catch (failure) {
+      if (_disposed || request != _metricsRequest) return;
+      sessionExpired = true;
+      chartStatus = ProgressSectionStatus.error;
+      historyStatus = ProgressSectionStatus.error;
+      chartError = failure;
+      historyError = failure;
+    } catch (failure) {
+      if (_disposed || request != _metricsRequest) return;
+      chartStatus = ProgressSectionStatus.error;
+      historyStatus = ProgressSectionStatus.error;
+      chartError = failure;
+      historyError = failure;
+    }
     _notify();
   }
 
@@ -106,8 +164,8 @@ class ProgressViewModel extends ChangeNotifier {
     _notify();
   }
 
-  /// Check-in: [draft] ya viene validado; sin #122 no se persiste el peso.
-  /// Si hay foto, la sube a `/photos`.
+  /// Check-in: [draft] ya viene validado. Crea la métrica, sube la foto
+  /// vinculada con `metricId`, guarda la nota local y recarga la vista.
   Future<void> submitCheckIn(ProgressCheckInDraft draft) async {
     sessionExpired = false;
     checkInFeedback = null;
@@ -115,21 +173,48 @@ class ProgressViewModel extends ChangeNotifier {
     _notify();
 
     try {
+      final metrics = _metrics;
+      if (metrics == null) {
+        await _submitLegacyCheckIn();
+        return;
+      }
+
+      final created = await metrics.create(
+        CreateBodyMetricInput(
+          measuredAt: _clock(),
+          weightKg: draft.weightKg,
+          bodyFatPercent: draft.bodyFatPercent,
+          waistCm: draft.waistCm,
+        ),
+      );
+      if (_disposed) return;
+
       final file = _pendingPhotoFile;
       if (file != null) {
-        final meta = await _photos.upload(file);
+        final meta = await _photos.upload(file, metricId: created.id);
         if (_disposed) return;
         _sessionPhotos.add(meta);
+        _photoWeightsById[meta.id] = _weightLabel(
+          created.weightKg ?? draft.weightKg,
+        );
         _pendingPhotoFile = null;
         selectedCheckInPhotoLabel = null;
         _refreshComparisonSlots();
-        checkInFeedback = 'Foto guardada. $kMetricsBlockedReason';
-      } else {
-        checkInFeedback = kMetricsBlockedReason;
       }
+
+      final note = draft.notesText.trim();
+      if (note.isNotEmpty) _notesByMetricId[created.id] = note;
+
+      await reloadMetrics();
+      if (_disposed) return;
+      checkInFeedback = sessionExpired
+          ? 'Sesión expirada.'
+          : 'Check-in registrado correctamente.';
     } on SessionExpiredException {
       sessionExpired = true;
       checkInFeedback = 'Sesión expirada.';
+    } on ProgressMetricException catch (error) {
+      checkInFeedback = error.message;
     } on ProgressPhotoUnavailableException {
       checkInFeedback = 'Foto no disponible.';
     } on ProgressPhotoException catch (error) {
@@ -139,6 +224,22 @@ class ProgressViewModel extends ChangeNotifier {
     } finally {
       isSubmittingCheckIn = false;
       _notify();
+    }
+  }
+
+  /// Comportamiento previo a #130 cuando no hay repositorio de métricas.
+  Future<void> _submitLegacyCheckIn() async {
+    final file = _pendingPhotoFile;
+    if (file != null) {
+      final meta = await _photos.upload(file);
+      if (_disposed) return;
+      _sessionPhotos.add(meta);
+      _pendingPhotoFile = null;
+      selectedCheckInPhotoLabel = null;
+      _refreshComparisonSlots();
+      checkInFeedback = 'Foto guardada. $kMetricsBlockedReason';
+    } else {
+      checkInFeedback = kMetricsBlockedReason;
     }
   }
 
@@ -165,6 +266,7 @@ class ProgressViewModel extends ChangeNotifier {
       await _photos.delete(photoId);
       if (_disposed) return;
       _sessionPhotos.removeWhere((p) => p.id == photoId);
+      _photoWeightsById.remove(photoId);
       _refreshComparisonSlots();
       _notify();
     } on SessionExpiredException {
@@ -174,10 +276,106 @@ class ProgressViewModel extends ChangeNotifier {
     } on ProgressPhotoUnavailableException {
       // 404 ajena/inexistente: no rompe; se limpia local si estaba.
       _sessionPhotos.removeWhere((p) => p.id == photoId);
+      _photoWeightsById.remove(photoId);
       _refreshComparisonSlots();
       _notify();
       rethrow;
     }
+  }
+
+  void _applySeries(ProgressSeries series) {
+    final weighted =
+        series.points.where((point) => point.weightKg != null).toList()
+          ..sort((a, b) => a.measuredAt.compareTo(b.measuredAt));
+
+    if (weighted.isEmpty) {
+      chartData = const ProgressChartData(
+        currentWeightKg: 0,
+        periodDeltaKg: 0,
+        averageWeightKg: 0,
+        points: [],
+      );
+      chartStatus = ProgressSectionStatus.empty;
+      return;
+    }
+
+    final values = [for (final point in weighted) point.weightKg!];
+    final current = values.last;
+    final average = values.reduce((a, b) => a + b) / values.length;
+
+    chartData = ProgressChartData(
+      currentWeightKg: current,
+      periodDeltaKg: current - values.first,
+      averageWeightKg: average,
+      points: [
+        for (final point in weighted)
+          ProgressChartPoint(
+            label: _shortDate(point.measuredAt),
+            weightKg: point.weightKg!,
+          ),
+      ],
+    );
+    chartStatus = ProgressSectionStatus.data;
+  }
+
+  void _applyHistory(List<BodyMetric> metrics) {
+    final sorted = [...metrics]
+      ..sort((a, b) => b.measuredAt.compareTo(a.measuredAt));
+    final weighted = sorted.where((metric) => metric.weightKg != null).toList();
+
+    if (weighted.isEmpty) {
+      historyEntries = const [];
+      historyStatus = ProgressSectionStatus.empty;
+      return;
+    }
+
+    historyEntries = [
+      for (var index = 0; index < weighted.length; index++)
+        ProgressHistoryEntry(
+          dateLabel: _formatDay(weighted[index].measuredAt),
+          weightKg: weighted[index].weightKg!,
+          weeklyDiffKg: _weeklyDiff(weighted, index),
+          note: _noteFor(weighted[index]),
+        ),
+    ];
+    historyStatus = ProgressSectionStatus.data;
+  }
+
+  /// Compara contra la medición más cercana a `measuredAt - 7 días`; si
+  /// ninguna cae dentro de ±3 días, usa la inmediata anterior.
+  double? _weeklyDiff(List<BodyMetric> metrics, int index) {
+    final currentWeight = metrics[index].weightKg;
+    if (currentWeight == null || index + 1 >= metrics.length) return null;
+
+    final older = metrics.sublist(index + 1);
+    final target = metrics[index].measuredAt.subtract(const Duration(days: 7));
+    var comparator = older.first;
+    var bestDistance = comparator.measuredAt.difference(target).inHours.abs();
+    for (final candidate in older.skip(1)) {
+      final distance = candidate.measuredAt.difference(target).inHours.abs();
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        comparator = candidate;
+      }
+    }
+    if (bestDistance > const Duration(days: 3).inHours) {
+      comparator = older.first;
+    }
+
+    final comparatorWeight = comparator.weightKg;
+    if (comparatorWeight == null) return null;
+    return currentWeight - comparatorWeight;
+  }
+
+  String? _noteFor(BodyMetric metric) {
+    final parts = <String>[];
+    final fat = metric.bodyFatPercent;
+    if (fat != null) parts.add('Grasa: ${_decimal(fat)}%');
+    final waist = metric.waistCm;
+    if (waist != null) parts.add('Cintura: ${_decimal(waist)} cm');
+    final localNote = _notesByMetricId[metric.id]?.trim();
+    if (localNote != null && localNote.isNotEmpty) parts.add(localNote);
+    return parts.isEmpty ? null : parts.join(' | ');
   }
 
   void _refreshComparisonSlots() {
@@ -194,7 +392,7 @@ class ProgressViewModel extends ChangeNotifier {
     initialPhotoSlot = ProgressPhotoPreviewSlot(
       label: 'Inicial',
       dateLabel: _formatDay(first.createdAt),
-      weightLabel: 'Sin métrica',
+      weightLabel: _photoWeightsById[first.id] ?? 'Sin métrica',
       caption: 'Sesión actual',
     );
     currentPhotoSlot = sorted.length == 1
@@ -202,41 +400,92 @@ class ProgressViewModel extends ChangeNotifier {
         : ProgressPhotoPreviewSlot(
             label: 'Actual',
             dateLabel: _formatDay(last.createdAt),
-            weightLabel: 'Sin métrica',
+            weightLabel: _photoWeightsById[last.id] ?? 'Sin métrica',
             caption: 'Sesión actual',
           );
     comparisonStatus = ProgressSectionStatus.data;
   }
 
-  static String _formatDay(DateTime value) {
-    final local = value.toLocal();
-    const months = [
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic',
-    ];
-    return '${local.day} ${months[local.month - 1]} ${local.year}';
+  ({String from, String to}) _rangeFor(ProgressRange range) {
+    final now = _clock().toUtc();
+    final today = DateTime.utc(now.year, now.month, now.day);
+    final days = switch (range) {
+      ProgressRange.d7 => 6,
+      ProgressRange.d30 => 29,
+      ProgressRange.d90 => 89,
+      ProgressRange.y1 => 364,
+    };
+    return (
+      from: _dateParam(today.subtract(Duration(days: days))),
+      to: _dateParam(today),
+    );
   }
 
+  static String _dateParam(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year.toString().padLeft(4, '0')}-$month-$day';
+  }
+
+  static String _shortDate(DateTime value) {
+    final local = value.toLocal();
+    return '${local.day} ${_months[local.month - 1]}';
+  }
+
+  static String _weightLabel(double value) => '${value.toStringAsFixed(1)} kg';
+
+  static String _decimal(double value) {
+    if (value == value.roundToDouble()) return value.toStringAsFixed(0);
+    return value.toStringAsFixed(1);
+  }
+
+  static String _formatDay(DateTime value) {
+    final local = value.toLocal();
+    return '${local.day} ${_months[local.month - 1]} ${local.year}';
+  }
+
+  static const _months = [
+    'ene',
+    'feb',
+    'mar',
+    'abr',
+    'may',
+    'jun',
+    'jul',
+    'ago',
+    'sep',
+    'oct',
+    'nov',
+    'dic',
+  ];
+
   /// Expone estados AsyncState útiles para tests de VM.
-  AsyncState<ProgressChartData> get chartAsync =>
-      chartStatus == ProgressSectionStatus.empty
-      ? const AsyncEmpty()
-      : AsyncData(chartData);
+  AsyncState<ProgressChartData> get chartAsync => switch (chartStatus) {
+    ProgressSectionStatus.loading => const AsyncLoading<ProgressChartData>(),
+    ProgressSectionStatus.data => AsyncData(chartData),
+    ProgressSectionStatus.error => AsyncError(
+      chartError ??
+          const ProgressMetricRequestException(
+            'No se pudieron cargar las métricas',
+          ),
+    ),
+    ProgressSectionStatus.empty => const AsyncEmpty<ProgressChartData>(),
+  };
 
   AsyncState<List<ProgressHistoryEntry>> get historyAsync =>
-      historyStatus == ProgressSectionStatus.empty
-      ? const AsyncEmpty()
-      : AsyncData(historyEntries);
+      switch (historyStatus) {
+        ProgressSectionStatus.loading =>
+          const AsyncLoading<List<ProgressHistoryEntry>>(),
+        ProgressSectionStatus.data => AsyncData(historyEntries),
+        ProgressSectionStatus.error => AsyncError(
+          historyError ??
+              const ProgressMetricRequestException(
+                'No se pudo cargar el historial',
+              ),
+        ),
+        ProgressSectionStatus.empty =>
+          const AsyncEmpty<List<ProgressHistoryEntry>>(),
+      };
 
   void _notify() {
     if (!_disposed) notifyListeners();

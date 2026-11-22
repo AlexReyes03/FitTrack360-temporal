@@ -10,6 +10,7 @@ import { MealsModule } from './meals/meals.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PrivacyModule } from './privacy/privacy.module';
 import { PhotosModule } from './photos/photos.module';
+import { ProgressModule } from './progress/progress.module';
 import { RoutinesModule } from './routines/routines.module';
 import { ExercisesModule } from './exercises/exercises.module';
 import { ExerciseMediaModule } from './static/exercise-media.module';
@@ -33,6 +34,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
     MealsModule,
     ExercisesModule,
     DashboardModule,
+    ProgressModule,
     ExerciseMediaModule.register(),
   ],
   controllers: [AppController],

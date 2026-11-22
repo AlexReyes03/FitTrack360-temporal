@@ -9,11 +9,13 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
+import '../settings/fakes.dart' show FakeConnectivityService;
 import 'support/exercise_test_support.dart';
 
 Future<FakeSessionStorage> pumpCatalogue(
   WidgetTester tester, {
   required MockClient client,
+  FakeConnectivityService? connectivity,
 }) async {
   final storage = FakeSessionStorage();
   final api = ExercisesApi(ApiClient(storage: storage, httpClient: client));
@@ -23,7 +25,10 @@ Future<FakeSessionStorage> pumpCatalogue(
       GoRoute(path: '/app', builder: (context, state) => const Text('Home')),
       GoRoute(
         path: '/app/ejercicios',
-        builder: (context, state) => ExercisesPage(api: api),
+        builder: (context, state) => ExercisesPage(
+          api: api,
+          connectivityService: connectivity ?? FakeConnectivityService(),
+        ),
       ),
       GoRoute(
         path: '/app/ejercicios/:id',
@@ -47,6 +52,9 @@ Future<void> flush(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
   await tester.pump(const Duration(milliseconds: 400));
 }
+
+/// «Reintentar» de la vista de error (el banner offline tiene el suyo).
+final _errorRetry = find.widgetWithText(TextButton, 'Reintentar');
 
 void main() {
   testWidgets('muestra carga y luego los datos con contador', (tester) async {
@@ -113,7 +121,7 @@ void main() {
 
     expect(find.text('No se pudo conectar'), findsOneWidget);
 
-    await tester.tap(find.text('Reintentar'));
+    await tester.tap(_errorRetry);
     await flush(tester);
 
     expect(calls, 2);
@@ -323,5 +331,90 @@ void main() {
     await flush(tester);
 
     expect(urls.last.queryParameters.containsKey('bodyPart'), isFalse);
+  });
+
+  group('conectividad', () {
+    testWidgets('sin red muestra el banner offline', (tester) async {
+      await pumpCatalogue(
+        tester,
+        client: MockClient(
+          (request) async => jsonResponse(pageJson([exerciseJson()])),
+        ),
+        connectivity: FakeConnectivityService(online: false),
+      );
+      await flush(tester);
+
+      expect(find.text('Sin conexión'), findsOneWidget);
+    });
+
+    testWidgets('sin red, Reintentar de la vista de error recarga los datos', (
+      tester,
+    ) async {
+      var calls = 0;
+      await pumpCatalogue(
+        tester,
+        client: MockClient((request) async {
+          calls++;
+          if (calls == 1) throw http.ClientException('sin red');
+          return jsonResponse(pageJson([exerciseJson()]));
+        }),
+        connectivity: FakeConnectivityService(online: false),
+      );
+      await flush(tester);
+      // Banner offline y vista de error muestran «Reintentar» a la vez.
+      expect(find.text('Reintentar'), findsNWidgets(2));
+
+      await tester.tap(_errorRetry);
+      await flush(tester);
+
+      expect(calls, 2);
+      expect(find.text('3/4 sit-up'), findsOneWidget);
+    });
+
+    testWidgets('al recuperar la red tras un fallo recarga sola', (
+      tester,
+    ) async {
+      var calls = 0;
+      final connectivity = FakeConnectivityService(online: false);
+      await pumpCatalogue(
+        tester,
+        client: MockClient((request) async {
+          calls++;
+          if (calls == 1) throw http.ClientException('sin red');
+          return jsonResponse(pageJson([exerciseJson()]));
+        }),
+        connectivity: connectivity,
+      );
+      await flush(tester);
+      expect(find.text('No se pudo conectar'), findsOneWidget);
+
+      connectivity.emit(true);
+      await flush(tester);
+
+      expect(calls, 2);
+      expect(find.text('3/4 sit-up'), findsOneWidget);
+      expect(find.text('No se pudo conectar'), findsNothing);
+    });
+
+    testWidgets('recuperar la red con datos cargados no recarga', (
+      tester,
+    ) async {
+      var calls = 0;
+      final connectivity = FakeConnectivityService();
+      await pumpCatalogue(
+        tester,
+        client: MockClient((request) async {
+          calls++;
+          return jsonResponse(pageJson([exerciseJson()]));
+        }),
+        connectivity: connectivity,
+      );
+      await flush(tester);
+
+      connectivity.emit(true);
+      await flush(tester);
+
+      expect(calls, 1);
+    });
   });
 }

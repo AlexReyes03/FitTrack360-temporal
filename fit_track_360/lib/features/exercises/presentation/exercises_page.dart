@@ -5,6 +5,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/connectivity_service.dart';
+import '../../../core/widgets/offline_banner.dart';
+import '../../../core/widgets/remote_state_views.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
@@ -18,9 +21,10 @@ import 'widgets/exercise_filters.dart';
 
 /// Catálogo de ejercicios: búsqueda, filtros, contador y paginación.
 class ExercisesPage extends StatefulWidget {
-  const ExercisesPage({super.key, this.api});
+  const ExercisesPage({super.key, this.api, this.connectivityService});
 
   final ExercisesApi? api;
+  final ConnectivityService? connectivityService;
 
   @override
   State<ExercisesPage> createState() => _ExercisesPageState();
@@ -33,6 +37,9 @@ class _ExercisesPageState extends State<ExercisesPage> {
   // El cliente solo se crea (y se libera) si la página no recibió una API.
   late final ApiClient? _ownedClient = widget.api == null ? ApiClient() : null;
   late final ExercisesApi _api = widget.api ?? ExercisesApi(_ownedClient!);
+  late final ConnectivityService _connectivity =
+      widget.connectivityService ?? ConnectivityService();
+  StreamSubscription<bool>? _connectivitySubscription;
 
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchTimer;
@@ -50,11 +57,16 @@ class _ExercisesPageState extends State<ExercisesPage> {
   @override
   void initState() {
     super.initState();
+    _connectivitySubscription = _connectivity.onStatusChange.listen(
+      _onConnectivityChange,
+      onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
+    );
     _load();
   }
 
   @override
   void dispose() {
+    _connectivitySubscription?.cancel();
     _searchTimer?.cancel();
     _searchController.dispose();
     _ownedClient?.dispose();
@@ -88,6 +100,11 @@ class _ExercisesPageState extends State<ExercisesPage> {
       if (!mounted || requestId != _requestId) return;
       setState(() => _state = AsyncError<ExercisePage>(error, stackTrace));
     }
+  }
+
+  /// Al recuperar la red, recarga solo si la última carga falló.
+  void _onConnectivityChange(bool online) {
+    if (online && mounted && _state is AsyncError) _load();
   }
 
   void _onSearchChanged(String _) {
@@ -171,6 +188,7 @@ class _ExercisesPageState extends State<ExercisesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                OfflineBanner(service: _connectivity, onRetry: _load),
                 _header(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
@@ -201,15 +219,13 @@ class _ExercisesPageState extends State<ExercisesPage> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Expanded(
-                  child: _state.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.accentWhite,
-                      ),
-                    ),
-                    data: (page) => _results(page),
-                    error: (error, _) => _error(error),
-                    empty: _empty,
+                  child: AsyncStateView<ExercisePage>(
+                    state: _state,
+                    onRetry: _load,
+                    loadingMessage: 'Cargando ejercicios...',
+                    emptyBuilder: _empty,
+                    errorBuilder: (error, _) => _error(error),
+                    dataBuilder: _results,
                   ),
                 ),
               ],

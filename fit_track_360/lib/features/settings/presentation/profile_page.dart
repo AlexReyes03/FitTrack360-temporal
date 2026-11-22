@@ -15,6 +15,7 @@ import '../../../design_system/tokens/app_typography.dart';
 import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/logout_service.dart';
+import '../../notifications/data/push_device_lifecycle_service.dart';
 import '../data/profile_api_repository.dart';
 import '../data/share_plus_export_sharer.dart';
 import '../domain/export_sharer.dart';
@@ -47,6 +48,7 @@ class ProfilePage extends StatefulWidget {
     this.logoutService,
     this.connectivityService,
     this.exportSharer,
+    this.pushDeviceService,
   });
 
   final ProfileRepository? repository;
@@ -55,6 +57,7 @@ class ProfilePage extends StatefulWidget {
   final LogoutService? logoutService;
   final ConnectivityService? connectivityService;
   final ExportSharer? exportSharer;
+  final PushDeviceLifecycle? pushDeviceService;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -64,15 +67,23 @@ class _ProfilePageState extends State<ProfilePage> {
   ApiClient? _ownedClient;
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  late final PushDeviceLifecycle _pushDeviceService =
+      widget.pushDeviceService ??
+      PushDeviceLifecycleService.fromClient(_ensureOwnedClient());
   late final ProfileViewModel _vm = ProfileViewModel(
     profileRepository:
-        widget.repository ?? ProfileApiRepository(_ownedClient = ApiClient()),
+        widget.repository ?? ProfileApiRepository(_ensureOwnedClient()),
     reminderService: widget.reminderService ?? LocalReminderService(),
     biometricService: widget.biometricService ?? LocalBiometricService(),
-    logoutService: widget.logoutService ?? LogoutService(),
+    logoutService:
+        widget.logoutService ??
+        LogoutService(pushDeviceService: _pushDeviceService),
     exportSharer: widget.exportSharer ?? SharePlusExportSharer(),
+    pushDeviceService: _pushDeviceService,
   );
   final _exportKey = GlobalKey();
+
+  ApiClient _ensureOwnedClient() => _ownedClient ??= ApiClient();
 
   final _name = TextEditingController();
   final _calories = TextEditingController();

@@ -40,20 +40,27 @@ class UserProfile {
   final String email;
   final String username;
   final String displayName;
+  final bool notificationsEnabled;
 
   const UserProfile({
     required this.id,
     required this.email,
     required this.username,
     required this.displayName,
+    this.notificationsEnabled = false,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
+    final preferences = json['preferences'];
+    final notificationsEnabled = preferences is Map<String, dynamic>
+        ? preferences['notificationsEnabled'] == true
+        : json['notificationsEnabled'] == true;
     return UserProfile(
       id: json['id'] as String,
       email: json['email'] as String,
       username: json['username'] as String,
       displayName: json['displayName'] as String,
+      notificationsEnabled: notificationsEnabled,
     );
   }
 }

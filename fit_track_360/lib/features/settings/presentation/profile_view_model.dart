@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show Rect;
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +7,7 @@ import '../../../core/async_state.dart';
 import '../../../core/notifications/reminder_service.dart';
 import '../../../core/security/biometric_service.dart';
 import '../../auth/data/logout_service.dart';
+import '../../notifications/data/push_device_lifecycle_service.dart';
 import '../domain/export_sharer.dart';
 import '../domain/profile_repository.dart';
 import '../domain/profile_validation.dart';
@@ -39,12 +41,14 @@ class ProfileViewModel extends ChangeNotifier {
     required BiometricService biometricService,
     required LogoutService logoutService,
     required ExportSharer exportSharer,
+    PushDeviceLifecycle? pushDeviceService,
     DateTime Function()? clock,
   }) : _repository = profileRepository,
        _reminders = reminderService,
        _biometrics = biometricService,
        _logout = logoutService,
        _sharer = exportSharer,
+       _pushLifecycle = pushDeviceService,
        _clock = clock ?? DateTime.now;
 
   final ProfileRepository _repository;
@@ -52,6 +56,7 @@ class ProfileViewModel extends ChangeNotifier {
   final BiometricService _biometrics;
   final LogoutService _logout;
   final ExportSharer _sharer;
+  final PushDeviceLifecycle? _pushLifecycle;
   final DateTime Function() _clock;
 
   AsyncState<UserProfile> state = const AsyncLoading();
@@ -80,6 +85,9 @@ class ProfileViewModel extends ChangeNotifier {
       final result = await _repository.fetchProfile();
       state = AsyncState.fromData(result);
       workoutCount = result?.workoutCount;
+      if (result != null && result.preferences.notificationsEnabled) {
+        unawaited(_syncPush(notificationsEnabled: true));
+      }
     } catch (error, stackTrace) {
       state = AsyncError(error, stackTrace);
       workoutCount = null; // El resumen se omite si el API no responde.
@@ -158,6 +166,7 @@ class ProfileViewModel extends ChangeNotifier {
           ),
         ),
       );
+      await _revokePush();
       _notify();
       return;
     }
@@ -174,6 +183,10 @@ class ProfileViewModel extends ChangeNotifier {
               notificationsEnabled: true,
             ),
           ),
+        );
+        await _syncPush(
+          notificationsEnabled: true,
+          requestPermissionIfNeeded: true,
         );
       case ReminderPermission.denied:
         message = reminderDeniedMessage;
@@ -239,6 +252,34 @@ class ProfileViewModel extends ChangeNotifier {
       message = exportShareFailedMessage;
       _notify();
       return json;
+    }
+  }
+
+  /// Sincroniza el token FCM sin romper la carga del perfil si falla.
+  Future<void> _syncPush({
+    required bool notificationsEnabled,
+    bool requestPermissionIfNeeded = false,
+  }) async {
+    final service = _pushLifecycle;
+    if (service == null) return;
+    try {
+      await service.syncForActiveSession(
+        notificationsEnabled: notificationsEnabled,
+        requestPermissionIfNeeded: requestPermissionIfNeeded,
+      );
+    } catch (_) {
+      // El ciclo FCM es best-effort.
+    }
+  }
+
+  /// Revoca el token FCM sin bloquear el cambio de preferencia.
+  Future<void> _revokePush() async {
+    final service = _pushLifecycle;
+    if (service == null) return;
+    try {
+      await service.deactivateAndRevoke();
+    } catch (_) {
+      // El ciclo FCM es best-effort.
     }
   }
 

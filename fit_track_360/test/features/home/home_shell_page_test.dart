@@ -6,6 +6,7 @@ import 'package:fit_track_360/core/network/connectivity_service.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
 import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
+import 'package:fit_track_360/features/notifications/data/push_device_lifecycle_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -59,7 +60,33 @@ class FakeSessionStorage implements SessionStorage {
   }
 }
 
-http.Response _profile() => http.Response.bytes(
+class _FakePushDeviceLifecycle implements PushDeviceLifecycle {
+  final syncCalls =
+      <({bool notificationsEnabled, bool requestPermissionIfNeeded})>[];
+  int revokeCalls = 0;
+  Object? syncError;
+  Object? revokeError;
+
+  @override
+  Future<void> syncForActiveSession({
+    required bool notificationsEnabled,
+    bool requestPermissionIfNeeded = false,
+  }) async {
+    syncCalls.add((
+      notificationsEnabled: notificationsEnabled,
+      requestPermissionIfNeeded: requestPermissionIfNeeded,
+    ));
+    if (syncError != null) throw syncError!;
+  }
+
+  @override
+  Future<void> deactivateAndRevoke() async {
+    revokeCalls++;
+    if (revokeError != null) throw revokeError!;
+  }
+}
+
+http.Response _profile({bool? notificationsEnabled}) => http.Response.bytes(
   utf8.encode(
     jsonEncode({
       'id': '1',
@@ -67,6 +94,14 @@ http.Response _profile() => http.Response.bytes(
       'username': 'ana',
       'displayName': 'Ana',
       'createdAt': '2026-11-04T00:00:00.000Z',
+      if (notificationsEnabled != null)
+        'preferences': {
+          'weightUnit': 'kg',
+          'distanceUnit': 'km',
+          'restSeconds': 90,
+          'notificationsEnabled': notificationsEnabled,
+          'biometricEnabled': false,
+        },
     }),
   ),
   200,
@@ -114,6 +149,7 @@ Future<GoRouter> _pumpShell(
   required FakeSessionStorage storage,
   required http.Client client,
   StepsSensor? stepsSensor,
+  PushDeviceLifecycle? pushDeviceService,
   void Function()? onLoginNavigation,
 }) async {
   final router = GoRouter(
@@ -132,6 +168,7 @@ Future<GoRouter> _pumpShell(
           stepsSensor:
               stepsSensor ??
               FakeStepsSensor(snapshots: [StepsSnapshot.unavailableDevice]),
+          pushDeviceService: pushDeviceService,
         ),
       ),
       GoRoute(
@@ -549,5 +586,109 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Pantalla ejercicios'), findsOneWidget);
+  });
+
+  group('ciclo de vida FCM silencioso (W13-7)', () {
+    testWidgets(
+      'sincroniza silenciosamente sin pedir permiso cuando notificationsEnabled es true',
+      (tester) async {
+        final push = _FakePushDeviceLifecycle();
+        await _pumpShell(
+          tester,
+          connectivity: FakeConnectivityService(online: true),
+          storage: storage,
+          pushDeviceService: push,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/users/me')) {
+              return _profile(notificationsEnabled: true);
+            }
+            return _route(request);
+          }),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Hola, Ana'), findsOneWidget);
+        expect(push.syncCalls, hasLength(1));
+        expect(push.syncCalls.single.notificationsEnabled, isTrue);
+        expect(push.syncCalls.single.requestPermissionIfNeeded, isFalse);
+      },
+    );
+
+    testWidgets(
+      'respeta notificationsEnabled en false sin pedir permisos intrusivos',
+      (tester) async {
+        final push = _FakePushDeviceLifecycle();
+        await _pumpShell(
+          tester,
+          connectivity: FakeConnectivityService(online: true),
+          storage: storage,
+          pushDeviceService: push,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/users/me')) {
+              return _profile(notificationsEnabled: false);
+            }
+            return _route(request);
+          }),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Hola, Ana'), findsOneWidget);
+        expect(push.syncCalls, hasLength(1));
+        expect(push.syncCalls.single.notificationsEnabled, isFalse);
+        expect(push.syncCalls.single.requestPermissionIfNeeded, isFalse);
+      },
+    );
+
+    testWidgets('degrada en silencio si la sincronización FCM falla', (
+      tester,
+    ) async {
+      final push = _FakePushDeviceLifecycle()
+        ..syncError = Exception('sin Play Services');
+      await _pumpShell(
+        tester,
+        connectivity: FakeConnectivityService(online: true),
+        storage: storage,
+        pushDeviceService: push,
+        client: MockClient((request) async {
+          if (request.url.path.endsWith('/users/me')) {
+            return _profile(notificationsEnabled: true);
+          }
+          return _route(request);
+        }),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hola, Ana'), findsOneWidget);
+      expect(push.syncCalls, hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+      'cerrar sesión desde HomeShellPage revoca el token FCM antes de ir a login',
+      (tester) async {
+        final push = _FakePushDeviceLifecycle();
+        await _pumpShell(
+          tester,
+          connectivity: FakeConnectivityService(online: true),
+          storage: storage,
+          pushDeviceService: push,
+          client: MockClient((request) async {
+            if (request.url.path.endsWith('/users/me')) {
+              return _profile(notificationsEnabled: true);
+            }
+            return _route(request);
+          }),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Cerrar sesión'));
+        await tester.pumpAndSettle();
+
+        expect(push.revokeCalls, 1);
+        expect(storage.accessToken, isNull);
+        expect(find.text('Pantalla login'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }

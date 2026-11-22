@@ -11,6 +11,7 @@ import '../../../core/widgets/offline_banner.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../auth/data/logout_service.dart';
+import '../../notifications/data/push_device_lifecycle_service.dart';
 import '../data/dashboard_api_repository.dart';
 import '../data/pedometer_steps_sensor.dart';
 import '../domain/steps_sensor.dart';
@@ -37,6 +38,7 @@ class HomeShellPage extends StatefulWidget {
     this.connectivityService,
     this.dashboardViewModel,
     this.stepsSensor,
+    this.pushDeviceService,
   });
 
   /// Dependencias sustituibles en pruebas; por defecto usa las reales.
@@ -45,6 +47,7 @@ class HomeShellPage extends StatefulWidget {
   final ConnectivityService? connectivityService;
   final HomeDashboardViewModel? dashboardViewModel;
   final StepsSensor? stepsSensor;
+  final PushDeviceLifecycle? pushDeviceService;
 
   @override
   State<HomeShellPage> createState() => _HomeShellPageState();
@@ -56,6 +59,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
   late final ApiClient _api = widget.apiClient ?? ApiClient(storage: _storage);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  late final PushDeviceLifecycle _pushDeviceService =
+      widget.pushDeviceService ??
+      PushDeviceLifecycleService.fromClient(_api, storage: _storage);
   late final HomeDashboardViewModel _dashboard;
   late final bool _ownsDashboard;
   StreamSubscription<bool>? _connectivitySubscription;
@@ -120,6 +126,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
       final profile = await _api.me();
       if (!mounted) return;
       setState(() => _displayName = profile.displayName);
+      unawaited(_syncPushSilently(profile.notificationsEnabled));
     } on SessionExpiredException {
       _goToLogin();
     } catch (_) {
@@ -129,13 +136,27 @@ class _HomeShellPageState extends State<HomeShellPage> {
     }
   }
 
+  Future<void> _syncPushSilently(bool notificationsEnabled) async {
+    try {
+      await _pushDeviceService.syncForActiveSession(
+        notificationsEnabled: notificationsEnabled,
+        requestPermissionIfNeeded: false,
+      );
+    } catch (_) {
+      // Sin Play Services, APNs o red: se degrada en silencio.
+    }
+  }
+
   Future<void> _retryAll() async {
     await Future.wait([_loadProfile(), _dashboard.load()]);
   }
 
   Future<void> _logout() async {
     setState(() => _loggingOut = true);
-    await LogoutService(storage: _storage).logout();
+    await LogoutService(
+      storage: _storage,
+      pushDeviceService: _pushDeviceService,
+    ).logout();
     _goToLogin();
   }
 

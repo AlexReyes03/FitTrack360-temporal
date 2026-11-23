@@ -143,6 +143,8 @@
 
 | 2026-11-22 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #181 (W12-13, #132) | Atender la revisión de @AlexReyes03: limpiar la sesión al confirmar la eliminación de cuenta, ofrecer «Iniciar sesión» ante sesión expirada en el aviso y codificar el `userId` en la ruta de consentimiento. | `fit_track_360/lib/features/settings/presentation/profile_page.dart`, `privacy_notice_page.dart`, `data/privacy_api_repository.dart`, `fit_track_360/test/features/settings/`, `api_client.dart` (conflicto) | Ajustado: tras el 204 se ejecuta `_vm.logout()` antes del diálogo y sin depender de `mounted`; se agregaron pruebas de limpieza inmediata, con el diálogo abierto y con la vista desmontada. Se integró `origin/main` resolviendo el conflicto y conservando DELETE y la carga multipart. | Rama `feat/w12-13-privacidad` (sin push) |
 
+| 2026-11-22 | @Loreley100 | OpenCode (DeepSeek V4.1 Flash Free) | Revisión #181 (W12-13, #132) | Segunda pasada: la limpieza local tras el 204 no debe depender de leer el token ni de una revocación remota. | `fit_track_360/lib/features/auth/data/logout_service.dart`, `lib/features/settings/presentation/profile_view_model.dart`, `profile_page.dart`, `fit_track_360/test/features/settings/` | Ajustado: `LogoutService.logout({revokeRemote})` limpia el almacén aunque falle la lectura del token y omite la revocación tras eliminar la cuenta; pruebas de regresión para ambos casos. | Rama `feat/w12-13-privacidad` (sin commit) |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

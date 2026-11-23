@@ -235,8 +235,9 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     // Con el 204 confirmado, la sesión local se limpia de inmediato: no se
-    // espera a cerrar el diálogo y no depende de que la vista siga montada.
-    await _vm.logout();
+    // espera a cerrar el diálogo, no depende de que la vista siga montada y
+    // no intenta revocar una cuenta que ya no existe.
+    await _vm.logout(revokeRemote: false);
     if (!mounted) return;
 
     await showDialog<void>(

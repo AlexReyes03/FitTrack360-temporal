@@ -255,7 +255,8 @@ class ProfileViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> logout() => _logout.logout();
+  Future<void> logout({bool revokeRemote = true}) =>
+      _logout.logout(revokeRemote: revokeRemote);
 
   /// Solo devuelve true cuando el servidor confirma la eliminación.
   Future<bool> deleteAccount() async {

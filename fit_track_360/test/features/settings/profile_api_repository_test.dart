@@ -203,5 +203,34 @@ void main() {
       expect(storage.accessToken, isNull);
       expect(storage.refreshToken, isNull);
     });
+
+    test('sin revocación remota limpia la sesión igual', () async {
+      final storage = FakeSessionStorage();
+      var revokes = 0;
+      await LogoutService(
+        storage: storage,
+        revoke: ({required idToken}) async => revokes++,
+      ).logout(revokeRemote: false);
+      expect(revokes, 0);
+      expect(storage.accessToken, isNull);
+      expect(storage.refreshToken, isNull);
+    });
+
+    test('limpia la sesión aunque no se pueda leer el token', () async {
+      final storage = _UnreadableSessionStorage();
+      await LogoutService(
+        storage: storage,
+        revoke: ({required idToken}) async {},
+      ).logout();
+      expect(storage.accessToken, isNull);
+      expect(storage.refreshToken, isNull);
+    });
   });
+}
+
+/// Simula un almacén seguro que falla al leer el token.
+class _UnreadableSessionStorage extends FakeSessionStorage {
+  @override
+  Future<String?> readAccessToken({bool forceRefresh = false}) =>
+      Future.error(Exception('almacén no disponible'));
 }

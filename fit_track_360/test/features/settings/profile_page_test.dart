@@ -38,6 +38,7 @@ class _Deps {
   final FakePrivacyRepository privacy;
   final FakeConnectivityService connectivity;
   final storage = FakeSessionStorage();
+  final revokedTokens = <String>[];
   final bool revokeFails;
 }
 
@@ -60,6 +61,7 @@ Future<void> _pump(WidgetTester tester, _Deps deps) async {
           logoutService: LogoutService(
             storage: deps.storage,
             revoke: ({required idToken}) async {
+              deps.revokedTokens.add(idToken);
               if (deps.revokeFails) throw Exception('sin red');
             },
           ),
@@ -428,9 +430,11 @@ void main() {
           findsOneWidget,
         );
 
-        // El 204 ya limpió los tokens aunque el diálogo siga abierto.
+        // El 204 ya limpió los tokens aunque el diálogo siga abierto, sin
+        // intentar revocar una sesión que el servidor ya eliminó.
         expect(deps.storage.accessToken, isNull);
         expect(deps.storage.refreshToken, isNull);
+        expect(deps.revokedTokens, isEmpty);
 
         await tester.tap(find.text('Entendido'));
         await tester.pumpAndSettle();

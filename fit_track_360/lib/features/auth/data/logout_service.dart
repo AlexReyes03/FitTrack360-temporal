@@ -13,17 +13,24 @@ class LogoutService {
   final RevokeIdToken? revoke;
   final FirebaseAuthService? firebaseAuth;
 
-  Future<void> logout() async {
+  /// [revokeRemote] false cuando la cuenta ya se eliminó: no queda sesión que
+  /// revocar y la limpieza local no debe esperar a la red.
+  Future<void> logout({bool revokeRemote = true}) async {
     if (firebaseAuth != null) {
       await firebaseAuth!.logout();
       return;
     }
 
-    final idToken = await _storage.readAccessToken();
+    String? idToken;
     try {
-      if (idToken != null && revoke != null) {
+      idToken = await _storage.readAccessToken();
+    } catch (_) {
+      // La limpieza local se ejecuta aunque no se pueda leer el token.
+    }
+    try {
+      if (revokeRemote && idToken != null && revoke != null) {
         await revoke!(idToken: idToken);
-      } else if (idToken != null) {
+      } else if (revokeRemote && idToken != null) {
         await auth_api.revokeRemoteSession(idToken: idToken);
       }
     } catch (_) {

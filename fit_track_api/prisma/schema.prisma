@@ -28,6 +28,8 @@ model User {
   bodyMetrics          BodyMetric[]
   mealLogs             MealLog[]
   settings             UserSettings?
+  notifications        Notification[]
+  deviceTokens         DeviceToken[]
 }
 
 enum WeightUnit {
@@ -161,8 +163,8 @@ model WorkoutSet {
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
-  @@index([sessionId])
   @@unique([sessionId, order])
+  @@index([sessionId])
 }
 
 model BodyMetric {
@@ -234,4 +236,47 @@ model MealItem {
   updatedAt DateTime @updatedAt
 
   @@index([mealLogId])
+}
+
+enum NotificationType {
+  NEW_LOGIN
+  PASSWORD_CHANGED
+  REMINDER
+  SYSTEM
+}
+
+enum DevicePlatform {
+  android
+  ios
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  body        String
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  targetRoute String?
+  metadata    Json?
+  createdAt   DateTime         @default(now())
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, type, createdAt])
+}
+
+model DeviceToken {
+  id          String         @id @default(uuid())
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String         @unique
+  platform    DevicePlatform
+  deviceLabel String?
+  lastSeenAt  DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([userId])
 }

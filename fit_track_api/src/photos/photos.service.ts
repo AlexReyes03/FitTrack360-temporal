@@ -56,7 +56,9 @@ export class PhotosService {
       if (format !== 'jpeg' && format !== 'png' && format !== 'webp')
         throw new Error('formato');
       mimeType = formats[format];
-      if (file.mimetype !== mimeType) throw new Error('mime');
+      const suppliedMime =
+        file.mimetype === 'image/jpg' ? 'image/jpeg' : file.mimetype;
+      if (suppliedMime !== mimeType) throw new Error('mime');
       result = await input
         .rotate()
         .toFormat(format)
@@ -96,8 +98,14 @@ export class PhotosService {
   }
   async remove(userId: string, id: string) {
     const photo = await this.owned(userId, id);
-    await this.storage.remove(userId, photo.storageKey);
+    // Delete the row first so a database failure never leaves a broken photo.
+    // A storage failure may leave an unreferenced file for operational cleanup.
     await this.prisma.photo.delete({ where: { id } });
+    try {
+      await this.storage.remove(userId, photo.storageKey);
+    } catch (error) {
+      if (!(error instanceof NotFoundException)) throw error;
+    }
   }
   private async owned(userId: string, id: string) {
     const photo = await this.prisma.photo.findFirst({ where: { id, userId } });

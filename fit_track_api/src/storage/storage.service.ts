@@ -126,8 +126,11 @@ export class StorageService {
         'utf8',
       );
       return JSON.parse(raw) as FileMetadata;
-    } catch {
-      throw new NotFoundException('Archivo no encontrado');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NotFoundException('Archivo no encontrado');
+      }
+      throw error;
     }
   }
 

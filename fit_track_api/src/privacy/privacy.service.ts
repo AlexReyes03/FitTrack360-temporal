@@ -110,13 +110,18 @@ export class PrivacyService {
     try {
       await this.prisma.$transaction(async (tx) => {
         await tx.user.delete({ where: { id: actor } });
-        if (user.firebaseUid) await this.verifier.deleteUser!(user.firebaseUid);
       });
     } catch (error) {
       await files.rollback();
       throw error;
     }
-    await files.commit();
+    // La cascada SQL ya terminó: si Firebase falla queda una identidad sin perfil,
+    // que requiere limpieza administrativa; los datos locales no se restauran.
+    try {
+      if (user.firebaseUid) await this.verifier.deleteUser!(user.firebaseUid);
+    } finally {
+      await files.commit();
+    }
   }
   private async owned(actor: string, target: string) {
     if (actor !== target) throw new NotFoundException('Usuario no encontrado');

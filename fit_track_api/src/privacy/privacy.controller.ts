@@ -10,7 +10,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   JwtAuthGuard,
   type AuthenticatedRequest,
@@ -35,13 +35,24 @@ export class PrivacyController {
   ) {
     return this.privacy.consent(this.user(req), userId, dto);
   }
-  @Get(':userId/export') @ApiBearerAuth() @UseGuards(JwtAuthGuard) exportData(
+  @ApiOperation({
+    summary: 'Exportación legacy; preferir GET /users/me/export',
+    deprecated: true,
+  })
+  @Get(':userId/export')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  exportData(
     @Req() req: AuthenticatedRequest,
     @Param('userId') userId: string,
   ) {
     return this.privacy.exportData(this.user(req), userId);
   }
   @Delete(':userId')
+  @ApiOperation({
+    summary: 'Eliminación legacy; preferir DELETE /users/me',
+    deprecated: true,
+  })
   @HttpCode(204)
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)

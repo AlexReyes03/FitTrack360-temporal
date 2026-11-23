@@ -14,6 +14,7 @@ import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/auth_api.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import '../data/exercise.dart';
 import '../data/exercises_api.dart';
 import 'widgets/exercise_card.dart';
@@ -237,80 +238,83 @@ class _ExercisesPageState extends State<ExercisesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffoldTemplate(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.contentMaxWidth,
+    final embedded = HomeNavigationShell.isEmbedded(context);
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppSpacing.contentMaxWidth),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OfflineBanner(service: _connectivity, onRetry: _load),
+            _header(embedded: embedded),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: DsTextField(
+                controller: _searchController,
+                label: 'Buscar',
+                hint: 'Nombre del ejercicio',
+                onChanged: _onSearchChanged,
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OfflineBanner(service: _connectivity, onRetry: _load),
-                _header(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    0,
-                    AppSpacing.md,
-                    AppSpacing.sm,
-                  ),
-                  child: DsTextField(
-                    controller: _searchController,
-                    label: 'Buscar',
-                    hint: 'Nombre del ejercicio',
-                    onChanged: _onSearchChanged,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
-                  child: ExerciseFilters(
-                    bodyPart: _bodyPart,
-                    equipment: _equipment,
-                    target: _target,
-                    onBodyPartChanged: _onBodyPartChanged,
-                    onEquipmentChanged: _onEquipmentChanged,
-                    onTargetChanged: _onTargetChanged,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Expanded(
-                  child: AsyncStateView<ExercisePage>(
-                    state: _state,
-                    onRetry: _load,
-                    loadingMessage: 'Cargando ejercicios...',
-                    emptyBuilder: _empty,
-                    errorBuilder: (error, _) => _error(error),
-                    dataBuilder: _results,
-                  ),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: ExerciseFilters(
+                bodyPart: _bodyPart,
+                equipment: _equipment,
+                target: _target,
+                onBodyPartChanged: _onBodyPartChanged,
+                onEquipmentChanged: _onEquipmentChanged,
+                onTargetChanged: _onTargetChanged,
+              ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: AsyncStateView<ExercisePage>(
+                state: _state,
+                onRetry: _load,
+                loadingMessage: 'Cargando ejercicios...',
+                emptyBuilder: _empty,
+                errorBuilder: (error, _) => _error(error),
+                dataBuilder: _results,
+              ),
+            ),
+          ],
         ),
       ),
     );
+    if (embedded) {
+      return Scaffold(backgroundColor: Colors.transparent, body: content);
+    }
+    return AppScaffoldTemplate(body: SafeArea(child: content));
   }
 
-  Widget _header() {
+  Widget _header({required bool embedded}) {
+    final showBack = !embedded || context.canPop();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xs,
-        AppSpacing.md,
+      padding: EdgeInsets.fromLTRB(
+        showBack ? AppSpacing.xs : AppSpacing.md,
+        embedded ? AppSpacing.sm : AppSpacing.md,
         AppSpacing.md,
         AppSpacing.sm,
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: _goBack,
-            tooltip: 'Volver',
-            icon: const Icon(Icons.arrow_back, color: AppColors.textSecondary),
-          ),
-          const SizedBox(width: AppSpacing.xs),
+          if (showBack) ...[
+            IconButton(
+              onPressed: _goBack,
+              tooltip: 'Volver',
+              icon: const Icon(
+                Icons.arrow_back,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
           Expanded(child: Text('Ejercicios', style: AppTypography.pageTitle)),
         ],
       ),
@@ -320,12 +324,7 @@ class _ExercisesPageState extends State<ExercisesPage> {
   Widget _results(ExercisePage page) {
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.md,
-      ),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, 28),
       itemCount: page.items.length + 2,
       itemBuilder: (context, index) {
         if (index == 0) {

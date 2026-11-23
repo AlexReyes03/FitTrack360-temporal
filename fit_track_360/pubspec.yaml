@@ -8,8 +8,9 @@ environment:
 
 dependencies:
   connectivity_plus: ^7.3.2
-  firebase_auth: ^7.0.1
-  firebase_core: ^5.1.0
+  firebase_auth: ^7.1.0
+  firebase_core: ^5.2.0
+  firebase_messaging: ^17.1.0
   flutter:
     sdk: flutter
   flutter_local_notifications: ^23.0.0
@@ -43,10 +44,12 @@ flutter:
     - assets/brand/logo-complete.jpg
 
 # Genera iconos de launcher Android e iOS desde el arte de marca.
-# icon-master.png: emblema sobre fondo bgDeep, sin transparencia (iOS no admite alpha).
+# icon-master.png: emblema 512x512 sobre fondo bgDeep para Android.
+# icon-ios.png: emblema 1024x1024 sobre fondo bgDeep para iOS (sin transparencia al generar).
 # icon-foreground.png: emblema con padding para la zona segura del adaptive icon.
 flutter_launcher_icons:
-  image_path: "assets/brand/icon-master.png"
+  image_path_android: "assets/brand/icon-master.png"
+  image_path_ios: "assets/brand/icon-ios.png"
   android: "ic_launcher"
   ios: true
   remove_alpha_ios: true

@@ -46,7 +46,7 @@ class GlassBottomNavBar extends StatelessWidget {
             maxWidth: AppSpacing.contentMaxWidth,
           ),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 10),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadii.card),
@@ -69,14 +69,15 @@ class GlassBottomNavBar extends StatelessWidget {
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(AppRadii.card),
+                            color: const Color(0xAD0A0C12),
                             gradient: const LinearGradient(
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               stops: [0.0, 0.5, 1.0],
                               colors: [
-                                Color(0x16FFFFFF),
-                                Color(0x07FFFFFF),
-                                Color(0x0DFFFFFF),
+                                Color(0x18FFFFFF),
+                                Color(0x08FFFFFF),
+                                Color(0x0EFFFFFF),
                               ],
                             ),
                             border: Border.all(color: AppColors.glassBorder),
@@ -114,7 +115,7 @@ class GlassBottomNavBar extends StatelessWidget {
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
+                          horizontal: 4,
                           vertical: 6,
                         ),
                         child: Row(
@@ -218,7 +219,7 @@ class _NavItemTileState extends State<_NavItemTile> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
           decoration: decoration,
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -230,17 +231,21 @@ class _NavItemTileState extends State<_NavItemTile> {
                     ? AppColors.accentWhite
                     : AppColors.textSecondary,
               ),
-              const SizedBox(height: 4),
-              Text(
-                widget.destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected
-                      ? AppColors.accentWhite
-                      : AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              const SizedBox(height: 3),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  widget.destination.label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: selected
+                        ? AppColors.accentWhite
+                        : AppColors.textSecondary,
+                    fontSize: 10.5,
+                    letterSpacing: -0.2,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
                 ),
               ),
             ],

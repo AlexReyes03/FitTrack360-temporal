@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -31,10 +32,16 @@ describe('PhotosService', () => {
   let storage: StorageService;
   let service: PhotosService;
   let saved: Record<string, unknown> | null;
+  let deletePhoto: jest.Mock<() => Promise<Record<string, unknown> | null>>;
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'fittrack-photo-test-'));
     storage = new StorageService(new ConfigService({ UPLOAD_DIR: directory }));
     saved = null;
+    deletePhoto = jest.fn(() => {
+      const old = saved;
+      saved = null;
+      return Promise.resolve(old);
+    });
     const db = {
       photo: {
         create: ({ data }: { data: Record<string, unknown> }) => {
@@ -53,11 +60,7 @@ describe('PhotosService', () => {
               ? saved
               : null,
           ),
-        delete: () => {
-          const old = saved;
-          saved = null;
-          return Promise.resolve(old);
-        },
+        delete: deletePhoto,
       },
       mealLog: {
         findFirst: ({ where }: { where: { userId: string } }) =>
@@ -106,6 +109,38 @@ describe('PhotosService', () => {
     await expect(storage.read(userId, key)).rejects.toBeInstanceOf(
       NotFoundException,
     );
+    expect(saved).toBeNull();
+  });
+  it('acepta el alias image/jpg y conserva el MIME canónico', async () => {
+    const image = await sharp({
+      create: { width: 1, height: 1, channels: 3, background: '#fff' },
+    })
+      .jpeg()
+      .toBuffer();
+    const photo = await service.upload(
+      userId,
+      fakeFile(image, 'image/jpg'),
+      {},
+    );
+    expect(photo.mimeType).toBe('image/jpeg');
+  });
+  it('elimina la fila aunque falte el archivo y conserva el archivo si falla la BD', async () => {
+    const image = await sharp({
+      create: { width: 1, height: 1, channels: 3, background: '#fff' },
+    })
+      .jpeg()
+      .toBuffer();
+    await service.upload(userId, fakeFile(image), {});
+    const key = saved?.storageKey as string;
+    deletePhoto.mockRejectedValueOnce(new Error('database failed'));
+    await expect(service.remove(userId, 'photo1')).rejects.toThrow(
+      'database failed',
+    );
+    const read = await storage.read(userId, key);
+    read.stream.destroy();
+    expect(saved).not.toBeNull();
+    await storage.remove(userId, key);
+    await expect(service.remove(userId, 'photo1')).resolves.toBeUndefined();
     expect(saved).toBeNull();
   });
   it('rechaza datos inválidos y el tipo MIME falso', async () => {

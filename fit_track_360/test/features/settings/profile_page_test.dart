@@ -1,9 +1,15 @@
 import 'dart:async';
 
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
+import 'package:fit_track_360/core/session_storage.dart';
+import 'package:fit_track_360/design_system/components/primary_button.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/design_system/widgets/ds_text_field.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
+import 'package:fit_track_360/features/notifications/domain/app_notification.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_scope.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
+import 'package:fit_track_360/features/notifications/presentation/push_device_scope.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_page.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_view_model.dart';
@@ -19,18 +25,21 @@ class _Deps {
     FakeReminderService? reminders,
     FakeBiometricService? biometrics,
     FakeExportSharer? sharer,
+    FakePushDeviceLifecycle? push,
     bool online = true,
     this.revokeFails = false,
   }) : repository = repository ?? FakeProfileRepository(),
        sharer = sharer ?? FakeExportSharer(),
        reminders = reminders ?? FakeReminderService(),
        biometrics = biometrics ?? FakeBiometricService(),
+       push = push ?? FakePushDeviceLifecycle(),
        connectivity = FakeConnectivityService(online: online);
 
   final FakeProfileRepository repository;
   final FakeReminderService reminders;
   final FakeBiometricService biometrics;
   final FakeExportSharer sharer;
+  final FakePushDeviceLifecycle push;
   final FakeConnectivityService connectivity;
   final storage = FakeSessionStorage();
   final bool revokeFails;
@@ -51,8 +60,10 @@ Future<void> _pump(WidgetTester tester, _Deps deps) async {
           biometricService: deps.biometrics,
           exportSharer: deps.sharer,
           connectivityService: deps.connectivity,
+          pushDeviceService: deps.push,
           logoutService: LogoutService(
             storage: deps.storage,
+            pushDeviceService: deps.push,
             revoke: ({required idToken}) async {
               if (deps.revokeFails) throw Exception('sin red');
             },
@@ -372,6 +383,400 @@ void main() {
       expect(deps.storage.accessToken, isNull);
       expect(find.text('login'), findsOneWidget);
     });
+
+    testWidgets(
+      'interruptor P3 y cerrar sesión disparan registro/revocación FCM sin cambiar textos ni bloquear /login',
+      (tester) async {
+        final push = FakePushDeviceLifecycle();
+        final deps = _Deps(push: push);
+        await _pump(tester, deps);
+
+        expect(find.text('Recordatorio diario'), findsOneWidget);
+        expect(
+          find.text(
+            'Te avisamos una vez al día para entrenar o registrar '
+            'tu comida. Te pediremos permiso al activarlo.',
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('Cerrar sesión'), findsOneWidget);
+        expect(_switch(tester, 'reminder-switch').value, isFalse);
+
+        // Encender P3 registra el token FCM solicitando permiso si falta.
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        expect(_switch(tester, 'reminder-switch').value, isTrue);
+        expect(push.syncCalls, hasLength(1));
+        expect(push.syncCalls.single.notificationsEnabled, isTrue);
+        expect(push.syncCalls.single.requestPermissionIfNeeded, isTrue);
+        expect(find.text('Recordatorio diario'), findsOneWidget);
+
+        // Apagar P3 revoca el token FCM y mantiene los textos intactos.
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        expect(_switch(tester, 'reminder-switch').value, isFalse);
+        expect(push.revokeCalls, 1);
+        expect(find.text('Recordatorio diario'), findsOneWidget);
+
+        // Cerrar sesión revoca el token FCM aunque falle y navega a /login.
+        push.revokeError = Exception('sin red');
+        await tester.tap(find.text('Cerrar sesión'));
+        await tester.pumpAndSettle();
+        expect(push.revokeCalls, 2);
+        expect(deps.storage.accessToken, isNull);
+        expect(find.text('login'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'ProfilePage sin logoutService externo cablea pushDeviceService al cerrar sesión',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final previousStorage = appSessionStorage;
+        final fakeStorage = FakeSessionStorage()..accessToken = null;
+        appSessionStorage = fakeStorage;
+        addTearDown(() => appSessionStorage = previousStorage);
+
+        final push = FakePushDeviceLifecycle();
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: FakeProfileRepository(),
+                reminderService: FakeReminderService(),
+                biometricService: FakeBiometricService(),
+                exportSharer: FakeExportSharer(),
+                connectivityService: FakeConnectivityService(),
+                pushDeviceService: push,
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Cerrar sesión'));
+        await tester.pumpAndSettle();
+
+        expect(push.revokeCalls, 1);
+        expect(find.text('login'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'cerrar sesión limpia NotificationsScope en memoria antes de ir a login',
+      (tester) async {
+        final deps = _Deps();
+        final notifications = NotificationsViewModel(
+          initialNotifications: [
+            AppNotification(
+              id: 'n-1',
+              title: 'Nuevo inicio de sesión',
+              message: 'Acceso desde Android.',
+              type: AppNotificationType.newLogin,
+              createdAt: DateTime(2026, 11, 22, 10),
+            ),
+          ],
+        );
+        addTearDown(notifications.dispose);
+
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: deps.repository,
+                reminderService: deps.reminders,
+                biometricService: deps.biometrics,
+                exportSharer: deps.sharer,
+                connectivityService: deps.connectivity,
+                logoutService: LogoutService(
+                  storage: deps.storage,
+                  revoke: ({required idToken}) async {},
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          NotificationsScope(
+            notifier: notifications,
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(notifications.unreadCount, 1);
+        expect(notifications.notifications, hasLength(1));
+
+        await tester.tap(find.byKey(const Key('profile-logout-button')));
+        await tester.pumpAndSettle();
+
+        expect(notifications.notifications, isEmpty);
+        expect(notifications.unreadCount, 0);
+        expect(notifications.hasLoaded, isFalse);
+        expect(find.text('login'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'el botón Cerrar sesión usa estilo rojo destructivo y texto claro',
+      (tester) async {
+        await _pump(tester, _Deps());
+
+        final buttonFinder = find.byKey(const Key('profile-logout-button'));
+        expect(buttonFinder, findsOneWidget);
+
+        final button = tester.widget<PrimaryButton>(buttonFinder);
+        expect(button.label, 'Cerrar sesión');
+        expect(button.variant, PrimaryButtonVariant.destructive);
+
+        final container = tester.widget<AnimatedContainer>(
+          find.descendant(
+            of: buttonFinder,
+            matching: find.byType(AnimatedContainer),
+          ),
+        );
+        final decoration = container.decoration! as BoxDecoration;
+        final gradient = decoration.gradient! as LinearGradient;
+        expect(
+          gradient.colors,
+          containsAll([
+            AppColors.dangerSolidTop,
+            AppColors.dangerSolidMid,
+            AppColors.dangerSolidBottom,
+          ]),
+        );
+
+        final labelText = tester.widget<Text>(
+          find.descendant(
+            of: buttonFinder,
+            matching: find.text('Cerrar sesión'),
+          ),
+        );
+        expect(labelText.style?.color, AppColors.accentWhite);
+      },
+    );
+
+    testWidgets('Cerrar sesión se deshabilita mientras cierra sesión', (
+      tester,
+    ) async {
+      final revokeCompleter = Completer<void>();
+      final deps = _Deps();
+      tester.view.physicalSize = const Size(1200, 6000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final router = GoRouter(
+        initialLocation: '/app/perfil',
+        routes: [
+          GoRoute(
+            path: '/app/perfil',
+            builder: (context, state) => ProfilePage(
+              repository: deps.repository,
+              reminderService: deps.reminders,
+              biometricService: deps.biometrics,
+              exportSharer: deps.sharer,
+              connectivityService: deps.connectivity,
+              logoutService: LogoutService(
+                storage: deps.storage,
+                revoke: ({required idToken}) => revokeCompleter.future,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/login',
+            builder: (context, state) => const Text('login'),
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('profile-logout-button')));
+      await tester.pump();
+
+      final busyButton = tester.widget<PrimaryButton>(
+        find.byKey(const Key('profile-logout-button')),
+      );
+      expect(busyButton.label, 'Cerrando...');
+      expect(busyButton.onPressed, isNull);
+
+      revokeCompleter.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('login'), findsOneWidget);
+    });
+  });
+
+  group('ciclo de vida compartido PushDeviceScope (W13-7)', () {
+    testWidgets(
+      'consume PushDeviceScope para P3 y logout sin llamar dispose() al desmontar',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final previousStorage = appSessionStorage;
+        appSessionStorage = FakeSessionStorage()..accessToken = null;
+        addTearDown(() => appSessionStorage = previousStorage);
+
+        final scopedPush = FakePushDeviceLifecycle();
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: FakeProfileRepository(),
+                reminderService: FakeReminderService(),
+                biometricService: FakeBiometricService(),
+                exportSharer: FakeExportSharer(),
+                connectivityService: FakeConnectivityService(),
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: scopedPush,
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        expect(scopedPush.syncCalls, hasLength(1));
+
+        await tester.tap(find.byKey(const Key('reminder-switch')));
+        await tester.pumpAndSettle();
+        expect(scopedPush.revokeCalls, 1);
+
+        await tester.tap(find.text('Cerrar sesión'));
+        await tester.pumpAndSettle();
+        expect(scopedPush.revokeCalls, 2);
+        expect(find.text('login'), findsOneWidget);
+
+        // Desmontar ProfilePage no debe disponer el servicio del PushDeviceScope.
+        expect(scopedPush.disposeCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'no llama dispose() sobre pushDeviceService inyectado al desmontar',
+      (tester) async {
+        final injectedPush = FakePushDeviceLifecycle();
+        await _pump(tester, _Deps(push: injectedPush));
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(injectedPush.disposeCalls, 0);
+      },
+    );
+
+    testWidgets(
+      'aislada sin PushDeviceScope ni pushDeviceService crea y libera su propia instancia sin errores',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: FakeProfileRepository(),
+                reminderService: FakeReminderService(),
+                biometricService: FakeBiometricService(),
+                exportSharer: FakeExportSharer(),
+                connectivityService: FakeConnectivityService(),
+              ),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('profile-name')), findsOneWidget);
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'cambios de dependencias posteriores no reconstruyen ProfileViewModel ni limpian controllers',
+      (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final repo = FakeProfileRepository();
+        final scopedPush = FakePushDeviceLifecycle();
+        final textScale = ValueNotifier<double>(1.0);
+        addTearDown(textScale.dispose);
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: scopedPush,
+            child: ValueListenableBuilder<double>(
+              valueListenable: textScale,
+              builder: (context, scale, child) => MediaQuery(
+                data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              child: MaterialApp(
+                home: ProfilePage(
+                  repository: repo,
+                  reminderService: FakeReminderService(),
+                  biometricService: FakeBiometricService(),
+                  exportSharer: FakeExportSharer(),
+                  connectivityService: FakeConnectivityService(),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(repo.fetchCalls, 1);
+
+        await tester.enterText(_field('Nombre'), 'Ana Editada');
+        textScale.value = 1.2;
+        await tester.pumpAndSettle();
+
+        expect(repo.fetchCalls, 1);
+        expect(find.text('Ana Editada'), findsOneWidget);
+        expect(scopedPush.disposeCalls, 0);
+      },
+    );
   });
 }
 

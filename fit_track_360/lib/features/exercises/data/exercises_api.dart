@@ -7,8 +7,7 @@ import 'exercise.dart';
 /// Cliente del catálogo de ejercicios.
 ///
 /// Los endpoints `GET /api/v1/exercises` y `GET /api/v1/exercises/:id`, y el
-/// sobre `{items, total, page, pageSize}`, todavía no están confirmados con
-/// backend. Todo el acoplamiento a ese contrato se concentra en este archivo.
+/// sobre `{items, total, page, pageSize}` corresponden al contrato del backend.
 class ExercisesApi {
   static const String collectionPath = '/api/v1/exercises';
   static const int defaultPageSize = 20;

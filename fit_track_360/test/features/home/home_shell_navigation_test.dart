@@ -1,199 +1,222 @@
-import 'dart:convert';
-
-import 'package:fit_track_360/core/network/api_client.dart';
-import 'package:fit_track_360/core/network/connectivity_service.dart';
-import 'package:fit_track_360/core/session_storage.dart';
-import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
+import 'package:fit_track_360/design_system/components/app_logo.dart';
+import 'package:fit_track_360/features/home/presentation/app_shell_page.dart';
+import 'package:fit_track_360/features/home/presentation/widgets/app_shell_header.dart';
+import 'package:fit_track_360/features/home/presentation/widgets/glass_bottom_nav_bar.dart';
+import 'package:fit_track_360/features/notifications/domain/app_notification.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_page.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_scope.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 
-class _OnlineConnectivity implements ConnectivityService {
-  @override
-  Stream<bool> get onStatusChange => const Stream<bool>.empty();
-
-  @override
-  Future<bool> isOnline() async => true;
+NotificationsViewModel _notifications() {
+  return NotificationsViewModel(
+    initialNotifications: [
+      AppNotification(
+        id: 'unread-login',
+        title: 'Nuevo inicio de sesión',
+        message: 'Se inició sesión en otro dispositivo.',
+        type: AppNotificationType.newLogin,
+        createdAt: DateTime(2026, 11, 22, 10),
+      ),
+      AppNotification(
+        id: 'unread-reminder',
+        title: 'Recordatorio de entrenamiento',
+        message: 'Registra tu sesión de hoy.',
+        type: AppNotificationType.reminder,
+        createdAt: DateTime(2026, 11, 22, 9),
+      ),
+      AppNotification(
+        id: 'read-password',
+        title: 'Contraseña actualizada',
+        message: 'Tu contraseña se cambió correctamente.',
+        type: AppNotificationType.passwordChanged,
+        createdAt: DateTime(2026, 11, 21, 18),
+        isRead: true,
+      ),
+    ],
+  );
 }
 
-class _Storage implements SessionStorage {
-  String? accessToken = 'access';
-
-  @override
-  Future<String?> readAccessToken({bool forceRefresh = false}) async =>
-      accessToken;
-
-  @override
-  Future<String?> readRefreshToken() async => null;
-
-  @override
-  Future<void> saveTokens({
-    required String accessToken,
-    required String refreshToken,
-  }) async {}
-
-  @override
-  Future<void> clear() async {
-    accessToken = null;
-  }
+GoRouter _shellRouter() {
+  return GoRouter(
+    initialLocation: '/app',
+    routes: [
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            AppShellPage(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/app',
+                builder: (context, state) => const Text('vista-inicio'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/app/entrenamientos',
+                builder: (context, state) => const Text('vista-entrenamientos'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/app/comidas',
+                builder: (context, state) => const Text('vista-comidas'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/app/ejercicios',
+                builder: (context, state) => const Text('vista-ejercicios'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/app/progreso',
+                builder: (context, state) => const Text('vista-progreso'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/app/perfil',
+                builder: (context, state) => const Text('vista-perfil'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/app/notificaciones',
+        builder: (context, state) => const NotificationsPage(),
+      ),
+    ],
+  );
 }
 
-http.Response _profile() => http.Response.bytes(
-  utf8.encode(
-    jsonEncode({
-      'id': '1',
-      'email': 'ana@test.com',
-      'username': 'ana',
-      'displayName': 'Ana',
-      'createdAt': '2026-11-04T00:00:00.000Z',
-    }),
-  ),
-  200,
-);
-
-http.Response _dashboardEmpty() => http.Response.bytes(
-  utf8.encode(
-    jsonEncode({
-      'date': '2026-11-19',
-      'utcOffsetMinutes': -360,
-      'nutrition': {
-        'mealsLogged': 0,
-        'consumed': {'calories': 0, 'proteinG': 0, 'carbsG': 0, 'fatG': 0},
-        'goals': {
-          'dailyCalorieGoal': 2000,
-          'proteinGoalG': 150,
-          'carbsGoalG': 200,
-          'fatGoalG': 60,
-        },
-        'remaining': {
-          'calories': 2000,
-          'proteinG': 150,
-          'carbsG': 200,
-          'fatG': 60,
-        },
-      },
-      'session': null,
-      'latestMetric': null,
-    }),
-  ),
-  200,
-  headers: {'content-type': 'application/json'},
-);
-
-Future<http.Response> _route(http.Request request) async {
-  final path = request.url.path;
-  if (path.endsWith('/users/me')) return _profile();
-  if (path.contains('/dashboard/today')) return _dashboardEmpty();
-  return http.Response('not found', 404);
+Future<NotificationsViewModel> _pump(
+  WidgetTester tester,
+  GoRouter router,
+) async {
+  final notifications = _notifications();
+  addTearDown(notifications.dispose);
+  await tester.pumpWidget(
+    NotificationsScope(
+      notifier: notifications,
+      child: MaterialApp.router(routerConfig: router),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return notifications;
 }
 
 void main() {
-  testWidgets('bottom nav y accesos rapidos llegan a las rutas principales', (
+  testWidgets('las 6 vistas principales comparten el shell y la barra', (
     tester,
   ) async {
-    tester.view.physicalSize = const Size(1080, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    final router = _shellRouter();
+    await _pump(tester, router);
 
-    final storage = _Storage();
-    final visited = <String>[];
-    final router = GoRouter(
-      initialLocation: '/app',
-      routes: [
-        GoRoute(
-          path: '/app',
-          builder: (context, state) => HomeShellPage(
-            apiClient: ApiClient(
-              storage: storage,
-              httpClient: MockClient(_route),
-            ),
-            sessionStorage: storage,
-            connectivityService: _OnlineConnectivity(),
-          ),
-        ),
-        GoRoute(
-          path: '/app/entrenamientos',
-          builder: (context, state) {
-            visited.add('entrenamientos');
-            return const Text('vista-entrenamientos');
-          },
-        ),
-        GoRoute(
-          path: '/app/comidas',
-          builder: (context, state) {
-            visited.add('comidas');
-            return const Text('vista-comidas');
-          },
-        ),
-        GoRoute(
-          path: '/app/ejercicios',
-          builder: (context, state) {
-            visited.add('ejercicios');
-            return const Text('vista-ejercicios');
-          },
-        ),
-        GoRoute(
-          path: '/app/foto',
-          builder: (context, state) {
-            visited.add('foto');
-            return const Text('vista-foto');
-          },
-        ),
-        GoRoute(
-          path: '/app/progreso',
-          builder: (context, state) {
-            visited.add('progreso');
-            return const Text('vista-progreso');
-          },
-        ),
-        GoRoute(
-          path: '/app/perfil',
-          builder: (context, state) {
-            visited.add('perfil');
-            return const Text('vista-perfil');
-          },
-        ),
-        GoRoute(
-          path: '/app/tracker',
-          builder: (context, state) {
-            visited.add('tracker');
-            return const Text('vista-tracker');
-          },
-        ),
-      ],
-    );
+    expect(find.text('vista-inicio'), findsOneWidget);
+    expect(find.byType(GlassBottomNavBar), findsOneWidget);
+    expect(find.text('Cerrar sesión'), findsNothing);
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
-    await tester.pumpAndSettle();
-
-    Future<void> openAndBack(Finder tapTarget, String marker) async {
-      await tester.ensureVisible(tapTarget);
-      await tester.tap(tapTarget);
+    for (final (label, marker) in [
+      ('Entrenos', 'vista-entrenamientos'),
+      ('Comidas', 'vista-comidas'),
+      ('Ejercicios', 'vista-ejercicios'),
+      ('Progreso', 'vista-progreso'),
+      ('Perfil', 'vista-perfil'),
+    ]) {
+      await tester.tap(find.text(label));
       await tester.pumpAndSettle();
-      expect(find.text(marker), findsOneWidget);
-      router.go('/app');
-      await tester.pumpAndSettle();
+      expect(find.text(marker), findsOneWidget, reason: label);
+      expect(
+        find.byType(GlassBottomNavBar),
+        findsOneWidget,
+        reason: 'La barra debe seguir visible en $label',
+      );
     }
 
-    await openAndBack(find.text('Entrenos'), 'vista-entrenamientos');
-    await openAndBack(find.text('Comidas').first, 'vista-comidas');
-    await openAndBack(find.text('Ejercicios'), 'vista-ejercicios');
-    await openAndBack(find.text('Progreso'), 'vista-progreso');
-    await openAndBack(find.text('Perfil').last, 'vista-perfil');
-    await openAndBack(find.text('Tracker diario'), 'vista-tracker');
-
-    expect(
-      visited,
-      containsAll([
-        'entrenamientos',
-        'comidas',
-        'ejercicios',
-        'progreso',
-        'perfil',
-        'tracker',
-      ]),
-    );
+    await tester.tap(find.text('Inicio'));
+    await tester.pumpAndSettle();
+    expect(find.text('vista-inicio'), findsOneWidget);
   });
+
+  testWidgets('la campana muestra el badge y abre notificaciones', (
+    tester,
+  ) async {
+    final router = _shellRouter();
+    final notifications = await _pump(tester, router);
+
+    expect(notifications.unreadCount, 2);
+    expect(find.text('2'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Notificaciones'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NotificationsPage), findsOneWidget);
+    expect(find.text('Notificaciones'), findsOneWidget);
+    expect(find.text('Marcar todas como leídas'), findsOneWidget);
+    expect(find.text('Nuevo inicio de sesión'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Volver'));
+    await tester.pumpAndSettle();
+    expect(find.text('vista-inicio'), findsOneWidget);
+  });
+
+  testWidgets(
+    'en 360dp muestra header con AppLogo y navbar sin desbordar en las 6 vistas',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 780);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final router = _shellRouter();
+      await _pump(tester, router);
+
+      expect(find.byType(AppShellHeader), findsOneWidget);
+      expect(find.byType(AppLogo), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      for (final (label, marker) in [
+        ('Inicio', 'vista-inicio'),
+        ('Entrenos', 'vista-entrenamientos'),
+        ('Comidas', 'vista-comidas'),
+        ('Ejercicios', 'vista-ejercicios'),
+        ('Progreso', 'vista-progreso'),
+        ('Perfil', 'vista-perfil'),
+      ]) {
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expect(find.text(marker), findsOneWidget, reason: label);
+        expect(
+          find.byType(GlassBottomNavBar),
+          findsOneWidget,
+          reason: 'GlassBottomNavBar visible en $label',
+        );
+        expect(
+          find.text('Cerrar sesión'),
+          findsNothing,
+          reason: 'No debe existir botón global de Cerrar sesión en $label',
+        );
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'Sin overflow en $label',
+        );
+      }
+    },
+  );
 }

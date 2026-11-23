@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsDateString,
   IsInt,
@@ -23,7 +24,11 @@ export class RoutineExerciseDto {
   @Min(1)
   @Max(100)
   targetSets!: number;
-  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) targetReps!: number;
+  @ApiProperty({ minimum: 1, maximum: 1000 })
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  targetReps!: number;
 }
 export class CreateRoutineDto {
   @ApiProperty()
@@ -34,6 +39,7 @@ export class CreateRoutineDto {
   name!: string;
   @ApiProperty({ type: [RoutineExerciseDto] })
   @IsArray()
+  @ArrayMinSize(1)
   @ArrayMaxSize(100)
   @ValidateNested({ each: true })
   @Type(() => RoutineExerciseDto)

@@ -204,7 +204,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Rutina:'), findsNothing);
-    expect(find.text('Crear sesión'), findsOneWidget);
+    expect(find.text('Registrar entrenamiento'), findsOneWidget);
   });
 
   testWidgets('tras crear, el borrador desaparece y no se reenvía', (
@@ -222,7 +222,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     expect(api.created.single.routineId, 'rutina-1');
@@ -230,7 +230,7 @@ void main() {
     expect(find.text('Sentadilla'), findsNothing);
     expect(find.text('Sesión guardada'), findsOneWidget);
 
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     expect(api.created, hasLength(2));
@@ -264,7 +264,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Hecha desde la rutina');
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     final body = posted.single;
@@ -300,7 +300,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     final body = posted.single;

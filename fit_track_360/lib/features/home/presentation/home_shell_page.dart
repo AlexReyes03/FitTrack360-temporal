@@ -8,9 +8,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/session_storage.dart';
 import '../../../core/widgets/offline_banner.dart';
-import '../../../design_system/components/primary_button.dart';
-import '../../../design_system/tokens/app_colors.dart';
-import '../../auth/data/logout_service.dart';
+import '../../notifications/data/push_device_lifecycle_service.dart';
+import '../../notifications/presentation/push_device_scope.dart';
 import '../data/dashboard_api_repository.dart';
 import '../data/pedometer_steps_sensor.dart';
 import '../domain/steps_sensor.dart';
@@ -21,14 +20,13 @@ import 'widgets/dashboard_nutrition_card.dart';
 import 'widgets/dashboard_session_card.dart';
 import 'widgets/dashboard_steps_card.dart';
 import 'widgets/home_dashboard_content.dart';
-import 'widgets/glass_bottom_nav_bar.dart';
-import 'widgets/home_navigation_shell.dart';
 import 'widgets/quick_actions_row.dart';
 
-/// Shell post-login. Carga el perfil con el cliente HTTP y cierra sesion
-/// (Firebase + revocacion Nest), volviendo a login.
-/// Muestra [OfflineBanner] sin red y recarga el perfil + dashboard al
-/// recuperarla.
+/// Vista de Inicio dentro del shell persistente.
+///
+/// Carga el perfil con el cliente HTTP y muestra el dashboard. El cierre de
+/// sesión vive en Perfil. Muestra [OfflineBanner] sin red y recarga el perfil
+/// y el dashboard al recuperarla.
 class HomeShellPage extends StatefulWidget {
   const HomeShellPage({
     super.key,
@@ -37,6 +35,7 @@ class HomeShellPage extends StatefulWidget {
     this.connectivityService,
     this.dashboardViewModel,
     this.stepsSensor,
+    this.pushDeviceService,
   });
 
   /// Dependencias sustituibles en pruebas; por defecto usa las reales.
@@ -45,6 +44,7 @@ class HomeShellPage extends StatefulWidget {
   final ConnectivityService? connectivityService;
   final HomeDashboardViewModel? dashboardViewModel;
   final StepsSensor? stepsSensor;
+  final PushDeviceLifecycle? pushDeviceService;
 
   @override
   State<HomeShellPage> createState() => _HomeShellPageState();
@@ -56,16 +56,32 @@ class _HomeShellPageState extends State<HomeShellPage> {
   late final ApiClient _api = widget.apiClient ?? ApiClient(storage: _storage);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  PushDeviceLifecycle? _pushDeviceService;
+  PushDeviceLifecycle? _ownedPushDeviceService;
+  bool _didInitializeDependencies = false;
   late final HomeDashboardViewModel _dashboard;
   late final bool _ownsDashboard;
   StreamSubscription<bool>? _connectivitySubscription;
 
   String? _displayName;
-  bool _loggingOut = false;
   bool _loadingProfile = false;
 
   /// Evita navegar dos veces a login cuando perfil y dashboard expiran juntos.
   bool _redirectingToLogin = false;
+
+  PushDeviceLifecycle _resolvePushDeviceService() {
+    final resolved = _pushDeviceService;
+    if (resolved != null) return resolved;
+    final service =
+        widget.pushDeviceService ??
+        PushDeviceScope.maybeOf(context) ??
+        (_ownedPushDeviceService = PushDeviceLifecycleService.fromClient(
+          _api,
+          storage: _storage,
+        ));
+    _pushDeviceService = service;
+    return service;
+  }
 
   @override
   void initState() {
@@ -87,8 +103,16 @@ class _HomeShellPageState extends State<HomeShellPage> {
         unawaited(_dashboard.load());
       }
     }, onError: (_) {});
-    _loadProfile();
     unawaited(_dashboard.load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitializeDependencies) return;
+    _didInitializeDependencies = true;
+    _resolvePushDeviceService();
+    _loadProfile();
   }
 
   void _onDashboardChanged() {
@@ -108,18 +132,23 @@ class _HomeShellPageState extends State<HomeShellPage> {
     if (_ownsDashboard) {
       _dashboard.dispose();
     }
+    final ownedPush = _ownedPushDeviceService;
+    if (ownedPush != null) {
+      unawaited(ownedPush.dispose());
+    }
     _api.dispose();
     super.dispose();
   }
 
   Future<void> _loadProfile() async {
     // Dos cargas simultaneas con ID token vencido fuerzan un solo refresh.
-    if (_loadingProfile || _loggingOut) return;
+    if (_loadingProfile) return;
     _loadingProfile = true;
     try {
       final profile = await _api.me();
       if (!mounted) return;
       setState(() => _displayName = profile.displayName);
+      unawaited(_syncPushSilently(profile.notificationsEnabled));
     } on SessionExpiredException {
       _goToLogin();
     } catch (_) {
@@ -129,141 +158,92 @@ class _HomeShellPageState extends State<HomeShellPage> {
     }
   }
 
+  Future<void> _syncPushSilently(bool notificationsEnabled) async {
+    try {
+      await _resolvePushDeviceService().syncForActiveSession(
+        notificationsEnabled: notificationsEnabled,
+        requestPermissionIfNeeded: false,
+      );
+    } catch (_) {
+      // Sin Play Services, APNs o red: se degrada en silencio.
+    }
+  }
+
   Future<void> _retryAll() async {
     await Future.wait([_loadProfile(), _dashboard.load()]);
   }
 
-  Future<void> _logout() async {
-    setState(() => _loggingOut = true);
-    await LogoutService(storage: _storage).logout();
-    _goToLogin();
-  }
-
-  static const List<GlassNavDestination> _destinations = [
-    GlassNavDestination(
-      label: 'Inicio',
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home_rounded,
-    ),
-    GlassNavDestination(
-      label: 'Entrenos',
-      icon: Icons.fitness_center_outlined,
-      selectedIcon: Icons.fitness_center_rounded,
-    ),
-    GlassNavDestination(
-      label: 'Comidas',
-      icon: Icons.restaurant_outlined,
-      selectedIcon: Icons.restaurant_rounded,
-    ),
-    GlassNavDestination(
-      label: 'Ejercicios',
-      icon: Icons.sports_gymnastics_outlined,
-      selectedIcon: Icons.sports_gymnastics_rounded,
-    ),
-    GlassNavDestination(
-      label: 'Progreso',
-      icon: Icons.photo_camera_outlined,
-      selectedIcon: Icons.photo_camera_rounded,
-    ),
-    GlassNavDestination(
-      label: 'Perfil',
-      icon: Icons.person_outline_rounded,
-      selectedIcon: Icons.person_rounded,
-    ),
-  ];
-
-  void _onDestinationSelected(int index) {
-    switch (index) {
-      case 0:
-        return;
-      case 1:
-        context.push('/app/entrenamientos');
-      case 2:
-        context.push('/app/comidas');
-      case 3:
-        context.push('/app/ejercicios');
-      case 4:
-        context.push('/app/progreso');
-      case 5:
-        context.push('/app/perfil');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    return HomeNavigationShell(
-      topBanner: OfflineBanner(service: _connectivity, onRetry: _retryAll),
-      header: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-        child: _Header(onProfileTap: () => context.push('/app/perfil')),
-      ),
-      destinations: _destinations,
-      selectedIndex: 0,
-      onDestinationSelected: _onDestinationSelected,
-      body: ListenableBuilder(
-        listenable: _dashboard,
-        builder: (context, _) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                HomeDashboardContent(
-                  displayName: _displayName,
-                  nutritionStatus: _blockStatus(_dashboard.nutrition),
-                  nutritionData:
-                      _dashboard.nutrition.dataOrNull ??
-                      DashboardNutritionData.preview,
-                  onRetryNutrition: _dashboard.load,
-                  sessionStatus: _blockStatus(_dashboard.session),
-                  sessionData:
-                      _dashboard.session.dataOrNull ??
-                      DashboardSessionData.preview,
-                  onRetrySession: _dashboard.load,
-                  metricStatus: _blockStatus(_dashboard.metric),
-                  metricData:
-                      _dashboard.metric.dataOrNull ??
-                      DashboardMetricData.preview,
-                  onRetryMetric: _dashboard.load,
-                  stepsStatus: _blockStatus(_dashboard.steps),
-                  stepsData:
-                      _dashboard.steps.dataOrNull ?? DashboardStepsData.preview,
-                  stepsUnavailable: _dashboard.stepsUnavailable,
-                  stepsUnavailableReason: _dashboard.stepsUnavailableReason,
-                  stepsNeedPermission: _dashboard.stepsNeedPermission,
-                  stepsCanOpenSettings: _dashboard.stepsCanOpenSettings,
-                  onRetrySteps: _dashboard.retrySteps,
-                  onEnableSteps: _dashboard.enableSteps,
-                  onOpenStepsSettings: () =>
-                      unawaited(_dashboard.openStepsSettings()),
-                  onOpenWorkout: () => context.push('/app/entrenamientos'),
-                  onOpenMeals: () => context.push('/app/comidas'),
-                  onOpenPhoto: () => context.push('/app/foto'),
-                ),
-                const SizedBox(height: 18),
-                // Acceso extra no cubierto por DashboardQuickActions (W11-12).
-                QuickActionsRow(
-                  title: null,
-                  actions: [
-                    QuickActionItem(
-                      label: 'Tracker diario',
-                      subtitle: 'Próximamente',
-                      icon: Icons.insights_rounded,
-                      onTap: () => context.push('/app/tracker'),
-                    ),
-                  ],
-                ),
-              ],
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OfflineBanner(service: _connectivity, onRetry: _retryAll),
+          Expanded(
+            child: ListenableBuilder(
+              listenable: _dashboard,
+              builder: (context, _) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      HomeDashboardContent(
+                        displayName: _displayName,
+                        nutritionStatus: _blockStatus(_dashboard.nutrition),
+                        nutritionData:
+                            _dashboard.nutrition.dataOrNull ??
+                            DashboardNutritionData.preview,
+                        onRetryNutrition: _dashboard.load,
+                        sessionStatus: _blockStatus(_dashboard.session),
+                        sessionData:
+                            _dashboard.session.dataOrNull ??
+                            DashboardSessionData.preview,
+                        onRetrySession: _dashboard.load,
+                        metricStatus: _blockStatus(_dashboard.metric),
+                        metricData:
+                            _dashboard.metric.dataOrNull ??
+                            DashboardMetricData.preview,
+                        onRetryMetric: _dashboard.load,
+                        stepsStatus: _blockStatus(_dashboard.steps),
+                        stepsData:
+                            _dashboard.steps.dataOrNull ??
+                            DashboardStepsData.preview,
+                        stepsUnavailable: _dashboard.stepsUnavailable,
+                        stepsUnavailableReason:
+                            _dashboard.stepsUnavailableReason,
+                        stepsNeedPermission: _dashboard.stepsNeedPermission,
+                        stepsCanOpenSettings: _dashboard.stepsCanOpenSettings,
+                        onRetrySteps: _dashboard.retrySteps,
+                        onEnableSteps: _dashboard.enableSteps,
+                        onOpenStepsSettings: () =>
+                            unawaited(_dashboard.openStepsSettings()),
+                        onOpenWorkout: () => context.go('/app/entrenamientos'),
+                        onOpenMeals: () => context.go('/app/comidas'),
+                        onOpenPhoto: () => context.push('/app/foto'),
+                      ),
+                      const SizedBox(height: 18),
+                      // Acceso extra no cubierto por DashboardQuickActions.
+                      QuickActionsRow(
+                        title: null,
+                        actions: [
+                          QuickActionItem(
+                            label: 'Tracker diario',
+                            subtitle: 'Próximamente',
+                            icon: Icons.insights_rounded,
+                            onTap: () => context.push('/app/tracker'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
-      footer: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 6),
-        child: PrimaryButton(
-          label: _loggingOut ? 'Cerrando...' : 'Cerrar sesión',
-          onPressed: _loggingOut ? null : _logout,
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -276,48 +256,4 @@ DashboardBlockStatus _blockStatus<T>(AsyncState<T> state) {
     AsyncEmpty<T>() => DashboardBlockStatus.empty,
     AsyncData<T>() => DashboardBlockStatus.data,
   };
-}
-
-class _Header extends StatelessWidget {
-  final VoidCallback onProfileTap;
-
-  const _Header({required this.onProfileTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [AppColors.accentWhite, AppColors.textSecondary],
-            ),
-            boxShadow: [BoxShadow(color: Color(0xCCFFFFFF), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(width: 10),
-        const Text(
-          'FITTRACK360',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.4,
-          ),
-        ),
-        const Spacer(),
-        IconButton(
-          tooltip: 'Perfil',
-          onPressed: onProfileTap,
-          icon: const Icon(
-            Icons.person_outline,
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
 }

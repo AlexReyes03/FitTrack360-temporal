@@ -1,5 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+/// Señal global de invalidación de sesión.
+///
+/// Incrementa su valor cada vez que se limpia o expira la sesión (logout,
+/// 401 sin refresh posible). Quien guarde estado por cuenta debe escucharla
+/// para limpiarlo y evitar fugas entre cuentas.
+final ValueNotifier<int> appSessionInvalidations = ValueNotifier<int>(0);
+
+/// Marca la sesión como invalidada para que los listeners limpien su estado.
+void notifySessionCleared() => appSessionInvalidations.value++;
 
 /// Contrato de sesión: Bearer = ID token (Firebase en prod; fake/secure en tests).
 abstract class SessionStorage {
@@ -48,6 +59,7 @@ class SecureSessionStorage implements SessionStorage {
   Future<void> clear() async {
     await _storage.delete(key: _accessTokenKey);
     await _storage.delete(key: _refreshTokenKey);
+    notifySessionCleared();
   }
 }
 
@@ -79,5 +91,6 @@ class FirebaseSessionStorage implements SessionStorage {
   @override
   Future<void> clear() async {
     await _auth.signOut();
+    notifySessionCleared();
   }
 }

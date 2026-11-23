@@ -296,7 +296,7 @@ void main() {
       expect(find.text('Sentadilla'), findsOneWidget);
       expect(find.text('Press banca'), findsOneWidget);
 
-      await tester.tap(find.text('Crear sesión'));
+      await tester.tap(find.text('Registrar entrenamiento'));
       await tester.pumpAndSettle();
 
       final draft = api.created.single;

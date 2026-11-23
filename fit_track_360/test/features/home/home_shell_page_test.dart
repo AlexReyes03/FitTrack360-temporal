@@ -6,7 +6,9 @@ import 'package:fit_track_360/core/network/connectivity_service.dart';
 import 'package:fit_track_360/core/notifications/fcm_messaging_gateway.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
+import 'package:fit_track_360/features/home/presentation/app_shell_page.dart';
 import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
+import 'package:fit_track_360/features/home/presentation/widgets/glass_bottom_nav_bar.dart';
 import 'package:fit_track_360/features/notifications/data/device_token_api.dart';
 import 'package:fit_track_360/features/notifications/data/push_device_lifecycle_service.dart';
 import 'package:fit_track_360/features/notifications/presentation/push_device_scope.dart';
@@ -471,25 +473,6 @@ void main() {
     expect(find.text('77'), findsOneWidget);
   });
 
-  testWidgets('cerrar sesion sin red limpia la sesion y va a login', (
-    tester,
-  ) async {
-    await _pumpShell(
-      tester,
-      connectivity: FakeConnectivityService(online: false),
-      storage: storage,
-      client: MockClient((_) async => throw http.ClientException('sin red')),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Cerrar sesión'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pantalla login'), findsOneWidget);
-    expect(storage.accessToken, isNull);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('muestra estados empty del dashboard con datos vacíos', (
     tester,
   ) async {
@@ -635,25 +618,6 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Entrenamiento'), findsOneWidget);
-    expect(find.text('Cerrar sesión'), findsOneWidget);
-  });
-
-  testWidgets('la navegación heredada de Ejercicios sigue disponible', (
-    tester,
-  ) async {
-    await _pumpShell(
-      tester,
-      connectivity: FakeConnectivityService(online: true),
-      storage: storage,
-      client: MockClient(_route),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.ensureVisible(find.text('Ejercicios'));
-    await tester.tap(find.text('Ejercicios'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Pantalla ejercicios'), findsOneWidget);
   });
 
   group('ciclo de vida FCM silencioso (W13-7)', () {
@@ -732,35 +696,123 @@ void main() {
     });
 
     testWidgets(
-      'cerrar sesión desde HomeShellPage revoca el token FCM antes de ir a login',
+      'AppShellPage con HomeShellPage y ProfilePage comparten el mismo PushDeviceScope al cerrar sesión',
       (tester) async {
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final previousStorage = appSessionStorage;
+        appSessionStorage = storage;
+        addTearDown(() => appSessionStorage = previousStorage);
+
         final push = _FakePushDeviceLifecycle();
-        await _pumpShell(
-          tester,
-          connectivity: FakeConnectivityService(online: true),
-          storage: storage,
-          pushDeviceService: push,
-          client: MockClient((request) async {
-            if (request.url.path.endsWith('/users/me')) {
-              return _profile(notificationsEnabled: true);
-            }
-            return _route(request);
-          }),
+        final profileRepo = settings_fakes.FakeProfileRepository(
+          profile: settings_fakes.sampleProfileWithNotifications(true),
+        );
+        final router = GoRouter(
+          initialLocation: '/app',
+          routes: [
+            StatefulShellRoute.indexedStack(
+              builder: (context, state, navigationShell) =>
+                  AppShellPage(navigationShell: navigationShell),
+              branches: [
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: '/app',
+                      builder: (context, state) => HomeShellPage(
+                        apiClient: ApiClient(
+                          storage: storage,
+                          httpClient: MockClient((request) async {
+                            if (request.url.path.endsWith('/users/me')) {
+                              return _profile(notificationsEnabled: true);
+                            }
+                            return _route(request);
+                          }),
+                        ),
+                        sessionStorage: storage,
+                        connectivityService: FakeConnectivityService(
+                          online: true,
+                        ),
+                        stepsSensor: FakeStepsSensor(
+                          snapshots: [StepsSnapshot.unavailableDevice],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                for (final path in const [
+                  '/app/entrenamientos',
+                  '/app/comidas',
+                  '/app/ejercicios',
+                  '/app/progreso',
+                ])
+                  StatefulShellBranch(
+                    routes: [
+                      GoRoute(
+                        path: path,
+                        builder: (context, state) => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: '/app/perfil',
+                      builder: (context, state) => ProfilePage(
+                        repository: profileRepo,
+                        reminderService: settings_fakes.FakeReminderService(),
+                        biometricService: settings_fakes.FakeBiometricService(),
+                        exportSharer: settings_fakes.FakeExportSharer(),
+                        connectivityService:
+                            settings_fakes.FakeConnectivityService(
+                              online: true,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('Pantalla login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          PushDeviceScope(
+            service: push,
+            child: MaterialApp.router(routerConfig: router),
+          ),
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Cerrar sesión'));
+        expect(push.syncCalls, hasLength(1));
+
+        await tester.tap(
+          find.descendant(
+            of: find.byType(GlassBottomNavBar),
+            matching: find.text('Perfil'),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('profile-logout-button')));
         await tester.pumpAndSettle();
 
         expect(push.revokeCalls, 1);
         expect(storage.accessToken, isNull);
         expect(find.text('Pantalla login'), findsOneWidget);
+        expect(push.disposeCalls, 0);
         expect(tester.takeException(), isNull);
       },
     );
 
     testWidgets(
-      'HomeShellPage y ProfilePage comparten el mismo PushDeviceScope y apagar P3 detiene onTokenRefresh',
+      'AppShellPage, HomeShellPage y ProfilePage comparten el mismo PushDeviceScope y apagar P3 detiene onTokenRefresh',
       (tester) async {
         tester.view.physicalSize = const Size(1200, 6000);
         tester.view.devicePixelRatio = 1;
@@ -784,36 +836,67 @@ void main() {
         final router = GoRouter(
           initialLocation: '/app',
           routes: [
-            GoRoute(
-              path: '/app',
-              builder: (context, state) => HomeShellPage(
-                apiClient: ApiClient(
-                  storage: storage,
-                  httpClient: MockClient((request) async {
-                    if (request.url.path.endsWith('/users/me')) {
-                      return _profile(notificationsEnabled: true);
-                    }
-                    return _route(request);
-                  }),
+            StatefulShellRoute.indexedStack(
+              builder: (context, state, navigationShell) =>
+                  AppShellPage(navigationShell: navigationShell),
+              branches: [
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: '/app',
+                      builder: (context, state) => HomeShellPage(
+                        apiClient: ApiClient(
+                          storage: storage,
+                          httpClient: MockClient((request) async {
+                            if (request.url.path.endsWith('/users/me')) {
+                              return _profile(notificationsEnabled: true);
+                            }
+                            return _route(request);
+                          }),
+                        ),
+                        sessionStorage: storage,
+                        connectivityService: FakeConnectivityService(
+                          online: true,
+                        ),
+                        stepsSensor: FakeStepsSensor(
+                          snapshots: [StepsSnapshot.unavailableDevice],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                sessionStorage: storage,
-                connectivityService: FakeConnectivityService(online: true),
-                stepsSensor: FakeStepsSensor(
-                  snapshots: [StepsSnapshot.unavailableDevice],
+                for (final path in const [
+                  '/app/entrenamientos',
+                  '/app/comidas',
+                  '/app/ejercicios',
+                  '/app/progreso',
+                ])
+                  StatefulShellBranch(
+                    routes: [
+                      GoRoute(
+                        path: path,
+                        builder: (context, state) => const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: '/app/perfil',
+                      builder: (context, state) => ProfilePage(
+                        repository: profileRepo,
+                        reminderService: settings_fakes.FakeReminderService(),
+                        biometricService: settings_fakes.FakeBiometricService(),
+                        exportSharer: settings_fakes.FakeExportSharer(),
+                        connectivityService:
+                            settings_fakes.FakeConnectivityService(
+                              online: true,
+                            ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ),
-            GoRoute(
-              path: '/app/perfil',
-              builder: (context, state) => ProfilePage(
-                repository: profileRepo,
-                reminderService: settings_fakes.FakeReminderService(),
-                biometricService: settings_fakes.FakeBiometricService(),
-                exportSharer: settings_fakes.FakeExportSharer(),
-                connectivityService: settings_fakes.FakeConnectivityService(
-                  online: true,
-                ),
-              ),
+              ],
             ),
             GoRoute(
               path: '/login',
@@ -843,8 +926,13 @@ void main() {
           'tok-rotated-1',
         ]);
 
-        // Navega a Perfil y apaga el interruptor P3 usando el mismo servicio del scope.
-        await tester.tap(find.byTooltip('Perfil'));
+        // Navega a Perfil por la barra y apaga el interruptor P3 usando el mismo servicio del scope.
+        await tester.tap(
+          find.descendant(
+            of: find.byType(GlassBottomNavBar),
+            matching: find.text('Perfil'),
+          ),
+        );
         await tester.pumpAndSettle();
         expect(find.byKey(const Key('reminder-switch')), findsOneWidget);
 
@@ -863,8 +951,13 @@ void main() {
         expect(gateway.hasRefreshListener, isFalse);
         expect(tokenApi.revoked, ['tok-rotated-1']);
 
-        // Desmonta ProfilePage volviendo al shell: un onTokenRefresh posterior no vuelve a registrar.
-        await tester.tap(find.byTooltip('Volver'));
+        // Vuelve a Inicio por la barra: un onTokenRefresh posterior no vuelve a registrar.
+        await tester.tap(
+          find.descendant(
+            of: find.byType(GlassBottomNavBar),
+            matching: find.text('Inicio'),
+          ),
+        );
         await tester.pumpAndSettle();
         expect(find.text('Hola, Ana'), findsOneWidget);
 

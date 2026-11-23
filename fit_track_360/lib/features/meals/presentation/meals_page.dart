@@ -16,6 +16,7 @@ import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import '../data/foods_api_repository.dart';
 import '../data/meals_api_repository.dart';
 import '../domain/daily_summary.dart';
@@ -215,55 +216,61 @@ class _MealsPageState extends State<MealsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffoldTemplate(
-      body: SafeArea(
-        child: ListenableBuilder(
-          listenable: _viewModel,
-          builder: (context, _) => ListView(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            children: [
-              OfflineBanner(service: _connectivity, onRetry: _load),
-              Text('Comidas de hoy', style: AppTypography.pageTitle),
-              const SizedBox(height: AppSpacing.sm),
-              PrimaryButton(
-                label: 'Agregar alimento',
-                onPressed: _viewModel.busy ? null : _openSearch,
-              ),
-              if (_viewModel.busy) ...[
-                const SizedBox(height: AppSpacing.sm),
-                const LinearProgressIndicator(
-                  key: Key('meals-busy'),
-                  color: AppColors.accentWhite,
-                  backgroundColor: Colors.transparent,
-                ),
-              ],
-              const SizedBox(height: AppSpacing.md),
-              AsyncStateView<DailySummary>(
-                state: _viewModel.state,
-                onRetry: _load,
-                loadingMessage: 'Cargando comidas...',
-                emptyTitle: 'Aún no registras comidas hoy',
-                emptyMessage: 'Agrega un alimento para ver el resumen del día.',
-                errorTitle: 'No se pudo cargar',
-                errorBuilder: (error, _) => RemoteErrorView(
-                  title: 'No se pudo cargar',
-                  message: error is AuthApiException
-                      ? error.message
-                      : 'No se pudo cargar tus comidas',
-                  onRetry: _load,
-                ),
-                dataBuilder: (summary) => _SummaryView(
-                  summary: summary,
-                  actionsEnabled: !_viewModel.busy,
-                  onEdit: _editItem,
-                  onDelete: _deleteItem,
-                ),
-              ),
-            ],
-          ),
+    final embedded = HomeNavigationShell.isEmbedded(context);
+    final content = ListenableBuilder(
+      listenable: _viewModel,
+      builder: (context, _) => ListView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          embedded ? AppSpacing.sm : AppSpacing.md,
+          AppSpacing.md,
+          28,
         ),
+        children: [
+          OfflineBanner(service: _connectivity, onRetry: _load),
+          Text('Comidas de hoy', style: AppTypography.pageTitle),
+          const SizedBox(height: AppSpacing.sm),
+          PrimaryButton(
+            label: 'Agregar alimento',
+            onPressed: _viewModel.busy ? null : _openSearch,
+          ),
+          if (_viewModel.busy) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const LinearProgressIndicator(
+              key: Key('meals-busy'),
+              color: AppColors.accentWhite,
+              backgroundColor: Colors.transparent,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          AsyncStateView<DailySummary>(
+            state: _viewModel.state,
+            onRetry: _load,
+            loadingMessage: 'Cargando comidas...',
+            emptyTitle: 'Aún no registras comidas hoy',
+            emptyMessage: 'Agrega un alimento para ver el resumen del día.',
+            errorTitle: 'No se pudo cargar',
+            errorBuilder: (error, _) => RemoteErrorView(
+              title: 'No se pudo cargar',
+              message: error is AuthApiException
+                  ? error.message
+                  : 'No se pudo cargar tus comidas',
+              onRetry: _load,
+            ),
+            dataBuilder: (summary) => _SummaryView(
+              summary: summary,
+              actionsEnabled: !_viewModel.busy,
+              onEdit: _editItem,
+              onDelete: _deleteItem,
+            ),
+          ),
+        ],
       ),
     );
+    if (embedded) {
+      return Scaffold(backgroundColor: Colors.transparent, body: content);
+    }
+    return AppScaffoldTemplate(body: SafeArea(child: content));
   }
 }
 

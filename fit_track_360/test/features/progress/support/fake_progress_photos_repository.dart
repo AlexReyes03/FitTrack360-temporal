@@ -10,6 +10,7 @@ class FakeProgressPhotosRepository implements ProgressPhotosRepository {
   Object? uploadError;
   Object? deleteError;
   final List<File> uploaded = [];
+  final List<String?> uploadedMetricIds = [];
   final List<String> deleted = [];
 
   @override
@@ -21,6 +22,7 @@ class FakeProgressPhotosRepository implements ProgressPhotosRepository {
     final error = uploadError;
     if (error != null) throw error;
     uploaded.add(file);
+    uploadedMetricIds.add(metricId);
     final n = uploaded.length;
     return ProgressPhotoMeta(
       id: 'ph-$n',

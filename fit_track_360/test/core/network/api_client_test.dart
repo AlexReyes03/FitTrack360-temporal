@@ -33,6 +33,25 @@ class _RefreshStorage implements SessionStorage {
   }
 }
 
+/// Sesión que ya no puede renovarse: `forceRefresh` devuelve null.
+class _ExpiredStorage implements SessionStorage {
+  @override
+  Future<String?> readAccessToken({bool forceRefresh = false}) async =>
+      forceRefresh ? null : 'caducado';
+
+  @override
+  Future<String?> readRefreshToken() async => null;
+
+  @override
+  Future<void> saveTokens({
+    required String accessToken,
+    required String refreshToken,
+  }) async {}
+
+  @override
+  Future<void> clear() async {}
+}
+
 void main() {
   test('GET, POST, PATCH y DELETE usan el metodo HTTP correcto', () async {
     final methods = <String>[];
@@ -148,12 +167,36 @@ void main() {
         httpClient: MockClient((_) async => http.Response('', 401)),
       );
       addTearDown(client.dispose);
+      var invalidations = 0;
+      void listener() => invalidations++;
+      appSessionInvalidations.addListener(listener);
+      addTearDown(() => appSessionInvalidations.removeListener(listener));
 
       await expectLater(
         client.delete('/api/v1/users/me'),
         throwsA(isA<SessionExpiredException>()),
       );
       expect(storage.accessToken, isNull);
+      expect(invalidations, 1);
+    });
+
+    test('si el refresh falla notifica la invalidacion de sesion', () async {
+      final client = ApiClient(
+        storage: _ExpiredStorage(),
+        httpClient: MockClient((_) async => http.Response('', 401)),
+      );
+      addTearDown(client.dispose);
+      var invalidations = 0;
+      void listener() => invalidations++;
+      appSessionInvalidations.addListener(listener);
+      addTearDown(() => appSessionInvalidations.removeListener(listener));
+
+      await expectLater(
+        client.get('/api/v1/users/me'),
+        throwsA(isA<SessionExpiredException>()),
+      );
+
+      expect(invalidations, 1);
     });
   });
 }

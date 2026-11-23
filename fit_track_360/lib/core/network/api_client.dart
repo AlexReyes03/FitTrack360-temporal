@@ -59,6 +59,7 @@ class ApiClient {
     final refreshed = await _tryRefresh();
     if (!refreshed) {
       await _storage.clear();
+      notifySessionCleared();
       throw const SessionExpiredException();
     }
 
@@ -66,6 +67,7 @@ class ApiClient {
     response = await _upload(path, file, renewedToken, fields: fields);
     if (response.statusCode == 401) {
       await _storage.clear();
+      notifySessionCleared();
       throw const SessionExpiredException();
     }
     return response;
@@ -88,6 +90,7 @@ class ApiClient {
     final refreshed = await _tryRefresh();
     if (!refreshed) {
       await _storage.clear();
+      notifySessionCleared();
       throw const SessionExpiredException();
     }
 
@@ -100,6 +103,7 @@ class ApiClient {
     );
     if (response.statusCode == 401) {
       await _storage.clear();
+      notifySessionCleared();
       throw const SessionExpiredException();
     }
     return response;

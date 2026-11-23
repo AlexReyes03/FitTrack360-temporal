@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +8,7 @@ import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
+import '../../notifications/presentation/notifications_scope.dart';
 import '../data/auth_api.dart';
 import '../data/firebase_auth_service.dart';
 import '../data/google_auth_gateway.dart';
@@ -47,6 +50,7 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _googleLoading = false;
   bool _emailTouched = false;
   bool _confirmPasswordTouched = false;
+  bool _didClearNotificationsOnMount = false;
   String? _error;
 
   bool get _anyGoogleLoading => widget.googleLoading || _googleLoading;
@@ -56,6 +60,19 @@ class _RegisterPageState extends State<RegisterPage> {
     super.initState();
     _emailFocusNode.addListener(_handleEmailFocus);
     _confirmPasswordFocusNode.addListener(_handleConfirmPasswordFocus);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didClearNotificationsOnMount) return;
+    _didClearNotificationsOnMount = true;
+    final notifications = NotificationsScope.maybeOf(context);
+    if (notifications != null) {
+      scheduleMicrotask(() {
+        if (mounted) notifications.clearOnLogout();
+      });
+    }
   }
 
   void _handleEmailFocus() {
@@ -149,6 +166,7 @@ class _RegisterPageState extends State<RegisterPage> {
         privacyNoticeVersion: '2',
       );
       if (!mounted) return;
+      NotificationsScope.maybeOf(context)?.clearOnLogout();
       context.go('/app');
     } on AuthApiException catch (e) {
       if (!mounted) return;
@@ -187,6 +205,7 @@ class _RegisterPageState extends State<RegisterPage> {
         privacyNoticeVersion: '2',
       );
       if (!mounted) return;
+      NotificationsScope.maybeOf(context)?.clearOnLogout();
       context.go('/app');
     } on GoogleSignInCancelledException {
       // Cancelar deja el registro sin error fatal.

@@ -144,6 +144,7 @@ model WorkoutSession {
   sets      WorkoutSet[]
 
   @@index([userId, startedAt(sort: Desc)])
+  @@index([routineId])
 }
 
 model WorkoutSet {

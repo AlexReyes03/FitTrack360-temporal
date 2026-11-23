@@ -14,7 +14,7 @@
     <!-- O5: pasos del día (ACTIVITY_RECOGNITION / pedometer). -->
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
     <application
-        android:label="fit_track_360"
+        android:label="Fit Track 360"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

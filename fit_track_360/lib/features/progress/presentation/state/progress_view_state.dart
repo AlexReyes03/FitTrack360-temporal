@@ -77,9 +77,13 @@ class ProgressCheckInDraft {
     required this.weightKg,
     required this.notesText,
     required this.hasPhotoSelected,
+    this.bodyFatPercent,
+    this.waistCm,
   });
 
   final double weightKg;
   final String notesText;
   final bool hasPhotoSelected;
+  final double? bodyFatPercent;
+  final double? waistCm;
 }

@@ -5,6 +5,7 @@ import 'package:fit_track_360/core/network/connectivity_service.dart';
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
 import 'package:fit_track_360/core/security/biometric_service.dart';
 import 'package:fit_track_360/core/session_storage.dart';
+import 'package:fit_track_360/features/notifications/data/push_device_lifecycle_service.dart';
 import 'package:fit_track_360/features/settings/domain/export_sharer.dart';
 import 'package:fit_track_360/features/settings/domain/profile_repository.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
@@ -31,6 +32,15 @@ const sampleProfile = UserProfile(
   displayName: 'Ana',
   goals: sampleGoals,
   preferences: samplePreferences,
+);
+
+UserProfile sampleProfileWithNotifications(bool enabled) => UserProfile(
+  id: sampleProfile.id,
+  email: sampleProfile.email,
+  username: sampleProfile.username,
+  displayName: sampleProfile.displayName,
+  goals: sampleProfile.goals,
+  preferences: samplePreferences.copyWith(notificationsEnabled: enabled),
 );
 
 Map<String, dynamic> sampleProfileJson() => {
@@ -190,6 +200,38 @@ class FakeSessionStorage implements SessionStorage {
   Future<void> clear() async {
     accessToken = null;
     refreshToken = null;
+  }
+}
+
+class FakePushDeviceLifecycle implements PushDeviceLifecycle {
+  final syncCalls =
+      <({bool notificationsEnabled, bool requestPermissionIfNeeded})>[];
+  int revokeCalls = 0;
+  int disposeCalls = 0;
+  Object? syncError;
+  Object? revokeError;
+
+  @override
+  Future<void> syncForActiveSession({
+    required bool notificationsEnabled,
+    bool requestPermissionIfNeeded = false,
+  }) async {
+    if (syncError != null) throw syncError!;
+    syncCalls.add((
+      notificationsEnabled: notificationsEnabled,
+      requestPermissionIfNeeded: requestPermissionIfNeeded,
+    ));
+  }
+
+  @override
+  Future<void> deactivateAndRevoke() async {
+    revokeCalls++;
+    if (revokeError != null) throw revokeError!;
+  }
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
   }
 }
 

@@ -3,7 +3,10 @@ import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { RoutinesService } from '../../src/routines/routines.service';
-import { CreateRoutineDto } from '../../src/routines/dto/routine.dto';
+import {
+  CreateRoutineDto,
+  UpdateRoutineDto,
+} from '../../src/routines/dto/routine.dto';
 import { WorkoutsService } from '../../src/workouts/workouts.service';
 
 const entry = { exerciseId: 'ex1', position: 1, targetSets: 2, targetReps: 8 };
@@ -61,6 +64,26 @@ describe('Rutinas', () => {
       exercises: [{ ...entry, targetSets: 0, targetReps: -1 }],
     });
     expect(await validate(dto)).not.toHaveLength(0);
+  });
+  it('rechaza ejercicios vacíos en creación y actualización y limita repeticiones', async () => {
+    for (const dto of [
+      plainToInstance(CreateRoutineDto, { name: 'A', exercises: [] }),
+      plainToInstance(UpdateRoutineDto, { exercises: [] }),
+      plainToInstance(CreateRoutineDto, {
+        name: 'A',
+        exercises: [{ ...entry, targetReps: 1001 }],
+      }),
+    ]) {
+      expect(await validate(dto)).not.toHaveLength(0);
+    }
+    expect(
+      await validate(
+        plainToInstance(CreateRoutineDto, {
+          name: 'A',
+          exercises: [{ ...entry, targetReps: 1000 }],
+        }),
+      ),
+    ).toHaveLength(0);
   });
   it('rechaza posiciones repetidas y ejercicios inexistentes', async () => {
     const { service } = setup();

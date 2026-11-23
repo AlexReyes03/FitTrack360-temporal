@@ -47,4 +47,12 @@ class AppColors {
   static const Color dangerFill = Color(0x29EF4444);
   static const Color dangerBorder = Color(0x73F87171);
   static const Color dangerText = Color(0xFFFECACA);
+
+  // Boton destructivo (Liquid Glass rojo)
+  static const Color dangerSolidTop = Color(0xFFEF4444);
+  static const Color dangerSolidMid = Color(0xFFDC2626);
+  static const Color dangerSolidBottom = Color(0xFFB91C1C);
+  static const Color dangerSolidPressedTop = Color(0xFFF87171);
+  static const Color dangerSolidRim = Color(0x99FCA5A5);
+  static const Color dangerSolidShadow = Color(0x4DEF4444);
 }

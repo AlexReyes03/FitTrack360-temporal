@@ -2,7 +2,10 @@ import 'dart:convert';
 
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/network/connectivity_service.dart';
+import 'package:fit_track_360/features/home/presentation/app_shell_page.dart';
 import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_scope.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -62,37 +65,97 @@ http.Response _dashboardEmpty() => http.Response.bytes(
 );
 
 void main() {
-  testWidgets('Home abre el catálogo de ejercicios', (tester) async {
+  testWidgets('Home abre el catálogo de ejercicios desde el shell', (
+    tester,
+  ) async {
     final storage = FakeSessionStorage();
+    final notifications = NotificationsViewModel(initialNotifications: []);
+    addTearDown(notifications.dispose);
     final router = GoRouter(
       initialLocation: '/app',
       routes: [
-        GoRoute(
-          path: '/app',
-          builder: (context, state) => HomeShellPage(
-            apiClient: ApiClient(
-              storage: storage,
-              httpClient: MockClient((request) async {
-                if (request.url.path.endsWith('/users/me')) return _profile();
-                if (request.url.path.contains('/dashboard/today')) {
-                  return _dashboardEmpty();
-                }
-                return http.Response('not found', 404);
-              }),
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) =>
+              AppShellPage(navigationShell: navigationShell),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app',
+                  builder: (context, state) => HomeShellPage(
+                    apiClient: ApiClient(
+                      storage: storage,
+                      httpClient: MockClient((request) async {
+                        if (request.url.path.endsWith('/users/me')) {
+                          return _profile();
+                        }
+                        if (request.url.path.contains('/dashboard/today')) {
+                          return _dashboardEmpty();
+                        }
+                        return http.Response('not found', 404);
+                      }),
+                    ),
+                    sessionStorage: storage,
+                    connectivityService: FakeConnectivityService(),
+                  ),
+                ),
+              ],
             ),
-            sessionStorage: storage,
-            connectivityService: FakeConnectivityService(),
-          ),
-        ),
-        GoRoute(
-          path: '/app/ejercicios',
-          builder: (context, state) => const Text('Catálogo de ejercicios'),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app/entrenamientos',
+                  builder: (context, state) =>
+                      const Text('vista-entrenamientos'),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app/comidas',
+                  builder: (context, state) => const Text('vista-comidas'),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app/ejercicios',
+                  builder: (context, state) =>
+                      const Text('Catálogo de ejercicios'),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app/progreso',
+                  builder: (context, state) => const Text('vista-progreso'),
+                ),
+              ],
+            ),
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app/perfil',
+                  builder: (context, state) => const Text('vista-perfil'),
+                ),
+              ],
+            ),
+          ],
         ),
       ],
     );
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpWidget(
+      NotificationsScope(
+        notifier: notifications,
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(find.text('Ejercicios'), findsOneWidget);
 

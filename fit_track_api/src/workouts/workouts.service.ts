@@ -45,6 +45,9 @@ interface StoredSession {
   sets?: StoredSet[];
 }
 
+// Se consultan como máximo las 1000 sesiones previas para calcular métricas.
+const HISTORY_LIMIT = 1000;
+
 const SETS_INCLUDE = {
   sets: {
     orderBy: { order: 'asc' as const },
@@ -94,10 +97,32 @@ export class WorkoutsService {
       include: SETS_INCLUDE,
       orderBy: { startedAt: 'desc' },
     });
-    const history = sessions.map(toSnapshot);
-    return history.map((session) =>
-      WorkoutResponseDto.fromSnapshot(session, history),
-    );
+    const history = sessions
+      .map(toSnapshot)
+      .sort(
+        (a, b) =>
+          b.startedAt.getTime() - a.startedAt.getTime() ||
+          b.createdAt.getTime() - a.createdAt.getTime(),
+      );
+    const result: WorkoutResponseDto[] = [];
+    for (let start = 0; start < history.length;) {
+      const current = history[start];
+      let end = start + 1;
+      while (
+        end < history.length &&
+        history[end].startedAt.getTime() === current.startedAt.getTime() &&
+        history[end].createdAt.getTime() === current.createdAt.getTime()
+      ) {
+        end++;
+      }
+      // Sesiones con ambas fechas iguales no son anteriores entre sí.
+      const previous = history.slice(end, end + HISTORY_LIMIT);
+      for (let index = start; index < end; index++) {
+        result.push(WorkoutResponseDto.fromSnapshot(history[index], previous));
+      }
+      start = end;
+    }
+    return result;
   }
 
   async findOne(userId: string, id: string): Promise<WorkoutResponseDto> {
@@ -171,9 +196,19 @@ export class WorkoutsService {
     session: StoredSession,
   ): Promise<WorkoutResponseDto> {
     const history = await this.sessions().findMany({
-      where: { userId },
+      where: {
+        userId,
+        OR: [
+          { startedAt: { lt: session.startedAt } },
+          {
+            startedAt: session.startedAt,
+            createdAt: { lt: session.createdAt },
+          },
+        ],
+      },
       include: SETS_INCLUDE,
-      orderBy: { startedAt: 'desc' },
+      orderBy: [{ startedAt: 'desc' }, { createdAt: 'desc' }],
+      take: HISTORY_LIMIT,
     });
     return WorkoutResponseDto.fromSnapshot(
       toSnapshot(session),
@@ -244,9 +279,18 @@ export class WorkoutsService {
       include?: typeof SETS_INCLUDE;
     }): Promise<StoredSession>;
     findMany(args: {
-      where: { userId: string };
+      where: {
+        userId: string;
+        OR?: Array<{
+          startedAt: Date | { lt: Date };
+          createdAt?: { lt: Date };
+        }>;
+      };
       include?: typeof SETS_INCLUDE;
-      orderBy?: { startedAt: 'asc' | 'desc' };
+      orderBy?:
+        | { startedAt: 'asc' | 'desc' }
+        | Array<{ startedAt: 'desc' } | { createdAt: 'desc' }>;
+      take?: number;
     }): Promise<StoredSession[]>;
     findFirst(args: {
       where: { id: string; userId: string };

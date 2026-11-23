@@ -364,7 +364,7 @@ void main() {
       expect(find.text('Press banca'), findsOneWidget);
 
       await tester.scrollUntilVisible(
-        find.text('Crear sesión'),
+        find.text('Registrar entrenamiento'),
         300,
         scrollable: find
             .descendant(
@@ -373,13 +373,13 @@ void main() {
             )
             .first,
       );
-      await tester.ensureVisible(find.text('Crear sesión'));
+      await tester.ensureVisible(find.text('Registrar entrenamiento'));
       await tester.drag(
         find.byKey(const Key('workout-form-scroll')),
         const Offset(0, -120),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Crear sesión'));
+      await tester.tap(find.text('Registrar entrenamiento'));
       await tester.pumpAndSettle();
 
       final draft = api.created.single;

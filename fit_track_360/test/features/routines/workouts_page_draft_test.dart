@@ -209,7 +209,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Rutina:'), findsNothing);
-    expect(find.text('Crear sesión'), findsOneWidget);
+    expect(find.text('Registrar entrenamiento'), findsOneWidget);
   });
 
   testWidgets('tras crear, el borrador desaparece y no se reenvía', (
@@ -228,7 +228,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Crear sesión'),
+      find.text('Registrar entrenamiento'),
       300,
       scrollable: find
           .descendant(
@@ -237,13 +237,13 @@ void main() {
           )
           .first,
     );
-    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.ensureVisible(find.text('Registrar entrenamiento'));
     await tester.drag(
       find.byKey(const Key('workout-form-scroll')),
       const Offset(0, -120),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     expect(api.created.single.routineId, 'rutina-1');
@@ -252,7 +252,7 @@ void main() {
     expect(find.text('Sesión guardada'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Crear sesión'),
+      find.text('Registrar entrenamiento'),
       300,
       scrollable: find
           .descendant(
@@ -261,13 +261,13 @@ void main() {
           )
           .first,
     );
-    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.ensureVisible(find.text('Registrar entrenamiento'));
     await tester.drag(
       find.byKey(const Key('workout-form-scroll')),
       const Offset(0, -120),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     expect(api.created, hasLength(2));
@@ -315,7 +315,7 @@ void main() {
       'Hecha desde la rutina',
     );
     await tester.scrollUntilVisible(
-      find.text('Crear sesión'),
+      find.text('Registrar entrenamiento'),
       300,
       scrollable: find
           .descendant(
@@ -324,13 +324,13 @@ void main() {
           )
           .first,
     );
-    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.ensureVisible(find.text('Registrar entrenamiento'));
     await tester.drag(
       find.byKey(const Key('workout-form-scroll')),
       const Offset(0, -120),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     final body = posted.single;
@@ -367,7 +367,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Crear sesión'),
+      find.text('Registrar entrenamiento'),
       300,
       scrollable: find
           .descendant(
@@ -376,13 +376,13 @@ void main() {
           )
           .first,
     );
-    await tester.ensureVisible(find.text('Crear sesión'));
+    await tester.ensureVisible(find.text('Registrar entrenamiento'));
     await tester.drag(
       find.byKey(const Key('workout-form-scroll')),
       const Offset(0, -120),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Crear sesión'));
+    await tester.tap(find.text('Registrar entrenamiento'));
     await tester.pumpAndSettle();
 
     final body = posted.single;

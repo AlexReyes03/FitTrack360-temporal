@@ -27,6 +27,16 @@ class HomeNavigationShell extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
 
+  /// Indica si el [context] vive dentro de [HomeNavigationShell].
+  ///
+  /// Permite a las vistas de pestaña evitar un segundo [AppBackground] y
+  /// compactar su espaciado superior al compartir el header del shell.
+  static bool isEmbedded(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<_HomeNavigationShellScope>() !=
+        null;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -44,7 +54,18 @@ class HomeNavigationShell extends StatelessWidget {
                 children: [
                   ?topBanner,
                   ?header,
-                  Expanded(child: body),
+                  Expanded(
+                    child: _HomeNavigationShellScope(
+                      // El shell ya absorbe el inset superior y la barra
+                      // inferior absorbe el inferior.
+                      child: MediaQuery.removePadding(
+                        context: context,
+                        removeTop: true,
+                        removeBottom: true,
+                        child: body,
+                      ),
+                    ),
+                  ),
                   ?footer,
                   GlassBottomNavBar(
                     destinations: destinations,
@@ -59,4 +80,11 @@ class HomeNavigationShell extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HomeNavigationShellScope extends InheritedWidget {
+  const _HomeNavigationShellScope({required super.child});
+
+  @override
+  bool updateShouldNotify(_HomeNavigationShellScope oldWidget) => false;
 }

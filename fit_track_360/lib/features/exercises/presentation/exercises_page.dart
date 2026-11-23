@@ -14,12 +14,13 @@ import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/auth_api.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import '../data/exercise.dart';
 import '../data/exercises_api.dart';
 import 'widgets/exercise_card.dart';
 import 'widgets/exercise_filters.dart';
 
-/// Catálogo de ejercicios: búsqueda, filtros, contador y paginación.
+/// Catálogo de ejercicios: búsqueda, filtros y carga incremental.
 class ExercisesPage extends StatefulWidget {
   const ExercisesPage({super.key, this.api, this.connectivityService});
 
@@ -43,6 +44,9 @@ class _ExercisesPageState extends State<ExercisesPage> {
 
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchTimer;
+  final ScrollController _scrollController = ScrollController();
+  bool _loadingMore = false;
+  bool _moreError = false;
 
   AsyncState<ExercisePage> _state = const AsyncLoading<ExercisePage>();
 
@@ -61,6 +65,7 @@ class _ExercisesPageState extends State<ExercisesPage> {
       _onConnectivityChange,
       onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
     );
+    _scrollController.addListener(_onScroll);
     _load();
   }
 
@@ -69,6 +74,7 @@ class _ExercisesPageState extends State<ExercisesPage> {
     _connectivitySubscription?.cancel();
     _searchTimer?.cancel();
     _searchController.dispose();
+    _scrollController.dispose();
     _ownedClient?.dispose();
     super.dispose();
   }
@@ -78,7 +84,13 @@ class _ExercisesPageState extends State<ExercisesPage> {
     // pendiente; si no, vencería después y volvería a la página 1.
     _searchTimer?.cancel();
     final requestId = ++_requestId;
-    setState(() => _state = const AsyncLoading<ExercisePage>());
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    setState(() {
+      _page = 1;
+      _loadingMore = false;
+      _moreError = false;
+      _state = const AsyncLoading<ExercisePage>();
+    });
     try {
       final result = await _api.fetchPage(
         query: _searchController.text,
@@ -95,10 +107,63 @@ class _ExercisesPageState extends State<ExercisesPage> {
             : AsyncData<ExercisePage>(result);
       });
     } on SessionExpiredException {
-      if (mounted) context.go('/login');
+      if (mounted && requestId == _requestId) context.go('/login');
     } catch (error, stackTrace) {
       if (!mounted || requestId != _requestId) return;
       setState(() => _state = AsyncError<ExercisePage>(error, stackTrace));
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.extentAfter < 300) _loadMore();
+  }
+
+  Future<void> _loadMore() async {
+    final state = _state;
+    if (state is! AsyncData<ExercisePage> ||
+        _loadingMore ||
+        _moreError ||
+        !state.data.hasNext ||
+        _searchTimer?.isActive == true) {
+      return;
+    }
+    final previous = state.data;
+    final requestId = _requestId;
+    setState(() => _loadingMore = true);
+    try {
+      final result = await _api.fetchPage(
+        query: _searchController.text,
+        bodyPart: _bodyPart,
+        equipment: _equipment,
+        target: _target,
+        page: previous.page + 1,
+        pageSize: _pageSize,
+      );
+      if (!mounted || requestId != _requestId) return;
+      final ids = previous.items.map((item) => item.id).toSet();
+      setState(() {
+        _page = result.page;
+        _loadingMore = false;
+        _state = AsyncData(
+          ExercisePage(
+            items: [
+              ...previous.items,
+              ...result.items.where((item) => ids.add(item.id)),
+            ],
+            total: result.total,
+            page: result.page,
+            pageSize: result.pageSize,
+          ),
+        );
+      });
+    } on SessionExpiredException {
+      if (mounted && requestId == _requestId) context.go('/login');
+    } catch (_) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        _loadingMore = false;
+        _moreError = true;
+      });
     }
   }
 
@@ -109,6 +174,7 @@ class _ExercisesPageState extends State<ExercisesPage> {
 
   void _onSearchChanged(String _) {
     _searchTimer?.cancel();
+    _requestId++;
     _searchTimer = Timer(_searchDebounce, () {
       if (!mounted) return;
       setState(() => _page = 1);
@@ -158,12 +224,6 @@ class _ExercisesPageState extends State<ExercisesPage> {
       _equipment != null ||
       _target != null;
 
-  void _goToPage(int page) {
-    if (page < 1) return;
-    setState(() => _page = page);
-    _load();
-  }
-
   void _openDetail(Exercise exercise) {
     context.push('/app/ejercicios/${exercise.id}');
   }
@@ -178,80 +238,83 @@ class _ExercisesPageState extends State<ExercisesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffoldTemplate(
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppSpacing.contentMaxWidth,
+    final embedded = HomeNavigationShell.isEmbedded(context);
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: AppSpacing.contentMaxWidth),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            OfflineBanner(service: _connectivity, onRetry: _load),
+            _header(embedded: embedded),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                0,
+                AppSpacing.md,
+                AppSpacing.sm,
+              ),
+              child: DsTextField(
+                controller: _searchController,
+                label: 'Buscar',
+                hint: 'Nombre del ejercicio',
+                onChanged: _onSearchChanged,
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                OfflineBanner(service: _connectivity, onRetry: _load),
-                _header(),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.md,
-                    0,
-                    AppSpacing.md,
-                    AppSpacing.sm,
-                  ),
-                  child: DsTextField(
-                    controller: _searchController,
-                    label: 'Buscar',
-                    hint: 'Nombre del ejercicio',
-                    onChanged: _onSearchChanged,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
-                  ),
-                  child: ExerciseFilters(
-                    bodyPart: _bodyPart,
-                    equipment: _equipment,
-                    target: _target,
-                    onBodyPartChanged: _onBodyPartChanged,
-                    onEquipmentChanged: _onEquipmentChanged,
-                    onTargetChanged: _onTargetChanged,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Expanded(
-                  child: AsyncStateView<ExercisePage>(
-                    state: _state,
-                    onRetry: _load,
-                    loadingMessage: 'Cargando ejercicios...',
-                    emptyBuilder: _empty,
-                    errorBuilder: (error, _) => _error(error),
-                    dataBuilder: _results,
-                  ),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: ExerciseFilters(
+                bodyPart: _bodyPart,
+                equipment: _equipment,
+                target: _target,
+                onBodyPartChanged: _onBodyPartChanged,
+                onEquipmentChanged: _onEquipmentChanged,
+                onTargetChanged: _onTargetChanged,
+              ),
             ),
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            Expanded(
+              child: AsyncStateView<ExercisePage>(
+                state: _state,
+                onRetry: _load,
+                loadingMessage: 'Cargando ejercicios...',
+                emptyBuilder: _empty,
+                errorBuilder: (error, _) => _error(error),
+                dataBuilder: _results,
+              ),
+            ),
+          ],
         ),
       ),
     );
+    if (embedded) {
+      return Scaffold(backgroundColor: Colors.transparent, body: content);
+    }
+    return AppScaffoldTemplate(body: SafeArea(child: content));
   }
 
-  Widget _header() {
+  Widget _header({required bool embedded}) {
+    final showBack = !embedded || context.canPop();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xs,
-        AppSpacing.md,
+      padding: EdgeInsets.fromLTRB(
+        showBack ? AppSpacing.xs : AppSpacing.md,
+        embedded ? AppSpacing.sm : AppSpacing.md,
         AppSpacing.md,
         AppSpacing.sm,
       ),
       child: Row(
         children: [
-          IconButton(
-            onPressed: _goBack,
-            tooltip: 'Volver',
-            icon: const Icon(Icons.arrow_back, color: AppColors.textSecondary),
-          ),
-          const SizedBox(width: AppSpacing.xs),
+          if (showBack) ...[
+            IconButton(
+              onPressed: _goBack,
+              tooltip: 'Volver',
+              icon: const Icon(
+                Icons.arrow_back,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+          ],
           Expanded(child: Text('Ejercicios', style: AppTypography.pageTitle)),
         ],
       ),
@@ -259,67 +322,52 @@ class _ExercisesPageState extends State<ExercisesPage> {
   }
 
   Widget _results(ExercisePage page) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        0,
-        AppSpacing.md,
-        AppSpacing.md,
-      ),
-      children: [
-        Text(
-          _resultsLabel(page.total),
-          style: AppTypography.body.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        for (final exercise in page.items)
-          Padding(
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, 0, AppSpacing.md, 28),
+      itemCount: page.items.length + 2,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+            child: Text(
+              _resultsLabel(page.total),
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          );
+        }
+        if (index <= page.items.length) {
+          final exercise = page.items[index - 1];
+          return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: ExerciseCard(
               exercise: exercise,
               onTap: () => _openDetail(exercise),
             ),
-          ),
-        _pagination(page),
-      ],
+          );
+        }
+        if (_loadingMore) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (_moreError) {
+          return TextButton(
+            onPressed: () {
+              setState(() => _moreError = false);
+              _loadMore();
+            },
+            child: const Text('Reintentar carga de ejercicios'),
+          );
+        }
+        return const SizedBox.shrink();
+      },
     );
   }
 
   String _resultsLabel(int total) =>
       total == 1 ? '1 resultado' : '$total resultados';
-
-  Widget _pagination(ExercisePage page) {
-    return Row(
-      children: [
-        TextButton(
-          onPressed: page.hasPrevious ? () => _goToPage(page.page - 1) : null,
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.textSecondary,
-            disabledForegroundColor: AppColors.textMuted,
-          ),
-          child: const Text('Anterior'),
-        ),
-        Expanded(
-          child: Text(
-            'Página ${page.page} de ${page.totalPages}',
-            textAlign: TextAlign.center,
-            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
-          ),
-        ),
-        TextButton(
-          onPressed: page.hasNext ? () => _goToPage(page.page + 1) : null,
-          style: TextButton.styleFrom(
-            foregroundColor: AppColors.textSecondary,
-            disabledForegroundColor: AppColors.textMuted,
-          ),
-          child: const Text('Siguiente'),
-        ),
-      ],
-    );
-  }
 
   Widget _empty() {
     return Center(

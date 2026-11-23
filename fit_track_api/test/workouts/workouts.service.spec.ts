@@ -1,3 +1,4 @@
+import { jest } from '@jest/globals';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -193,6 +194,20 @@ function serviceWithStore() {
 }
 
 describe('WorkoutsService · series, volumen y comparación (W11-03)', () => {
+  it('limita la consulta histórica a sesiones anteriores del usuario', async () => {
+    const { store, service } = serviceWithStore();
+    const spy = jest.spyOn(store.workoutSession, 'findMany');
+    await service.create('user-ana', { startedAt: '2026-11-15T10:00:00.000Z' });
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 1000,
+        where: expect.objectContaining({
+          userId: 'user-ana',
+          OR: expect.any(Array),
+        }),
+      }),
+    );
+  });
   it('crea una sesión con varias series y la recupera completa, en orden', async () => {
     const { service } = serviceWithStore();
 

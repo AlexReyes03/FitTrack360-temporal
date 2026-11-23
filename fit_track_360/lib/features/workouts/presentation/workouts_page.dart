@@ -13,6 +13,7 @@ import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
+import '../../home/presentation/widgets/home_navigation_shell.dart';
 import '../../settings/data/profile_api_repository.dart';
 import 'session_exercise_editor.dart';
 import '../data/workout_session.dart';
@@ -257,157 +258,157 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffoldTemplate(
-      body: SafeArea(
-        child: ListView(
-          key: const Key('workout-form-scroll'),
-          padding: const EdgeInsets.all(24),
+    final embedded =
+        widget.editingSession == null &&
+        HomeNavigationShell.isEmbedded(context);
+    final list = ListView(
+      key: const Key('workout-form-scroll'),
+      padding: EdgeInsets.fromLTRB(24, embedded ? 12 : 24, 24, 28),
+      children: [
+        OfflineBanner(service: _connectivity, onRetry: _load),
+        Row(
           children: [
-            OfflineBanner(service: _connectivity, onRetry: _load),
-            Row(
-              children: [
-                if (Navigator.of(context).canPop())
-                  IconButton(
-                    tooltip: 'Volver',
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                Text(
-                  widget.editingSession == null
-                      ? 'Entrenamientos'
-                      : 'Editar sesión',
-                  style: AppTypography.pageTitle,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            if (_draft?.routineName case final name?)
-              Text('Rutina: $name', style: AppTypography.body),
-            SessionExerciseEditor(
-              key: ValueKey(_editorKey),
-              initial: _draft,
-              onChanged: (exercises, sets) {
-                _editedExercises = exercises;
-                _editedSets = sets;
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _restController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Descanso entre series (segundos)',
-                helperText: 'Referencia para esta sesión; no se guarda en el historial.',
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Notas', style: AppTypography.body),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _notesController,
-              enabled: !_creating,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: const InputDecoration(
-                hintText: 'Opcional',
-                hintStyle: TextStyle(color: AppColors.textMuted),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Inicio', style: AppTypography.body),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: _creating ? null : _pickStartedAt,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Fecha y hora: ${_format(_startedAt)}',
-                  style: const TextStyle(color: AppColors.textPrimary),
-                ),
-              ),
-            ),
-            if (_saved) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Sesión guardada',
-                style: AppTypography.body.copyWith(
+            if (Navigator.of(context).canPop())
+              IconButton(
+                tooltip: 'Volver',
+                onPressed: () => Navigator.of(context).maybePop(),
+                icon: const Icon(
+                  Icons.arrow_back,
                   color: AppColors.textSecondary,
                 ),
               ),
-            ],
-            if (_formError != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                _formError!,
-                style: AppTypography.body.copyWith(color: AppColors.dangerText),
-              ),
-            ],
-            const SizedBox(height: 16),
-            PrimaryButton(
-              label: _creating
-                  ? 'Guardando...'
-                  : widget.editingSession == null
-                  ? 'Crear sesión'
-                  : 'Guardar cambios',
-              onPressed: _creating ? null : _create,
+            Text(
+              widget.editingSession == null
+                  ? 'Entrenamientos'
+                  : 'Editar sesión',
+              style: AppTypography.pageTitle,
             ),
-            if (widget.editingSession == null) ...[
-              const SizedBox(height: 32),
-              AsyncStateView<List<WorkoutSession>>(
-                state: _state,
-                onRetry: _load,
-                loadingMessage: 'Cargando sesiones...',
-                emptyTitle: 'Aún no tienes sesiones',
-                emptyMessage: 'Crea una sesión para empezar el historial.',
-                errorBuilder: (error, _) => RemoteErrorView(
-                  title: 'No se pudo cargar',
-                  message: error is AuthApiException
-                      ? error.message
-                      : 'No se pudo conectar',
-                  onRetry: _load,
-                ),
-                dataBuilder: (sessions) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final session in sessions)
-                      InkWell(
-                        onTap: () async {
-                          await context.push(
-                            '/app/entrenamientos/${session.id}',
-                          );
-                          if (mounted) await _load();
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _format(session.startedAt),
-                                style: AppTypography.body,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                session.notes == null || session.notes!.isEmpty
-                                    ? 'Sin notas'
-                                    : session.notes!,
-                                style: AppTypography.body.copyWith(
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
-      ),
+        const SizedBox(height: 16),
+        if (_draft?.routineName case final name?)
+          Text('Rutina: $name', style: AppTypography.body),
+        SessionExerciseEditor(
+          key: ValueKey(_editorKey),
+          initial: _draft,
+          onChanged: (exercises, sets) {
+            _editedExercises = exercises;
+            _editedSets = sets;
+          },
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _restController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Descanso entre series (segundos)',
+            helperText:
+                'Referencia para esta sesión; no se guarda en el historial.',
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('Notas', style: AppTypography.body),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _notesController,
+          enabled: !_creating,
+          style: const TextStyle(color: AppColors.textPrimary),
+          decoration: const InputDecoration(
+            hintText: 'Opcional',
+            hintStyle: TextStyle(color: AppColors.textMuted),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('Inicio', style: AppTypography.body),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _creating ? null : _pickStartedAt,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Fecha y hora: ${_format(_startedAt)}',
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        ),
+        if (_saved) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Sesión guardada',
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+          ),
+        ],
+        if (_formError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _formError!,
+            style: AppTypography.body.copyWith(color: AppColors.dangerText),
+          ),
+        ],
+        const SizedBox(height: 16),
+        PrimaryButton(
+          label: _creating
+              ? 'Guardando...'
+              : widget.editingSession == null
+              ? 'Registrar entrenamiento'
+              : 'Guardar cambios',
+          onPressed: _creating ? null : _create,
+        ),
+        if (widget.editingSession == null) ...[
+          const SizedBox(height: 32),
+          AsyncStateView<List<WorkoutSession>>(
+            state: _state,
+            onRetry: _load,
+            loadingMessage: 'Cargando sesiones...',
+            emptyTitle: 'Aún no tienes sesiones',
+            emptyMessage: 'Crea una sesión para empezar el historial.',
+            errorBuilder: (error, _) => RemoteErrorView(
+              title: 'No se pudo cargar',
+              message: error is AuthApiException
+                  ? error.message
+                  : 'No se pudo conectar',
+              onRetry: _load,
+            ),
+            dataBuilder: (sessions) => Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final session in sessions)
+                  InkWell(
+                    onTap: () async {
+                      await context.push('/app/entrenamientos/${session.id}');
+                      if (mounted) await _load();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _format(session.startedAt),
+                            style: AppTypography.body,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            session.notes == null || session.notes!.isEmpty
+                                ? 'Sin notas'
+                                : session.notes!,
+                            style: AppTypography.body.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
+    if (embedded) {
+      return Scaffold(backgroundColor: Colors.transparent, body: list);
+    }
+    return AppScaffoldTemplate(body: SafeArea(child: list));
   }
 }

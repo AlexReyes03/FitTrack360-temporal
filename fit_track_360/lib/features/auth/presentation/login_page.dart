@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,6 +9,7 @@ import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/form_page_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
+import '../../notifications/presentation/notifications_scope.dart';
 import '../data/auth_api.dart';
 import '../data/firebase_auth_service.dart';
 import '../data/google_auth_gateway.dart';
@@ -39,6 +42,7 @@ class _LoginPageState extends State<LoginPage> {
   bool _submitting = false;
   bool _googleLoading = false;
   bool _emailTouched = false;
+  bool _didClearNotificationsOnMount = false;
   String? _error;
 
   bool get _anyGoogleLoading => widget.googleLoading || _googleLoading;
@@ -47,6 +51,19 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _emailFocusNode.addListener(_handleEmailFocus);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didClearNotificationsOnMount) return;
+    _didClearNotificationsOnMount = true;
+    final notifications = NotificationsScope.maybeOf(context);
+    if (notifications != null) {
+      scheduleMicrotask(() {
+        if (mounted) notifications.clearOnLogout();
+      });
+    }
   }
 
   void _handleEmailFocus() {
@@ -89,6 +106,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await _auth.login(email: email, password: password);
       if (!mounted) return;
+      NotificationsScope.maybeOf(context)?.clearOnLogout();
       context.go('/app');
     } on AuthApiException catch (e) {
       if (!mounted) return;
@@ -115,6 +133,7 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await _auth.loginWithGoogle(allowAutoRegister: false);
       if (!mounted) return;
+      NotificationsScope.maybeOf(context)?.clearOnLogout();
       context.go('/app');
     } on GoogleSignInCancelledException {
       // Cancelar deja la pantalla de login sin error fatal.

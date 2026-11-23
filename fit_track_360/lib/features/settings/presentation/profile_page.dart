@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,7 +18,9 @@ import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/logout_service.dart';
 import '../../home/presentation/widgets/home_navigation_shell.dart';
+import '../../notifications/data/push_device_lifecycle_service.dart';
 import '../../notifications/presentation/notifications_scope.dart';
+import '../../notifications/presentation/push_device_scope.dart';
 import '../data/profile_api_repository.dart';
 import '../data/share_plus_export_sharer.dart';
 import '../domain/export_sharer.dart';
@@ -49,6 +53,7 @@ class ProfilePage extends StatefulWidget {
     this.logoutService,
     this.connectivityService,
     this.exportSharer,
+    this.pushDeviceService,
   });
 
   final ProfileRepository? repository;
@@ -57,6 +62,7 @@ class ProfilePage extends StatefulWidget {
   final LogoutService? logoutService;
   final ConnectivityService? connectivityService;
   final ExportSharer? exportSharer;
+  final PushDeviceLifecycle? pushDeviceService;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -64,17 +70,14 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   ApiClient? _ownedClient;
+  PushDeviceLifecycle? _ownedPushDeviceService;
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
-  late final ProfileViewModel _vm = ProfileViewModel(
-    profileRepository:
-        widget.repository ?? ProfileApiRepository(_ownedClient = ApiClient()),
-    reminderService: widget.reminderService ?? LocalReminderService(),
-    biometricService: widget.biometricService ?? LocalBiometricService(),
-    logoutService: widget.logoutService ?? LogoutService(),
-    exportSharer: widget.exportSharer ?? SharePlusExportSharer(),
-  );
+  late final ProfileViewModel _vm;
+  bool _initialized = false;
   final _exportKey = GlobalKey();
+
+  ApiClient _ensureOwnedClient() => _ownedClient ??= ApiClient();
 
   final _name = TextEditingController();
   final _calories = TextEditingController();
@@ -88,10 +91,29 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loggingOut = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    final pushDeviceService =
+        widget.pushDeviceService ??
+        PushDeviceScope.maybeOf(context) ??
+        (_ownedPushDeviceService = PushDeviceLifecycleService.fromClient(
+          _ensureOwnedClient(),
+        ));
+    _vm = ProfileViewModel(
+      profileRepository:
+          widget.repository ?? ProfileApiRepository(_ensureOwnedClient()),
+      reminderService: widget.reminderService ?? LocalReminderService(),
+      biometricService: widget.biometricService ?? LocalBiometricService(),
+      logoutService:
+          widget.logoutService ??
+          LogoutService(pushDeviceService: pushDeviceService),
+      exportSharer: widget.exportSharer ?? SharePlusExportSharer(),
+      pushDeviceService: pushDeviceService,
+    );
+    unawaited(_vm.load());
     _vm.addListener(_onChange);
-    _vm.load();
   }
 
   void _onChange() {
@@ -116,8 +138,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   void dispose() {
-    _vm.removeListener(_onChange);
-    _vm.dispose();
+    if (_initialized) {
+      _vm.removeListener(_onChange);
+      _vm.dispose();
+    }
+    final ownedPush = _ownedPushDeviceService;
+    if (ownedPush != null) {
+      unawaited(ownedPush.dispose());
+    }
     _ownedClient?.dispose();
     for (final c in [_name, _calories, _protein, _carbs, _fat, _rest]) {
       c.dispose();

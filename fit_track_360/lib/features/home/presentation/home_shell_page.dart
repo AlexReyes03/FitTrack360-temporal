@@ -8,6 +8,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/session_storage.dart';
 import '../../../core/widgets/offline_banner.dart';
+import '../../notifications/data/push_device_lifecycle_service.dart';
+import '../../notifications/presentation/push_device_scope.dart';
 import '../data/dashboard_api_repository.dart';
 import '../data/pedometer_steps_sensor.dart';
 import '../domain/steps_sensor.dart';
@@ -33,6 +35,7 @@ class HomeShellPage extends StatefulWidget {
     this.connectivityService,
     this.dashboardViewModel,
     this.stepsSensor,
+    this.pushDeviceService,
   });
 
   /// Dependencias sustituibles en pruebas; por defecto usa las reales.
@@ -41,6 +44,7 @@ class HomeShellPage extends StatefulWidget {
   final ConnectivityService? connectivityService;
   final HomeDashboardViewModel? dashboardViewModel;
   final StepsSensor? stepsSensor;
+  final PushDeviceLifecycle? pushDeviceService;
 
   @override
   State<HomeShellPage> createState() => _HomeShellPageState();
@@ -52,6 +56,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
   late final ApiClient _api = widget.apiClient ?? ApiClient(storage: _storage);
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
+  PushDeviceLifecycle? _pushDeviceService;
+  PushDeviceLifecycle? _ownedPushDeviceService;
+  bool _didInitializeDependencies = false;
   late final HomeDashboardViewModel _dashboard;
   late final bool _ownsDashboard;
   StreamSubscription<bool>? _connectivitySubscription;
@@ -61,6 +68,20 @@ class _HomeShellPageState extends State<HomeShellPage> {
 
   /// Evita navegar dos veces a login cuando perfil y dashboard expiran juntos.
   bool _redirectingToLogin = false;
+
+  PushDeviceLifecycle _resolvePushDeviceService() {
+    final resolved = _pushDeviceService;
+    if (resolved != null) return resolved;
+    final service =
+        widget.pushDeviceService ??
+        PushDeviceScope.maybeOf(context) ??
+        (_ownedPushDeviceService = PushDeviceLifecycleService.fromClient(
+          _api,
+          storage: _storage,
+        ));
+    _pushDeviceService = service;
+    return service;
+  }
 
   @override
   void initState() {
@@ -82,8 +103,16 @@ class _HomeShellPageState extends State<HomeShellPage> {
         unawaited(_dashboard.load());
       }
     }, onError: (_) {});
-    _loadProfile();
     unawaited(_dashboard.load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didInitializeDependencies) return;
+    _didInitializeDependencies = true;
+    _resolvePushDeviceService();
+    _loadProfile();
   }
 
   void _onDashboardChanged() {
@@ -103,6 +132,10 @@ class _HomeShellPageState extends State<HomeShellPage> {
     if (_ownsDashboard) {
       _dashboard.dispose();
     }
+    final ownedPush = _ownedPushDeviceService;
+    if (ownedPush != null) {
+      unawaited(ownedPush.dispose());
+    }
     _api.dispose();
     super.dispose();
   }
@@ -115,12 +148,24 @@ class _HomeShellPageState extends State<HomeShellPage> {
       final profile = await _api.me();
       if (!mounted) return;
       setState(() => _displayName = profile.displayName);
+      unawaited(_syncPushSilently(profile.notificationsEnabled));
     } on SessionExpiredException {
       _goToLogin();
     } catch (_) {
       // Sin red o perfil no disponible: se mantiene el saludo generico.
     } finally {
       _loadingProfile = false;
+    }
+  }
+
+  Future<void> _syncPushSilently(bool notificationsEnabled) async {
+    try {
+      await _resolvePushDeviceService().syncForActiveSession(
+        notificationsEnabled: notificationsEnabled,
+        requestPermissionIfNeeded: false,
+      );
+    } catch (_) {
+      // Sin Play Services, APNs o red: se degrada en silencio.
     }
   }
 

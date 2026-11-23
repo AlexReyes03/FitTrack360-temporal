@@ -51,6 +51,8 @@ class WorkoutDetailViewModel extends ChangeNotifier {
   /// [AsyncEmpty] cuando no existe una sesión anterior con la cual comparar.
   AsyncState<WorkoutComparison> get comparison => _comparison;
 
+  WorkoutSession? get session => _session;
+
   bool get notFound => _notFound;
 
   bool get sharing => _sharing;

@@ -15,7 +15,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import {
   JwtAuthGuard,
@@ -35,6 +40,9 @@ export class PhotosController {
   }
   @Post()
   @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Subir foto JPEG (image/jpeg o image/jpg), PNG o WebP',
+  })
   @UseInterceptors(
     FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }),
   )

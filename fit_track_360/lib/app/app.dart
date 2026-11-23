@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../core/network/api_client.dart';
+import '../core/session_storage.dart';
 import '../design_system/tokens/app_colors.dart';
+import '../features/notifications/data/notifications_api_repository.dart';
 import '../features/notifications/presentation/notifications_scope.dart';
 import '../features/notifications/presentation/notifications_view_model.dart';
 import 'router.dart';
@@ -17,18 +20,45 @@ final ThemeData fitTrackDarkTheme = ThemeData(
 );
 
 class FitTrackApp extends StatefulWidget {
-  const FitTrackApp({super.key});
+  const FitTrackApp({super.key, this.notifications});
+
+  /// Inyectable en pruebas; en runtime se crea con el API real.
+  final NotificationsViewModel? notifications;
 
   @override
   State<FitTrackApp> createState() => _FitTrackAppState();
 }
 
 class _FitTrackAppState extends State<FitTrackApp> {
-  final NotificationsViewModel _notifications = NotificationsViewModel();
+  ApiClient? _apiClient;
+  late final NotificationsViewModel _notifications;
+  late final bool _ownsNotifications;
+
+  @override
+  void initState() {
+    super.initState();
+    final injected = widget.notifications;
+    _ownsNotifications = injected == null;
+    if (injected != null) {
+      _notifications = injected;
+    } else {
+      final client = ApiClient();
+      _apiClient = client;
+      _notifications = NotificationsViewModel(
+        repository: NotificationsApiRepository(client),
+      );
+    }
+    appSessionInvalidations.addListener(_onSessionInvalidated);
+  }
+
+  /// Una sesión expirada o cerrada no debe dejar avisos de la cuenta anterior.
+  void _onSessionInvalidated() => _notifications.clearOnLogout();
 
   @override
   void dispose() {
-    _notifications.dispose();
+    appSessionInvalidations.removeListener(_onSessionInvalidated);
+    if (_ownsNotifications) _notifications.dispose();
+    _apiClient?.dispose();
     super.dispose();
   }
 

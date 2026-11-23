@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -47,29 +49,53 @@ const List<GlassNavDestination> appShellDestinations = [
 /// Recibe el [StatefulNavigationShell] del router, dibuja el header global y la
 /// barra inferior, y deja que cada rama conserve su propio estado y navegador.
 /// El cierre de sesión vive solo en Perfil.
-class AppShellPage extends StatelessWidget {
+class AppShellPage extends StatefulWidget {
   const AppShellPage({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  State<AppShellPage> createState() => _AppShellPageState();
+}
+
+class _AppShellPageState extends State<AppShellPage> {
+  bool _didRefreshUnreadCount = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_didRefreshUnreadCount) return;
+    _didRefreshUnreadCount = true;
+    final notifications = NotificationsScope.maybeOf(context);
+    if (notifications != null) {
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        if (notifications.sessionExpired) {
+          notifications.clearOnLogout();
+        }
+        unawaited(notifications.refreshUnreadCount());
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final notifications = NotificationsScope.of(context);
+    final notifications = NotificationsScope.maybeOf(context);
     return HomeNavigationShell(
       header: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.md, 10, AppSpacing.md, 4),
         child: AppShellHeader(
-          unreadCount: notifications.unreadCount,
+          unreadCount: notifications?.unreadCount ?? 0,
           onNotificationsTap: () => context.push('/app/notificaciones'),
         ),
       ),
       destinations: appShellDestinations,
-      selectedIndex: navigationShell.currentIndex,
-      onDestinationSelected: (index) => navigationShell.goBranch(
+      selectedIndex: widget.navigationShell.currentIndex,
+      onDestinationSelected: (index) => widget.navigationShell.goBranch(
         index,
-        initialLocation: index == navigationShell.currentIndex,
+        initialLocation: index == widget.navigationShell.currentIndex,
       ),
-      body: navigationShell,
+      body: widget.navigationShell,
     );
   }
 }

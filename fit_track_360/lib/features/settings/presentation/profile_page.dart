@@ -16,6 +16,7 @@ import '../../../design_system/widgets/app_background.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../auth/data/logout_service.dart';
 import '../../home/presentation/widgets/home_navigation_shell.dart';
+import '../../notifications/presentation/notifications_scope.dart';
 import '../data/profile_api_repository.dart';
 import '../data/share_plus_export_sharer.dart';
 import '../domain/export_sharer.dart';
@@ -182,6 +183,7 @@ class _ProfilePageState extends State<ProfilePage> {
     setState(() => _loggingOut = true);
     await _vm.logout();
     if (!mounted) return;
+    NotificationsScope.maybeOf(context)?.clearOnLogout();
     context.go('/login');
   }
 

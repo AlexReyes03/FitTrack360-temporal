@@ -5,6 +5,9 @@ import 'package:fit_track_360/design_system/components/primary_button.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/design_system/widgets/ds_text_field.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
+import 'package:fit_track_360/features/notifications/domain/app_notification.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_scope.dart';
+import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_page.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_view_model.dart';
@@ -373,6 +376,72 @@ void main() {
       expect(deps.storage.accessToken, isNull);
       expect(find.text('login'), findsOneWidget);
     });
+
+    testWidgets(
+      'cerrar sesión limpia NotificationsScope en memoria antes de ir a login',
+      (tester) async {
+        final deps = _Deps();
+        final notifications = NotificationsViewModel(
+          initialNotifications: [
+            AppNotification(
+              id: 'n-1',
+              title: 'Nuevo inicio de sesión',
+              message: 'Acceso desde Android.',
+              type: AppNotificationType.newLogin,
+              createdAt: DateTime(2026, 11, 22, 10),
+            ),
+          ],
+        );
+        addTearDown(notifications.dispose);
+
+        tester.view.physicalSize = const Size(1200, 6000);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+
+        final router = GoRouter(
+          initialLocation: '/app/perfil',
+          routes: [
+            GoRoute(
+              path: '/app/perfil',
+              builder: (context, state) => ProfilePage(
+                repository: deps.repository,
+                reminderService: deps.reminders,
+                biometricService: deps.biometrics,
+                exportSharer: deps.sharer,
+                connectivityService: deps.connectivity,
+                logoutService: LogoutService(
+                  storage: deps.storage,
+                  revoke: ({required idToken}) async {},
+                ),
+              ),
+            ),
+            GoRoute(
+              path: '/login',
+              builder: (context, state) => const Text('login'),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          NotificationsScope(
+            notifier: notifications,
+            child: MaterialApp.router(routerConfig: router),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(notifications.unreadCount, 1);
+        expect(notifications.notifications, hasLength(1));
+
+        await tester.tap(find.byKey(const Key('profile-logout-button')));
+        await tester.pumpAndSettle();
+
+        expect(notifications.notifications, isEmpty);
+        expect(notifications.unreadCount, 0);
+        expect(notifications.hasLoaded, isFalse);
+        expect(find.text('login'), findsOneWidget);
+      },
+    );
 
     testWidgets(
       'el botón Cerrar sesión usa estilo rojo destructivo y texto claro',

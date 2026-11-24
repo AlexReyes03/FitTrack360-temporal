@@ -47,7 +47,7 @@ Units in **dp** (base 16: 1 rem in the web reference ≈ 16 dp). Colors in hex.
 | `bg.mid` | `#0d1017` | Mid stop of the vertical backdrop gradient (`#0e1017` acceptable as alias) |
 | `text.primary` | `#f8fafc` | Titles and main body |
 | `text.secondary` | `#a1a1aa` | Subtitles, hints, secondary labels |
-| `text.muted` | `#71717a` | Placeholder |
+| `text.muted` | `#8a8a93` | Placeholder, metadatos terciarios, micro etiquetas. Antes `#71717a` (~4.1:1 sobre `bg.deep`, no cumplía WCAG AA); `#8a8a93` da ~5.9:1 sobre `bg.deep`, ~5.6:1 sobre `bg.mid` y ≥4.5:1 sobre glass 8.5 % (#221/#226). |
 | `text.onAccent` | `#090a0f` | Text on white/silver |
 | `accent.white` | `#ffffff` | CTA, badge, strong selection |
 | `accent.silver` | `#d4d4d8` | Far end of the accent gradient |
@@ -66,6 +66,41 @@ Units in **dp** (base 16: 1 rem in the web reference ≈ 16 dp). Colors in hex.
 | `danger.fill` | `#ef4444` at 16% opacity | StatusBanner danger background |
 | `danger.border` | `#f87171` at 45% opacity | StatusBanner danger border |
 | `danger.text` | `#fecaca` | StatusBanner danger text |
+| `glass.shadow` | `rgba(0,0,0,0.78)` | Outer drop shadow of GlassSurface and bottom nav bar |
+| `scrim` | `rgba(0,0,0,0.60)` | Barrier under modal sheets and dialogs |
+| `glass.tileFill` | white 3.5 % | Tile inside a card (OptionTile idle, dashboard tiles) |
+| `skeleton.fill` | white 6 % | Loading skeleton blocks, circular icon wells |
+| `glass.divider` | white 8 % | Soft tile borders and dividers inside glass |
+| `glass.fillSelected` | white 16 % | Selected / pressed chip or tile fill |
+| `glass.specular` | white 55 % | Center stop of the specular streak |
+| `cta.border` | white 85 % | PrimaryButton border, active control border |
+| `control.borderIdle` | white 32 % | Idle radio/checkbox border |
+| `input.fill` | `rgba(7,8,12,0.72)` (`0xB807080C`) | TextField background |
+| `input.border` / `focused` / `disabled` | white 18 % / 60 % / 10 % | TextField borders |
+| `navBar.fill` | `0xAD0A0C12` | Base fill of the bottom nav bar; diagonal overlay `navBar.glassTop/Mid/Bottom` = white 9.4 % / 3.1 % / 5.5 % |
+| `chart.line` | `accent.white` | Main series stroke |
+| `chart.grid` | white 8 % | Horizontal guide lines |
+| `chart.areaTop` → `chart.areaBottom` | white 20 % → 0 % | Area gradient under the line |
+
+Flutter names: `AppColors.<camelCase>` (`AppColors.inputFill`, `AppColors.glassTileFill`, `AppColors.chartGrid`…).
+
+**Translucent white mapping (fase B of #221).** Replace `Colors.white.withValues(alpha: x)` by the token below. When the alpha differs from the token by ≤ 0.01 the visual change is imperceptible and the token wins.
+
+| Literal alpha | Token | Typical use found |
+| --- | --- | --- |
+| 0, 0.0 | `chartAreaBottom` (or `Colors.transparent` in gradients) | Specular / chart gradient ends |
+| 0.02–0.045 | `glassTileFill` | Tile and section fills (`dashboard_*`, `tracker_*`) |
+| 0.05–0.06 | `skeletonFill` | Skeleton blocks, icon wells |
+| 0.075–0.10 | `glassDivider` (borders) / `glassFillPressedSoft` (pressed fill) | Tile borders, dividers, chart grid |
+| 0.10 (input) | `inputBorderDisabled` | TextField disabled border |
+| 0.12 | `glassBorder` | Glass border |
+| 0.14–0.16 | `glassFillSelected` | Selected chip/tile |
+| 0.18–0.20 | `inputBorder` | Input and chip borders |
+| 0.24 | `glassRim` | Selected tile border |
+| 0.32 | `controlBorderIdle` | Idle checkbox |
+| 0.55 | `glassSpecular` | Specular streak |
+| 0.6 | `inputBorderFocused` | Focused input border |
+| 0.85 | `ctaBorder` | Button border, active control |
 
 **Screen background (fixed to the viewport; content scrolls over it):**
 
@@ -98,15 +133,56 @@ Family: system sans (SF Pro / Inter / Segoe / Roboto). Body line-height ≈ 1.55
 | CTA | 800 | 16 | `text.onAccent` | |
 | Banner / end title | 500–800 | 15–22 | by state | End title: white → `text.secondary` gradient |
 
+**App roles (`AppTypography`).** Derived from the `fontSize` literals measured in `lib/` (12 ×23, 14 ×20, 13 ×18, 12.5 ×11, 15 ×10, 16 ×8, 11 ×8, 22 ×6, 13.5 ×6, 28 ×5). Use `copyWith` only for color or weight variants, never for size.
+
+| Flutter role | Weight | Size | Color | Use | Absorbs literals |
+| --- | --- | --- | --- | --- | --- |
+| `pageTitle` | 800 | 32 | `text.primary` | Page title | 26–32 |
+| `authTitle` | 800 | 28 | `text.primary` | Login / register / recover title | 28 (auth) |
+| `metricValue` | 800 | 28 | `text.primary` | Hero number in a metric card | 28 (dashboard) |
+| `headline` | 800 | 22 | `text.primary` | Greeting, profile name, exercise name, EndState | 22, 18 (profile/placeholder) |
+| `sectionTitle` | 700 | 16 | `text.primary` | Card / section header | 16, 18 (`_sectionTitle` in profile) |
+| `cta` | 800 | 16 | `text.onAccent` | Primary button | — |
+| `secondaryCta` | 700 | 15.5 | `text.primary` | Glass secondary button | 15.5 |
+| `cardTitle` | 700 | 15 | `text.primary` | Item / row title inside a card | 15 |
+| `bannerTitle` | 700 | 15 | `zinc.100` (variant overrides) | StatusBanner / OfflineBanner title | 15 (banner) |
+| `body` | 400 | 14 | `text.primary` | Paragraphs | 14 (w400), 13.5 |
+| `label` | 600 | 14 | `text.secondary` | Field labels, secondary data | 14 (w600) |
+| `caption` | 500 | 13 | `text.secondary` | Helper notes, separators | 13, 12.5 |
+| `bannerBody` | 400 | 13 | `zinc.100` (variant overrides) | Banner message | 13 (banner) |
+| `badgeGlyph` | 800 | 13 | `accent.white` | Monograms | — |
+| `meta` | 600 | 12 | `text.secondary` | Dates, units, short subtitles | 12, 11.5 |
+| `micro` | 600 | 11 | `text.muted` | Overlines (uppercase), counters, chart legends | 11, 10.5 (non-nav) |
+| `navLabel` / `navLabelSelected` | 500 / 700 | 10.5 | `text.secondary` / `accent.white` | Bottom nav destination | 10.5 (nav) |
+| `timer` | 800 | 42 | `text.primary` | Session stopwatch, tabular figures | 42 |
+
 ### Space
 
 | Token | dp | Use |
 | --- | --- | --- |
-| `space.xs` | 6–8 | Small inner gaps |
-| `space.sm` | 9–14 | Badge–text gap, option padding |
-| `space.md` | 18–24 | Card padding, space between questions |
-| `space.lg` | 28–40 | Screen vertical padding |
-| `content.maxWidth` | 760 | Max column width |
+| `space.hairline` | 2 | Title ↔ subtitle glued together |
+| `space.xxs` | 4 | Label ↔ value, icon ↔ text |
+| `space.xs` | 8 (web 6–8) | Small inner gaps |
+| `space.sm` | 12 (web 9–14) | Badge–text gap, option padding |
+| `space.base` | 16 | Gap between cards/sections, compact padding |
+| `space.md` | 24 (web 18–24) | Card padding, space between questions |
+| `space.lg` | 32 (web 28–40) | Screen vertical padding |
+| `content.maxWidth` | 760 | Max column width (`AppSpacing.contentMaxWidth`; never `760` literal) |
+
+Semantic aliases: `AppSpacing.cardPadding = md (24)` for **every** glass card (Inicio, Progreso, Comidas, Perfil use the same padding) and `AppSpacing.sectionGap = base (16)` between cards.
+
+**Literal → token (fase B).** Measured `SizedBox` literals: 16 ×35, 12 ×28, 6 ×25, 4 ×19, 8 ×18, 10 ×18, 2 ×8, 14 ×8, 24 ×6, 18 ×5.
+
+| Literal | Token | Note |
+| --- | --- | --- |
+| 2, 3 | `hairline` | |
+| 4, 5 | `xxs` | |
+| 6, 7 | `xxs` for label↔value pairs, `xs` elsewhere | Choose by context; it is the only ambiguous step |
+| 8 | `xs` | |
+| 10, 12, 14 | `sm` | 14 inside OptionTile stays as the DS control–label gap |
+| 16, 18 | `base` / `sectionGap` | |
+| 20, 24 | `md` / `cardPadding` | Card padding 20 → 24 unifies the four modules |
+| 32 | `lg` | |
 
 GlassSurface padding: 24 dp (mobile) / 32–36 dp (width ≥ 768).  
 QuestionBlock padding: 20 dp / 24–26 dp on desktop.  
@@ -129,6 +205,14 @@ Primary paragraph under intro badge → secondary paragraph: **8 dp**.
 | `radius.checkbox` | 6.4 | Idle/selected checkbox corner |
 | `radius.pill` | full (999) | BrandPill, PrimaryButton |
 | `radius.banner` | 14 | StatusBanner |
+
+Flutter: `AppRadii.<name>`. Literal mapping for fase B: `BorderRadius.circular(14)` → `AppRadii.input` (text fields) / `AppRadii.option` (tiles) / `AppRadii.banner` (banners); `circular(999)` → `AppRadii.pill`; `circular(6.4)` → `AppRadii.checkbox`.
+
+### Hardcoded-style sensor (ratchet)
+
+`test/design_system/hardcoded_style_guard_test.dart` scans `lib/` (except `lib/design_system/tokens/`) and counts `fontSize: <number>`, `Color(0x…)`, `Colors.white.withValues(` and `BorderRadius.circular(<number>)`. It **fails when any count goes above its baseline** and prints “Línea base desactualizada” when a count goes down.
+
+To lower the baseline: migrate literals to tokens, run `flutter test test/design_system/hardcoded_style_guard_test.dart`, copy the new count printed in the output into `_baseline` in the same PR. Never raise it: create a token or add a justified file to `_allowedFiles` instead. When every count reaches 0 the sensor becomes a full ban.
 
 ### Elevation and blur
 

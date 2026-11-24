@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../../../design_system/components/page_header.dart';
+import '../../../design_system/components/secondary_button.dart';
+import '../../../design_system/components/text_link.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
@@ -61,41 +64,18 @@ class _RoutinesPageState extends State<RoutinesPage> {
     return error is AuthApiException ? error.message : 'No se pudo conectar';
   }
 
-  void _back() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/app');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppScaffoldTemplate(
+      header: PageHeader(
+        title: 'Rutinas',
+        subtitle: 'Tus plantillas de entrenamiento.',
+        onBackFallback: () => context.go('/app'),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                tooltip: 'Volver',
-                onPressed: _back,
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
-            Text('Rutinas', style: AppTypography.pageTitle),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Tus plantillas de entrenamiento.',
-              style: AppTypography.body.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
             _state.when(
               loading: () => const Padding(
                 padding: EdgeInsets.all(AppSpacing.lg),
@@ -109,7 +89,9 @@ class _RoutinesPageState extends State<RoutinesPage> {
                 children: [
                   for (final routine in routines)
                     Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      padding: const EdgeInsets.only(
+                        bottom: AppSpacing.sectionGap,
+                      ),
                       child: RoutineCard(
                         routine: routine,
                         onTap: () => context.push(
@@ -146,12 +128,10 @@ class _ErrorView extends StatelessWidget {
           style: AppTypography.body.copyWith(color: AppColors.dangerText),
         ),
         const SizedBox(height: AppSpacing.xs),
-        TextButton(
+        SecondaryButton(
+          label: 'Reintentar',
+          size: SecondaryButtonSize.compact,
           onPressed: onRetry,
-          child: const Text(
-            'Reintentar',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
         ),
       ],
     );
@@ -173,13 +153,7 @@ class _EmptyView extends StatelessWidget {
           style: AppTypography.body.copyWith(color: AppColors.textSecondary),
         ),
         const SizedBox(height: AppSpacing.xs),
-        TextButton(
-          onPressed: onRetry,
-          child: const Text(
-            'Actualizar',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ),
+        TextLink(label: 'Actualizar', subtle: true, onPressed: onRetry),
       ],
     );
   }

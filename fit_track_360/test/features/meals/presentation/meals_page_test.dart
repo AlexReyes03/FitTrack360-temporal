@@ -11,6 +11,8 @@ import 'package:fit_track_360/features/meals/domain/meals_repository.dart';
 import 'package:fit_track_360/features/meals/presentation/food_search_page.dart';
 import 'package:fit_track_360/features/meals/presentation/food_search_view_model.dart';
 import 'package:fit_track_360/core/widgets/remote_state_views.dart';
+import 'package:fit_track_360/design_system/components/glass_dialog.dart';
+import 'package:fit_track_360/design_system/components/primary_button.dart';
 import 'package:fit_track_360/features/meals/presentation/meals_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +100,10 @@ final _errorRetry = find.descendant(
   of: find.byType(RemoteErrorView),
   matching: find.text('Reintentar'),
 );
+
+/// SnackBar de `showAppSnackBar` con la variante indicada.
+Finder _snackBar(String variant) =>
+    find.byKey(ValueKey('app-snack-bar-$variant'));
 
 NewMealEntry _rice() => NewMealEntry(
   mealType: MealType.lunch,
@@ -359,6 +365,7 @@ void main() {
     await _addManually(tester, 'Avena', '150');
 
     expect(find.text('No se pudo agregar el alimento'), findsOneWidget);
+    expect(_snackBar('danger'), findsOneWidget);
     expect(find.text('login'), findsNothing);
   });
 
@@ -455,11 +462,34 @@ void main() {
     await _openItemMenu(tester, 'm1', 0);
     await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
+    expect(find.byType(GlassDialog), findsOneWidget);
     expect(find.text('Eliminar alimento'), findsOneWidget);
+    expect(find.byType(AlertDialog), findsNothing);
 
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
 
+    expect(find.byType(GlassDialog), findsNothing);
+    expect(meals.updates, isEmpty);
+    expect(meals.deletes, isEmpty);
+    expect(find.textContaining('Arroz · 150 g'), findsOneWidget);
+  });
+
+  testWidgets('tocar el velo cierra la confirmación sin eliminar', (
+    tester,
+  ) async {
+    final meals = FakeMealsRepository()..stored.add(_lunch(const [_arroz]));
+    await _pumpPage(tester, meals, FakeFoodSearchRepository());
+
+    await _openItemMenu(tester, 'm1', 0);
+    await tester.tap(find.text('Eliminar'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassDialog), findsOneWidget);
+
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GlassDialog), findsNothing);
     expect(meals.updates, isEmpty);
     expect(meals.deletes, isEmpty);
     expect(find.textContaining('Arroz · 150 g'), findsOneWidget);
@@ -472,11 +502,13 @@ void main() {
     await _openItemMenu(tester, 'm1', 0);
     await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Eliminar'));
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Eliminar'));
     await tester.pumpAndSettle();
 
     expect(meals.deletes, ['m1']);
     expect(meals.updates, isEmpty);
+    expect(_snackBar('success'), findsOneWidget);
+    expect(find.text('Alimento eliminado'), findsOneWidget);
     expect(find.text('Aún no registras comidas hoy'), findsOneWidget);
   });
 
@@ -490,7 +522,7 @@ void main() {
     await _openItemMenu(tester, 'm1', 0);
     await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Eliminar'));
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Eliminar'));
     await tester.pumpAndSettle();
 
     expect(meals.deletes, isEmpty);
@@ -530,10 +562,11 @@ void main() {
     await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
     meals.deleteError = Exception('red');
-    await tester.tap(find.widgetWithText(TextButton, 'Eliminar'));
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Eliminar'));
     await tester.pumpAndSettle();
 
     expect(find.text('No se pudo eliminar el alimento'), findsOneWidget);
+    expect(_snackBar('danger'), findsOneWidget);
     expect(find.textContaining('Arroz · 150 g'), findsOneWidget);
   });
 
@@ -552,6 +585,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('El alimento ya no existe'), findsOneWidget);
+    expect(_snackBar('warning'), findsOneWidget);
     expect(find.text('Editar alimento'), findsNothing);
   });
 
@@ -599,7 +633,19 @@ void main() {
 
     await tester.tap(find.text('Guardar cambios'));
     await tester.pump();
-    expect(find.text('Guardando...'), findsOneWidget);
+    expect(find.text('Guardando…'), findsOneWidget);
+    expect(find.text('Guardando...'), findsNothing);
+    expect(
+      tester
+          .widget<PrimaryButton>(
+            find.widgetWithText(PrimaryButton, 'Guardando…'),
+          )
+          .isLoading,
+      isTrue,
+    );
+
+    await tester.tap(find.text('Guardando…'));
+    await tester.pump();
 
     meals.updateGate!.complete();
     await tester.pumpAndSettle();
@@ -638,14 +684,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No se puede editar'), findsOneWidget);
     expect(find.textContaining('no guarda porción'), findsOneWidget);
+    expect(find.byType(GlassDialog), findsOneWidget);
 
-    await tester.tap(find.text('Entendido'));
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Entendido'));
     await tester.pumpAndSettle();
+    expect(find.byType(GlassDialog), findsNothing);
 
     await _openItemMenu(tester, 'm1', 0);
     await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Eliminar'));
+    await tester.tap(find.widgetWithText(PrimaryButton, 'Eliminar'));
     await tester.pumpAndSettle();
 
     expect(meals.deletes, ['m1']);

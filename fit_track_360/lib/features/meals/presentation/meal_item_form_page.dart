@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../design_system/components/page_header.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
@@ -174,29 +175,16 @@ class _MealItemFormPageState extends State<MealItemFormPage> {
   Widget build(BuildContext context) {
     const numeric = TextInputType.numberWithOptions(decimal: true);
     return AppScaffoldTemplate(
+      header: PageHeader(
+        title: 'Editar alimento',
+        onBack: () {
+          if (!_saving) _back();
+        },
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.md),
           children: [
-            Row(
-              children: [
-                IconButton(
-                  tooltip: 'Volver',
-                  onPressed: _saving ? null : _back,
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Editar alimento',
-                    style: AppTypography.pageTitle,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
             DsTextField(
               key: const Key('edit-name'),
               controller: _name,
@@ -252,15 +240,11 @@ class _MealItemFormPageState extends State<MealItemFormPage> {
               ),
             ],
             const SizedBox(height: AppSpacing.md),
-            if (_saving) ...[
-              const Center(
-                child: CircularProgressIndicator(color: AppColors.accentWhite),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-            ],
             PrimaryButton(
-              label: _saving ? 'Guardando...' : 'Guardar cambios',
-              onPressed: _saving ? null : _save,
+              label: 'Guardar cambios',
+              loadingLabel: 'Guardando…',
+              isLoading: _saving,
+              onPressed: _save,
             ),
           ],
         ),

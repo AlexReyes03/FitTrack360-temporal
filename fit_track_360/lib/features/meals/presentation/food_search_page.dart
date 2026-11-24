@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../design_system/components/glass_surface.dart';
+import '../../../design_system/components/page_header.dart';
 import '../../../design_system/components/primary_button.dart';
+import '../../../design_system/components/secondary_button.dart';
+import '../../../design_system/components/text_link.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
@@ -68,17 +71,6 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
     super.dispose();
   }
 
-  /// La vista se abre con `context.push('/app/comidas/buscar')` desde Comidas:
-  /// si hay ruta previa se cierra sin resultado; si se llego sin historial,
-  /// vuelve a `/app/comidas`.
-  void _back() {
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/app/comidas');
-    }
-  }
-
   double? _parse(TextEditingController controller) =>
       double.tryParse(controller.text.trim().replaceAll(',', '.'));
 
@@ -123,31 +115,16 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
       color: AppColors.textSecondary,
     );
     return AppScaffoldTemplate(
+      header: PageHeader(
+        title: 'Agregar alimento',
+        onBackFallback: () => context.go('/app/comidas'),
+      ),
       body: SafeArea(
         child: ListenableBuilder(
           listenable: _viewModel,
           builder: (context, _) => ListView(
             padding: const EdgeInsets.all(AppSpacing.md),
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    tooltip: 'Volver',
-                    onPressed: _back,
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const Expanded(
-                    child: Text(
-                      'Agregar alimento',
-                      style: AppTypography.pageTitle,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
               Text('Comida de destino', style: AppTypography.body),
               const SizedBox(height: AppSpacing.xs),
               Wrap(
@@ -167,15 +144,13 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
               const SizedBox(height: AppSpacing.sm),
               // Con el aviso de error o sin resultados, ese aviso ya ofrece la captura manual.
               if (_manual || !_viewModel.offersManualCapture)
-                TextButton(
+                TextLink(
+                  label: _manual ? 'Volver a la búsqueda' : 'Captura manual',
+                  subtle: true,
                   onPressed: () => setState(() {
                     _manual = !_manual;
                     _manualError = null;
                   }),
-                  child: Text(
-                    _manual ? 'Volver a la búsqueda' : 'Captura manual',
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
                 ),
             ],
           ),
@@ -241,7 +216,7 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
       child: GestureDetector(
         onTap: () => _viewModel.select(food),
         child: GlassSurface(
-          padding: const EdgeInsets.all(AppSpacing.sm),
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -265,16 +240,15 @@ class _FoodSearchPageState extends State<FoodSearchPage> {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Text(message, style: AppTypography.body),
-      TextButton(
+      const SizedBox(height: AppSpacing.xs),
+      SecondaryButton(
         key: const Key('open-manual'),
+        label: 'Captura manual',
+        size: SecondaryButtonSize.compact,
         onPressed: () => setState(() {
           _manual = true;
           _name.text = _query.text.trim();
         }),
-        child: const Text(
-          'Captura manual',
-          style: TextStyle(color: AppColors.accentWhite),
-        ),
       ),
     ],
   );

@@ -9,8 +9,11 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/remote_state_views.dart';
+import '../../../design_system/components/app_snack_bar.dart';
+import '../../../design_system/components/glass_dialog.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
+import '../../../design_system/components/status_banner.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_spacing.dart';
@@ -100,8 +103,9 @@ class _MealsPageState extends State<MealsPage> {
     if (entry == null || !mounted) return;
     final ok = await _viewModel.add(entry);
     if (!ok && mounted && !_viewModel.sessionExpired) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo agregar el alimento')),
+      _showMessage(
+        'No se pudo agregar el alimento',
+        variant: StatusBannerVariant.danger,
       );
     }
   }
@@ -120,7 +124,10 @@ class _MealsPageState extends State<MealsPage> {
       ),
     );
     if (!mounted || result != MealMutationResult.notFound) return;
-    _showMessage('El alimento ya no existe');
+    _showMessage(
+      'El alimento ya no existe',
+      variant: StatusBannerVariant.warning,
+    );
   }
 
   Future<void> _deleteItem(MealEntry entry, int index) async {
@@ -130,14 +137,23 @@ class _MealsPageState extends State<MealsPage> {
     if (!mounted) return;
     switch (result) {
       case MealMutationResult.success:
-        _showMessage('Alimento eliminado');
+        _showMessage(
+          'Alimento eliminado',
+          variant: StatusBannerVariant.success,
+        );
         break;
       case MealMutationResult.notFound:
-        _showMessage('El alimento ya no existe');
+        _showMessage(
+          'El alimento ya no existe',
+          variant: StatusBannerVariant.warning,
+        );
         break;
       case MealMutationResult.failure:
         if (!_viewModel.sessionExpired) {
-          _showMessage('No se pudo eliminar el alimento');
+          _showMessage(
+            'No se pudo eliminar el alimento',
+            variant: StatusBannerVariant.danger,
+          );
         }
         break;
       case MealMutationResult.busy:
@@ -147,71 +163,40 @@ class _MealsPageState extends State<MealsPage> {
 
   Future<bool> _confirmDelete(MealEntry entry, MealItem item) async {
     final last = entry.items.length == 1;
-    final confirmed = await showDialog<bool>(
+    return showGlassConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.bgMid,
-        title: const Text(
-          'Eliminar alimento',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: Text(
-          last
-              ? '«${item.name}» es el último alimento de esta comida. '
-                    'Se eliminará el registro completo.'
-              : '¿Eliminar «${item.name}»? Esta acción no se puede deshacer.',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: AppColors.textPrimary),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'Eliminar',
-              style: TextStyle(color: AppColors.dangerText),
-            ),
-          ),
-        ],
-      ),
+      title: 'Eliminar alimento',
+      message: last
+          ? '«${item.name}» es el último alimento de esta comida. '
+                'Se eliminará el registro completo.'
+          : '¿Eliminar «${item.name}»? Esta acción no se puede deshacer.',
+      confirmLabel: 'Eliminar',
+      destructive: true,
     );
-    return confirmed ?? false;
   }
 
-  Future<void> _showLegacyMessage() => showDialog<void>(
+  Future<void> _showLegacyMessage() => showGlassDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: AppColors.bgMid,
-      title: const Text(
-        'No se puede editar',
-        style: TextStyle(color: AppColors.textPrimary),
-      ),
-      content: const Text(
-        'Este registro antiguo no guarda porción ni macros separadas. '
-        'Editarlo podría convertir sus valores en cero. Puedes eliminarlo y '
-        'registrarlo de nuevo.',
-        style: TextStyle(color: AppColors.textSecondary),
-      ),
+    builder: (dialogContext) => GlassDialog(
+      title: 'No se puede editar',
+      message:
+          'Este registro antiguo no guarda porción ni macros separadas. '
+          'Editarlo podría convertir sus valores en cero. Puedes eliminarlo y '
+          'registrarlo de nuevo.',
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text(
-            'Entendido',
-            style: TextStyle(color: AppColors.textPrimary),
-          ),
+        PrimaryButton(
+          label: 'Entendido',
+          onPressed: () => Navigator.of(dialogContext).pop(),
         ),
       ],
     ),
   );
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+  void _showMessage(
+    String message, {
+    StatusBannerVariant variant = StatusBannerVariant.neutral,
+  }) {
+    showAppSnackBar(context, message: message, variant: variant);
   }
 
   @override
@@ -224,7 +209,7 @@ class _MealsPageState extends State<MealsPage> {
           AppSpacing.md,
           embedded ? AppSpacing.sm : AppSpacing.md,
           AppSpacing.md,
-          28,
+          AppSpacing.lg,
         ),
         children: [
           OfflineBanner(service: _connectivity, onRetry: _load),
@@ -296,6 +281,7 @@ class _SummaryView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         GlassSurface(
+          padding: const EdgeInsets.all(AppSpacing.cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -317,8 +303,9 @@ class _SummaryView extends StatelessWidget {
           ),
         ),
         for (final section in summary.sections) ...[
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.sectionGap),
           GlassSurface(
+            padding: const EdgeInsets.all(AppSpacing.cardPadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

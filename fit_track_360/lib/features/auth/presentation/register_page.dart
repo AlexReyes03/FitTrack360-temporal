@@ -3,16 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../app/router.dart';
 import '../../../design_system/components/glass_surface.dart';
-import '../../../design_system/components/primary_button.dart';
+import '../../../design_system/templates/form_page_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
-import '../../../design_system/widgets/app_background.dart';
+import '../../../design_system/tokens/app_radii.dart';
+import '../../../design_system/tokens/app_spacing.dart';
+import '../../../design_system/tokens/app_typography.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../notifications/presentation/notifications_scope.dart';
-import '../data/auth_api.dart';
 import '../data/firebase_auth_service.dart';
-import '../data/google_auth_gateway.dart';
+import '../domain/auth_messages.dart';
 import '../domain/auth_validators.dart';
+import 'auth_navigation.dart';
+import 'auth_view_models.dart';
+import 'widgets/auth_header.dart';
+import 'widgets/auth_link_row.dart';
+import 'widgets/auth_status_banner.dart';
+import 'widgets/auth_submit_button.dart';
 import 'widgets/google_sign_in_section.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -32,34 +40,34 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  static final _usernamePattern = RegExp(r'^[a-zA-Z0-9_]{3,30}$');
-
-  late final FirebaseAuthService _auth =
-      widget.authService ?? FirebaseAuthService();
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
-  final TextEditingController _displayNameController = TextEditingController();
+  late final RegisterViewModel _viewModel = RegisterViewModel(
+    auth: widget.authService,
+  );
+  final Map<RegisterField, TextEditingController> _controllers = {
+    for (final field in RegisterField.values) field: TextEditingController(),
+  };
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _confirmPasswordFocusNode = FocusNode();
+  final GlobalKey _bannerKey = GlobalKey();
 
-  bool _privacyConsent = false;
-  bool _submitting = false;
-  bool _googleLoading = false;
   bool _emailTouched = false;
   bool _confirmPasswordTouched = false;
   bool _didClearNotificationsOnMount = false;
-  String? _error;
+  String? _lastError;
 
-  bool get _anyGoogleLoading => widget.googleLoading || _googleLoading;
+  bool get _anyGoogleLoading =>
+      widget.googleLoading || _viewModel.isGoogleLoading;
+  bool get _busy => _viewModel.isSubmitting || _anyGoogleLoading;
+
+  TextEditingController _controller(RegisterField field) =>
+      _controllers[field]!;
 
   @override
   void initState() {
     super.initState();
     _emailFocusNode.addListener(_handleEmailFocus);
     _confirmPasswordFocusNode.addListener(_handleConfirmPasswordFocus);
+    _viewModel.addListener(_onViewModelChanged);
   }
 
   @override
@@ -75,108 +83,78 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  void _onViewModelChanged() {
+    if (!mounted) return;
+    final error = _viewModel.errorMessage;
+    if (error != null && error != _lastError) revealAuthBanner(_bannerKey);
+    _lastError = error;
+    setState(() {});
+  }
+
   void _handleEmailFocus() {
-    if (!_emailFocusNode.hasFocus && _emailController.text.trim().isNotEmpty) {
+    if (!_emailFocusNode.hasFocus &&
+        _controller(RegisterField.email).text.trim().isNotEmpty) {
       setState(() => _emailTouched = true);
     }
   }
 
   void _handleConfirmPasswordFocus() {
     if (!_confirmPasswordFocusNode.hasFocus &&
-        _confirmPasswordController.text.trim().isNotEmpty) {
+        _controller(RegisterField.confirmPassword).text.isNotEmpty) {
       setState(() => _confirmPasswordTouched = true);
     }
   }
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    _displayNameController.dispose();
+    _viewModel
+      ..removeListener(_onViewModelChanged)
+      ..dispose();
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
     _emailFocusNode.dispose();
     _confirmPasswordFocusNode.dispose();
     super.dispose();
   }
 
-  String? get _emailError {
-    if (!_emailTouched) return null;
-    final email = _emailController.text.trim();
-    if (email.isEmpty || AuthValidators.isValidEmail(email)) return null;
-    return 'Usa el formato ejemplo@correo.com';
+  String? _fieldError(RegisterField field) {
+    if (_viewModel.missingFields.contains(field)) {
+      return AuthMessages.requiredField;
+    }
+    switch (field) {
+      case RegisterField.email:
+        if (!_emailTouched) return null;
+        final email = _controller(field).text.trim();
+        if (email.isEmpty || AuthValidators.isValidEmail(email)) return null;
+        return AuthMessages.emailFormatHint;
+      case RegisterField.confirmPassword:
+        if (!_confirmPasswordTouched) return null;
+        final confirm = _controller(field).text;
+        if (confirm.isEmpty) return null;
+        return confirm == _controller(RegisterField.password).text
+            ? null
+            : AuthMessages.passwordMismatch;
+      default:
+        return null;
+    }
   }
 
-  String? get _confirmPasswordError {
-    if (!_confirmPasswordTouched) return null;
-    final confirmPassword = _confirmPasswordController.text.trim();
-    if (confirmPassword.isEmpty) return null;
-    return confirmPassword == _passwordController.text.trim()
-        ? null
-        : 'Las contraseñas no coinciden';
-  }
-
-  bool get _fieldsFilled =>
-      _usernameController.text.trim().isNotEmpty &&
-      _emailController.text.trim().isNotEmpty &&
-      _passwordController.text.trim().isNotEmpty &&
-      _confirmPasswordController.text.trim().isNotEmpty &&
-      _displayNameController.text.trim().isNotEmpty;
-
-  bool get _canSubmit =>
-      _fieldsFilled && _privacyConsent && !_submitting && !_anyGoogleLoading;
+  RegisterForm get _form => RegisterForm(
+    displayName: _controller(RegisterField.displayName).text,
+    username: _controller(RegisterField.username).text,
+    email: _controller(RegisterField.email).text,
+    password: _controller(RegisterField.password).text,
+    confirmPassword: _controller(RegisterField.confirmPassword).text,
+  );
 
   Future<void> _submit() async {
-    final username = _usernameController.text.trim();
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final confirmPassword = _confirmPasswordController.text.trim();
-    final displayName = _displayNameController.text.trim();
-
     setState(() {
-      _error = null;
       _emailTouched = true;
       _confirmPasswordTouched = true;
-      if (username.isEmpty ||
-          email.isEmpty ||
-          password.isEmpty ||
-          confirmPassword.isEmpty ||
-          displayName.isEmpty) {
-        _error = 'Completa todos los campos';
-      } else if (!_usernamePattern.hasMatch(username)) {
-        _error = 'El usuario solo puede tener letras, numeros y guion bajo';
-      } else if (password.length < 8) {
-        _error = 'La contraseña debe tener al menos 8 caracteres';
-      } else if (password != confirmPassword) {
-        _error = 'Las contraseñas no coinciden';
-      } else if (!AuthValidators.isValidEmail(email)) {
-        _error = 'Correo invalido';
-      }
     });
-    if (_error != null || !_privacyConsent) return;
-
-    setState(() => _submitting = true);
-    try {
-      await _auth.register(
-        username: username,
-        email: email,
-        password: password,
-        displayName: displayName,
-        privacyConsent: true,
-        privacyNoticeVersion: '2',
-      );
-      if (!mounted) return;
-      NotificationsScope.maybeOf(context)?.clearOnLogout();
-      context.go('/app');
-    } on AuthApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.message);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'No se pudo conectar');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    final ok = await _viewModel.submit(_form);
+    if (ok) _enterApp();
   }
 
   Future<void> _submitGoogle() async {
@@ -184,215 +162,118 @@ class _RegisterPageState extends State<RegisterPage> {
       widget.onGooglePressed!();
       return;
     }
-    if (_submitting || _anyGoogleLoading) return;
-
-    if (!_privacyConsent) {
-      setState(
-        () =>
-            _error = 'Acepta el aviso de privacidad para continuar con Google',
-      );
-      return;
-    }
-
-    setState(() {
-      _error = null;
-      _googleLoading = true;
-    });
-    try {
-      await _auth.loginWithGoogle(
-        allowAutoRegister: true,
-        privacyConsent: true,
-        privacyNoticeVersion: '2',
-      );
-      if (!mounted) return;
-      NotificationsScope.maybeOf(context)?.clearOnLogout();
-      context.go('/app');
-    } on GoogleSignInCancelledException {
-      // Cancelar deja el registro sin error fatal.
-    } on AuthApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.message);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'No se pudo conectar');
-    } finally {
-      if (mounted) setState(() => _googleLoading = false);
-    }
+    final ok = await _viewModel.submitGoogle();
+    if (ok) _enterApp();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
-                child: GlassSurface(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Text(
-                        'Crear cuenta',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Empieza a registrar tu progreso',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      DsTextField(
-                        controller: _displayNameController,
-                        label: 'Nombre',
-                        hint: 'Tu nombre completo',
-                        enabled: !_submitting && !_anyGoogleLoading,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      DsTextField(
-                        controller: _usernameController,
-                        label: 'Usuario',
-                        hint: 'Solo letras, numeros y guion bajo',
-                        enabled: !_submitting && !_anyGoogleLoading,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      DsTextField(
-                        controller: _emailController,
-                        focusNode: _emailFocusNode,
-                        label: 'Correo',
-                        hint: 'ejemplo@correo.com',
-                        keyboardType: TextInputType.emailAddress,
-                        errorText: _emailError,
-                        enabled: !_submitting && !_anyGoogleLoading,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      DsTextField(
-                        controller: _passwordController,
-                        label: 'Contraseña',
-                        hint: 'Minimo 8 caracteres',
-                        obscureText: true,
-                        enabled: !_submitting && !_anyGoogleLoading,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 12),
-                      DsTextField(
-                        controller: _confirmPasswordController,
-                        focusNode: _confirmPasswordFocusNode,
-                        label: 'Confirmar contraseña',
-                        hint: 'Repite tu contraseña',
-                        obscureText: true,
-                        errorText: _confirmPasswordError,
-                        enabled: !_submitting && !_anyGoogleLoading,
-                        onChanged: (_) => setState(() {}),
-                      ),
-                      const SizedBox(height: 10),
-                      _PrivacyCheckbox(
-                        value: _privacyConsent,
-                        onChanged: (_submitting || _anyGoogleLoading)
-                            ? null
-                            : (value) =>
-                                  setState(() => _privacyConsent = value),
-                      ),
-                      const SizedBox(height: 16),
-                      PrimaryButton(
-                        label: 'Crear cuenta',
-                        onPressed: _canSubmit ? _submit : null,
-                      ),
-                      const SizedBox(height: 16),
-                      GoogleAuthSection(
-                        onGooglePressed: _submitGoogle,
-                        isLoading: _anyGoogleLoading,
-                        enabled: !_submitting,
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 12),
-                        _DangerBanner(message: _error!),
-                      ],
-                      const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: () => context.push('/login'),
-                        child: const Text(
-                          'Ya tienes cuenta? Iniciar sesion',
-                          style: TextStyle(color: AppColors.textSecondary),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+  void _enterApp() {
+    if (!mounted) return;
+    NotificationsScope.maybeOf(context)?.clearOnLogout();
+    context.go('/app');
+  }
+
+  Widget _field(
+    RegisterField field, {
+    required String label,
+    String? hint,
+    bool obscureText = false,
+    TextInputType? keyboardType,
+    FocusNode? focusNode,
+  }) {
+    return DsTextField(
+      controller: _controller(field),
+      focusNode: focusNode,
+      label: label,
+      hint: hint,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      errorText: _fieldError(field),
+      enabled: !_busy,
+      onChanged: (value) => _viewModel.fieldChanged(field, value),
     );
   }
-}
-
-class _PrivacyCheckbox extends StatelessWidget {
-  final bool value;
-  final ValueChanged<bool>? onChanged;
-
-  const _PrivacyCheckbox({required this.value, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onChanged != null;
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: onChanged == null ? null : () => onChanged!(!value),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-        child: Row(
+    final error = _viewModel.errorMessage;
+    return FormPageTemplate(
+      header: const AuthHeader(
+        title: AuthMessages.registerTitle,
+        subtitle: AuthMessages.registerSubtitle,
+      ),
+      fields: GlassSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Opacity(
-              opacity: enabled ? 1 : 0.35,
-              child: Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: value
-                      ? AppColors.accentWhite
-                      : AppColors.controlFillIdle,
-                  borderRadius: BorderRadius.circular(6.4),
-                  border: Border.all(
-                    width: 1.5,
-                    color: value
-                        ? AppColors.accentWhite
-                        : Colors.white.withValues(alpha: 0.32),
-                  ),
-                ),
-                child: value
-                    ? const Icon(
-                        Icons.check,
-                        size: 14.4,
-                        color: AppColors.textOnAccent,
-                      )
-                    : null,
+            _field(
+              RegisterField.displayName,
+              label: AuthMessages.nameLabel,
+              hint: AuthMessages.nameHint,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _field(
+              RegisterField.username,
+              label: AuthMessages.usernameLabel,
+              hint: AuthMessages.usernameHint,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _field(
+              RegisterField.email,
+              label: AuthMessages.emailLabel,
+              hint: AuthMessages.emailHint,
+              keyboardType: TextInputType.emailAddress,
+              focusNode: _emailFocusNode,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _field(
+              RegisterField.password,
+              label: AuthMessages.passwordLabel,
+              hint: AuthMessages.passwordHint,
+              obscureText: true,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _field(
+              RegisterField.confirmPassword,
+              label: AuthMessages.confirmPasswordLabel,
+              hint: AuthMessages.confirmPasswordHint,
+              obscureText: true,
+              focusNode: _confirmPasswordFocusNode,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            _PrivacyConsentCheckbox(
+              value: _viewModel.privacyConsent,
+              showError: _viewModel.consentMissing,
+              onChanged: _busy ? null : _viewModel.setPrivacyConsent,
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AuthTextLink(
+                label: AuthMessages.privacyNoticeLink,
+                onPressed: () => context.push(appPrivacyNoticePath),
               ),
             ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Text(
-                'Acepto el aviso de privacidad',
-                style: TextStyle(color: AppColors.zinc200, fontSize: 15.5),
-              ),
+            const SizedBox(height: AppSpacing.xs),
+            AuthSubmitButton(
+              label: AuthMessages.registerSubmit,
+              loadingLabel: AuthMessages.registerSubmitting,
+              isLoading: _viewModel.isSubmitting,
+              onPressed: _anyGoogleLoading ? null : _submit,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AuthStatusBanner(key: _bannerKey, message: error),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            GoogleAuthSection(
+              onGooglePressed: _submitGoogle,
+              isLoading: _anyGoogleLoading,
+              enabled: !_viewModel.isSubmitting,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            AuthLinkRow(
+              prompt: AuthMessages.loginPrompt,
+              label: AuthMessages.loginLink,
+              onPressed: _busy ? null : () => backToLogin(context),
             ),
           ],
         ),
@@ -401,24 +282,75 @@ class _PrivacyCheckbox extends StatelessWidget {
   }
 }
 
-class _DangerBanner extends StatelessWidget {
-  final String message;
+/// Casilla del aviso de privacidad: expone `checked` a lectores de pantalla y
+/// toda la fila mide al menos 48dp de alto.
+class _PrivacyConsentCheckbox extends StatelessWidget {
+  final bool value;
+  final bool showError;
+  final ValueChanged<bool>? onChanged;
 
-  const _DangerBanner({required this.message});
+  const _PrivacyConsentCheckbox({
+    required this.value,
+    required this.showError,
+    this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
-      decoration: BoxDecoration(
-        color: AppColors.dangerFill,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.dangerBorder),
-      ),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: AppColors.dangerText, fontSize: 14),
+    final enabled = onChanged != null;
+    final borderColor = value
+        ? AppColors.accentWhite
+        : showError
+        ? AppColors.dangerBorder
+        : AppColors.glassBorderStrong;
+
+    return Semantics(
+      container: true,
+      checked: value,
+      enabled: enabled,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadii.option),
+        onTap: enabled ? () => onChanged!(!value) : null,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+            child: Row(
+              children: [
+                Opacity(
+                  opacity: enabled ? 1 : 0.35,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: value
+                          ? AppColors.accentWhite
+                          : AppColors.controlFillIdle,
+                      borderRadius: BorderRadius.circular(AppRadii.checkbox),
+                      border: Border.all(width: 1.5, color: borderColor),
+                    ),
+                    child: value
+                        ? const Icon(
+                            Icons.check,
+                            size: 16,
+                            color: AppColors.textOnAccent,
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    AuthMessages.privacyConsentLabel,
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.zinc200,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

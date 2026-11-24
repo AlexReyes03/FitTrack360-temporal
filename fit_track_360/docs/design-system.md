@@ -312,6 +312,17 @@ No separate hover state required on touch devices.
 
 Radius 14 dp; padding ~15×18 dp; optional light blur (sigma ~8–12).
 
+**Auth (#230):** in login, register and password recovery the banner sits **directly below the CTA** (above the Google section), is a `Semantics(liveRegion: true)` so screen readers announce it, and is brought into view with `Scrollable.ensureVisible` when it appears. Backend/Firebase errors are always mapped to Spanish copy (`AuthMessages`); raw `message` text is never shown. Implemented privately as `AuthStatusBanner` (migrate to the DS in #222).
+
+### Auth screens (#230)
+
+- All three auth screens use `FormPageTemplate` with a shared `AuthHeader` (logo mark, `pageTitle`, secondary subtitle, centered).
+- The CTA shows a spinner and a loading label while submitting (`AuthSubmitButton`, a private wrapper over `PrimaryButton`; migrate to `PrimaryButton(isLoading:)` in #222).
+- The CTA is never a dead button: it validates on tap and explains what is missing (required fields inline + banner, privacy consent).
+- Consent checkbox: `Semantics(checked:)`, row height ≥ 48 dp, with a «Consultar aviso de privacidad» link to the public route `/aviso-privacidad`.
+- Back-to-login links use `pop` when possible and `go('/login')` otherwise, so the auth stack never grows.
+- Passwords are never trimmed (login and register behave the same).
+
 ### EndState
 
 **Anatomy:** centered GlassSurface: title with white → `text.secondary` gradient + `text.secondary` paragraph.

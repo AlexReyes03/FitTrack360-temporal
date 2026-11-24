@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../domain/auth_messages.dart';
 import 'auth_api.dart';
 import 'google_auth_gateway.dart';
 
@@ -11,10 +12,12 @@ const googleWebClientId = String.fromEnvironment('GOOGLE_WEB_CLIENT_ID');
 
 /// Login con Google sin User en Nest y sin consentimiento de privacidad.
 const googleAccountNotLinkedMessage =
-    'No hay cuenta vinculada. Usa Crear cuenta, acepta el aviso de privacidad y continua con Google.';
+    'No hay una cuenta vinculada a este correo de Google. Toca «Crear cuenta», '
+    'acepta el aviso de privacidad y continúa con Google.';
 
 /// El correo de Google ya pertenece a otra cuenta de FitTrack360.
-const googleEmailTakenMessage = 'El correo ya esta registrado con otra cuenta';
+const googleEmailTakenMessage =
+    'Este correo ya está registrado con otra cuenta de FitTrack360.';
 
 /// Intentos de username con sufijo aleatorio tras la primera colision.
 const googleUsernameRetryAttempts = 5;
@@ -60,11 +63,11 @@ class FirebaseAuthService {
   Future<String> _requireIdToken({bool forceRefresh = false}) async {
     final user = _auth.currentUser;
     if (user == null) {
-      throw const AuthApiException('Sesion invalida');
+      throw const AuthApiException(AuthMessages.sessionInvalid);
     }
     final token = await user.getIdToken(forceRefresh);
     if (token == null || token.isEmpty) {
-      throw const AuthApiException('Sesion invalida');
+      throw const AuthApiException(AuthMessages.sessionInvalid);
     }
     return token;
   }
@@ -250,8 +253,7 @@ class FirebaseAuthService {
       }
     }
 
-    throw lastConflict ??
-        const AuthApiException('No se pudo completar el registro con Google');
+    throw lastConflict ?? const AuthApiException(AuthMessages.registerGeneric);
   }
 
   Future<void> sendPasswordResetEmail({required String email}) async {
@@ -326,28 +328,7 @@ class FirebaseAuthService {
     return (trimmed == null || trimmed.isEmpty) ? null : trimmed;
   }
 
-  String _mapFirebaseError(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'email-already-in-use':
-        return 'El correo ya esta registrado';
-      case 'invalid-email':
-        return 'Correo invalido';
-      case 'weak-password':
-        return 'La contraseña debe tener al menos 8 caracteres';
-      case 'user-not-found':
-      case 'wrong-password':
-      case 'invalid-credential':
-        return 'Credenciales incorrectas';
-      case 'account-exists-with-different-credential':
-        return 'El correo ya esta registrado con otro metodo de acceso';
-      case 'too-many-requests':
-        return 'Demasiados intentos. Intenta mas tarde';
-      case 'network-request-failed':
-        return 'No se pudo conectar';
-      case 'user-disabled':
-        return 'Esta cuenta esta deshabilitada';
-      default:
-        return e.message ?? 'No se pudo completar la autenticacion';
-    }
-  }
+  /// Copy en español del código de Firebase; nunca `e.message` crudo.
+  String _mapFirebaseError(FirebaseAuthException e) =>
+      AuthMessages.forFirebaseCode(e.code);
 }

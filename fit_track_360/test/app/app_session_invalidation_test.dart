@@ -220,9 +220,15 @@ void main() {
     addTearDown(viewModel.dispose);
 
     await tester.pumpWidget(FitTrackApp(notifications: viewModel));
-    // Resuelve el redirect asíncrono y deja correr el temporizador del splash.
+    // Resuelve el redirect asíncrono; sin sesión el splash va directo a
+    // /login, que limpia los avisos al montar (#230).
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(viewModel.notifications, isEmpty);
+
+    // Vuelve a cargar para comprobar que notifySessionCleared limpia el VM.
+    await viewModel.load();
     await tester.pump();
 
     expect(viewModel.notifications, hasLength(1));
@@ -386,7 +392,7 @@ void main() {
       final textFields = find.byType(TextField);
       await tester.enterText(textFields.at(0), 'cuenta.b@test.com');
       await tester.enterText(textFields.at(1), 'Password123!');
-      final submitButton = find.text('Entrar');
+      final submitButton = find.text('Iniciar sesión');
       await tester.ensureVisible(submitButton);
       await tester.tap(submitButton);
       await tester.pumpAndSettle();
@@ -571,7 +577,10 @@ void main() {
       await tester.enterText(fields.at(2), 'cuenta.b@test.com');
       await tester.enterText(fields.at(3), 'Password123!');
       await tester.enterText(fields.at(4), 'Password123!');
-      final privacy = find.text('Acepto el aviso de privacidad');
+      final privacy = find.text(
+        'He leído el aviso de privacidad y acepto el tratamiento de mis '
+        'datos personales descrito en él.',
+      );
       await tester.ensureVisible(privacy);
       await tester.tap(privacy);
       await tester.pumpAndSettle();

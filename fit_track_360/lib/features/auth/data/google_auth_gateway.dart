@@ -4,11 +4,12 @@ import 'package:google_sign_in/google_sign_in.dart';
 /// Mensaje cuando el SDK nativo no puede iniciar Google (cliente OAuth,
 /// SHA-1 o plist faltantes, DEVELOPER_ERROR, etc.).
 const googleSignInUnavailableMessage =
-    'Inicio con Google no disponible en este dispositivo por ahora. Usa tu correo y contraseña.';
+    'El inicio con Google no está disponible en este dispositivo por ahora. '
+    'Usa tu correo y contraseña.';
 
 /// Mensaje cuando Google no responde por falta de red.
 const googleSignInNetworkMessage =
-    'No se pudo conectar con Google. Revisa tu conexion e intenta de nuevo.';
+    'No pudimos conectar con Google. Revisa tu conexión e inténtalo de nuevo.';
 
 /// Resultado del picker de Google (antes de Firebase credential).
 class GoogleAuthTokens {
@@ -26,7 +27,7 @@ class GoogleSignInCancelledException implements Exception {
   const GoogleSignInCancelledException();
 
   @override
-  String toString() => 'Inicio de sesion con Google cancelado';
+  String toString() => 'Inicio de sesión con Google cancelado';
 }
 
 /// Abstraccion de `google_sign_in` (inyectable en tests).

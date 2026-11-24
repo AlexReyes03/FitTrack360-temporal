@@ -17,9 +17,9 @@ void main() {
     await tester.pumpWidget(_wrap(LoginPage(onGooglePressed: () => tapped++)));
     await tester.pumpAndSettle();
 
-    expect(find.text('Correo'), findsOneWidget);
+    expect(find.text('Correo electrónico'), findsOneWidget);
     expect(find.text('Contraseña'), findsOneWidget);
-    expect(find.text('Entrar'), findsOneWidget);
+    expect(find.text('Iniciar sesión'), findsOneWidget);
     expect(find.text('o'), findsOneWidget);
     expect(find.text('Continuar con Google'), findsOneWidget);
 

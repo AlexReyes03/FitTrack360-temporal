@@ -80,7 +80,7 @@ void main() {
 
     expect(auth.googleCalled, isTrue);
     expect(find.text('HOME'), findsNothing);
-    expect(find.text('Iniciar sesion'), findsOneWidget);
+    expect(find.text('Inicia sesión'), findsOneWidget);
     expect(find.textContaining('No se pudo'), findsNothing);
     expect(find.textContaining('cuenta vinculada'), findsNothing);
   });
@@ -89,18 +89,13 @@ void main() {
     tester,
   ) async {
     final auth = _FakeAuth()
-      ..googleError = const AuthApiException(
-        'El correo ya esta registrado con otra cuenta',
-      );
+      ..googleError = const AuthApiException(googleEmailTakenMessage);
 
     await _pumpLogin(tester, auth: auth);
     await _tapGoogle(tester);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('El correo ya esta registrado con otra cuenta'),
-      findsOneWidget,
-    );
+    expect(find.text(googleEmailTakenMessage), findsOneWidget);
     expect(find.text('HOME'), findsNothing);
   });
 

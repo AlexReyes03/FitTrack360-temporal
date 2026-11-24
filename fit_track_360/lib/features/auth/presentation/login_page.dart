@@ -3,17 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../design_system/components/app_logo.dart';
 import '../../../design_system/components/glass_surface.dart';
-import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/form_page_template.dart';
-import '../../../design_system/tokens/app_colors.dart';
+import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/widgets/ds_text_field.dart';
 import '../../notifications/presentation/notifications_scope.dart';
-import '../data/auth_api.dart';
 import '../data/firebase_auth_service.dart';
-import '../data/google_auth_gateway.dart';
+import '../domain/auth_messages.dart';
 import '../domain/auth_validators.dart';
+import 'auth_view_models.dart';
+import 'widgets/auth_header.dart';
+import 'widgets/auth_link_row.dart';
+import 'widgets/auth_status_banner.dart';
+import 'widgets/auth_submit_button.dart';
 import 'widgets/google_sign_in_section.dart';
 
 class LoginPage extends StatefulWidget {
@@ -33,24 +35,27 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  late final FirebaseAuthService _auth =
-      widget.authService ?? FirebaseAuthService();
+  late final LoginViewModel _viewModel = LoginViewModel(
+    auth: widget.authService,
+  );
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _emailFocusNode = FocusNode();
+  final GlobalKey _bannerKey = GlobalKey();
 
-  bool _submitting = false;
-  bool _googleLoading = false;
   bool _emailTouched = false;
   bool _didClearNotificationsOnMount = false;
-  String? _error;
+  String? _lastError;
 
-  bool get _anyGoogleLoading => widget.googleLoading || _googleLoading;
+  bool get _anyGoogleLoading =>
+      widget.googleLoading || _viewModel.isGoogleLoading;
+  bool get _busy => _viewModel.isSubmitting || _anyGoogleLoading;
 
   @override
   void initState() {
     super.initState();
     _emailFocusNode.addListener(_handleEmailFocus);
+    _viewModel.addListener(_onViewModelChanged);
   }
 
   @override
@@ -66,6 +71,14 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  void _onViewModelChanged() {
+    if (!mounted) return;
+    final error = _viewModel.errorMessage;
+    if (error != null && error != _lastError) revealAuthBanner(_bannerKey);
+    _lastError = error;
+    setState(() {});
+  }
+
   void _handleEmailFocus() {
     if (!_emailFocusNode.hasFocus && _emailController.text.trim().isNotEmpty) {
       setState(() => _emailTouched = true);
@@ -74,6 +87,9 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    _viewModel
+      ..removeListener(_onViewModelChanged)
+      ..dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _emailFocusNode.dispose();
@@ -84,39 +100,16 @@ class _LoginPageState extends State<LoginPage> {
     if (!_emailTouched) return null;
     final email = _emailController.text.trim();
     if (email.isEmpty || AuthValidators.isValidEmail(email)) return null;
-    return 'Usa el formato ejemplo@correo.com';
+    return AuthMessages.emailFormatHint;
   }
 
   Future<void> _submit() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    setState(() {
-      _error = null;
-      _emailTouched = true;
-      if (email.isEmpty || password.isEmpty) {
-        _error = 'Completa todos los campos';
-      } else if (!AuthValidators.isValidEmail(email)) {
-        _error = 'Correo invalido';
-      }
-    });
-    if (_error != null) return;
-
-    setState(() => _submitting = true);
-    try {
-      await _auth.login(email: email, password: password);
-      if (!mounted) return;
-      NotificationsScope.maybeOf(context)?.clearOnLogout();
-      context.go('/app');
-    } on AuthApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.message);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'No se pudo conectar');
-    } finally {
-      if (mounted) setState(() => _submitting = false);
-    }
+    setState(() => _emailTouched = true);
+    final ok = await _viewModel.submit(
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+    if (ok) _enterApp();
   }
 
   Future<void> _submitGoogle() async {
@@ -124,133 +117,82 @@ class _LoginPageState extends State<LoginPage> {
       widget.onGooglePressed!();
       return;
     }
-    if (_submitting || _anyGoogleLoading) return;
+    if (_busy) return;
+    final ok = await _viewModel.submitGoogle();
+    if (ok) _enterApp();
+  }
 
-    setState(() {
-      _error = null;
-      _googleLoading = true;
-    });
-    try {
-      await _auth.loginWithGoogle(allowAutoRegister: false);
-      if (!mounted) return;
-      NotificationsScope.maybeOf(context)?.clearOnLogout();
-      context.go('/app');
-    } on GoogleSignInCancelledException {
-      // Cancelar deja la pantalla de login sin error fatal.
-    } on AuthApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e.message);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'No se pudo conectar');
-    } finally {
-      if (mounted) setState(() => _googleLoading = false);
-    }
+  void _enterApp() {
+    if (!mounted) return;
+    NotificationsScope.maybeOf(context)?.clearOnLogout();
+    context.go('/app');
+  }
+
+  void _openForgotPassword() {
+    final email = _emailController.text.trim();
+    context.push('/forgot-password', extra: email.isEmpty ? null : email);
   }
 
   @override
   Widget build(BuildContext context) {
+    final error = _viewModel.errorMessage;
     return FormPageTemplate(
+      header: const AuthHeader(
+        title: AuthMessages.loginTitle,
+        subtitle: AuthMessages.loginSubtitle,
+      ),
       fields: GlassSurface(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Center(
-              child: AppLogo(
-                variant: AppLogoVariant.mark,
-                height: AppLogo.loginHeight,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Iniciar sesion',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.3,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Bienvenido de vuelta',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-            ),
-            const SizedBox(height: 24),
             DsTextField(
               controller: _emailController,
               focusNode: _emailFocusNode,
-              label: 'Correo',
-              hint: 'ejemplo@correo.com',
+              label: AuthMessages.emailLabel,
+              hint: AuthMessages.emailHint,
               keyboardType: TextInputType.emailAddress,
               errorText: _emailError,
-              enabled: !_submitting && !_anyGoogleLoading,
+              enabled: !_busy,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.sm),
             DsTextField(
               controller: _passwordController,
-              label: 'Contraseña',
-              hint: 'Minimo 8 caracteres',
+              label: AuthMessages.passwordLabel,
               obscureText: true,
-              enabled: !_submitting && !_anyGoogleLoading,
+              enabled: !_busy,
             ),
-            const SizedBox(height: 24),
-            PrimaryButton(
-              label: 'Entrar',
-              onPressed: (_submitting || _anyGoogleLoading) ? null : _submit,
+            Align(
+              alignment: Alignment.centerRight,
+              child: AuthTextLink(
+                label: AuthMessages.forgotPasswordLink,
+                onPressed: _busy ? null : _openForgotPassword,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.xs),
+            AuthSubmitButton(
+              label: AuthMessages.loginSubmit,
+              loadingLabel: AuthMessages.loginSubmitting,
+              isLoading: _viewModel.isSubmitting,
+              onPressed: _anyGoogleLoading ? null : _submit,
+            ),
+            if (error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AuthStatusBanner(key: _bannerKey, message: error),
+            ],
+            const SizedBox(height: AppSpacing.md),
             GoogleAuthSection(
               onGooglePressed: _submitGoogle,
               isLoading: _anyGoogleLoading,
-              enabled: !_submitting,
+              enabled: !_viewModel.isSubmitting,
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 16),
-              _DangerBanner(message: _error!),
-            ],
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => context.push('/forgot-password'),
-              child: const Text(
-                'Olvidaste tu contraseña?',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
-            ),
-            TextButton(
-              onPressed: () => context.push('/register'),
-              child: const Text(
-                'No tienes cuenta? Crear cuenta',
-                style: TextStyle(color: AppColors.textSecondary),
-              ),
+            const SizedBox(height: AppSpacing.sm),
+            AuthLinkRow(
+              prompt: AuthMessages.registerPrompt,
+              label: AuthMessages.registerLink,
+              onPressed: _busy ? null : () => context.push('/register'),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _DangerBanner extends StatelessWidget {
-  final String message;
-
-  const _DangerBanner({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
-      decoration: BoxDecoration(
-        color: AppColors.dangerFill,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.dangerBorder),
-      ),
-      child: Text(
-        message,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: AppColors.dangerText, fontSize: 14),
       ),
     );
   }

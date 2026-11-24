@@ -4,7 +4,8 @@ import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
 import '../../data/exercise_labels.dart';
 
-/// Filtros por grupo muscular, equipo y músculo objetivo.
+/// Filtros por zona del cuerpo, equipo y músculo objetivo. Los nombres vienen
+/// de [ExerciseFieldLabels] para coincidir con el detalle.
 class ExerciseFilters extends StatelessWidget {
   const ExerciseFilters({
     super.key,
@@ -33,21 +34,21 @@ class ExerciseFilters extends StatelessWidget {
       runSpacing: 8,
       children: [
         _FilterDropdown(
-          label: 'Músculo',
+          label: ExerciseFieldLabels.bodyPart,
           value: bodyPart,
           optionLabel: translateBodyPart,
           options: bodyPartOptions,
           onChanged: onBodyPartChanged,
         ),
         _FilterDropdown(
-          label: 'Equipo',
+          label: ExerciseFieldLabels.equipment,
           value: equipment,
           optionLabel: translateEquipment,
           options: equipmentOptions,
           onChanged: onEquipmentChanged,
         ),
         _FilterDropdown(
-          label: 'Objetivo',
+          label: ExerciseFieldLabels.target,
           value: target,
           optionLabel: translateTarget,
           options: targetOptions,

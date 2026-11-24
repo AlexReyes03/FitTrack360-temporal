@@ -1,9 +1,8 @@
 /// Ejercicio del catálogo (`GET /api/v1/exercises`).
 ///
-/// Prisma solo persiste `id`, `name`, `imageFile`, `gifFile`, `attribution`,
-/// `bodyPart`, `equipment` y `target`. Instrucciones y músculos existen en el
-/// seed pero aún no en la base (W11-01), y `nameEs`, `level` y `commonErrors`
-/// no existen en ninguna capa. La UI omite los campos ausentes.
+/// El API ya expone `nameEs`, `level` y `commonErrors` (y busca por `nameEs`),
+/// pero el seed `exercises.es.json` todavía no los trae, así que llegan nulos.
+/// La UI muestra `nameEs ?? name` y omite los campos ausentes.
 class Exercise {
   final String id;
   final String name;

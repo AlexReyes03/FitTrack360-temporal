@@ -77,6 +77,25 @@ void main() {
     });
   });
 
+  group('nivel y nombres de campo (UX-12)', () {
+    test('traduce el nivel conocido y deja legible el desconocido', () {
+      expect(translateLevel('beginner'), 'Principiante');
+      expect(translateLevel('intermediate'), 'Intermedio');
+      expect(translateLevel('advanced'), 'Avanzado');
+      expect(translateLevel('expert'), 'Experto');
+      expect(translateLevel('Beginner'), 'Principiante');
+      expect(translateLevel('pro'), 'Pro');
+    });
+
+    test('los campos usan el mismo nombre en filtros y detalle', () {
+      expect(ExerciseFieldLabels.bodyPart, 'Zona del cuerpo');
+      expect(ExerciseFieldLabels.equipment, 'Equipo');
+      expect(ExerciseFieldLabels.target, 'Músculo objetivo');
+      expect(ExerciseFieldLabels.level, 'Nivel');
+      expect(ExerciseFieldLabels.secondaryMuscles, 'Músculos secundarios');
+    });
+  });
+
   group('valores desconocidos', () {
     test('no se inventan traducciones: se deja el valor legible', () {
       expect(translateBodyPart('new zone'), 'New zone');

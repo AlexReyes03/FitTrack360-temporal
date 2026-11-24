@@ -147,13 +147,13 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          exercise.name,
+          exercise.nameEs ?? exercise.name,
           style: AppTypography.pageTitle.copyWith(fontSize: 26),
         ),
         if (exercise.nameEs != null) ...[
           const SizedBox(height: 4),
           Text(
-            exercise.nameEs!,
+            exercise.name,
             style: AppTypography.body.copyWith(
               color: AppColors.textSecondary,
               fontSize: 16,
@@ -167,21 +167,21 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
           children: [
             ExerciseTag(translateBodyPart(exercise.bodyPart), highlight: true),
             ExerciseTag(translateEquipment(exercise.equipment)),
-            ExerciseTag(translateTarget(exercise.target)),
           ],
         ),
-        if (exercise.level != null) ...[
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Nivel: ${exercise.level!}',
-            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
+        _section('Ficha', _facts(exercise)),
         if (exercise.instructionsEs != null)
           _section('Instrucciones', Text(exercise.instructionsEs!)),
         if (exercise.instructionStepsEs.isNotEmpty)
           _section('Pasos', _steps(exercise.instructionStepsEs)),
-        _section('Músculos', _muscles(exercise)),
+        if (_secondaryMuscles(exercise).isNotEmpty)
+          _section(
+            'Músculos',
+            Text(
+              '${ExerciseFieldLabels.secondaryMuscles}: '
+              '${_secondaryMuscles(exercise).join(', ')}',
+            ),
+          ),
         if (exercise.commonErrors != null)
           _section('Errores comunes', Text(exercise.commonErrors!)),
         const SizedBox(height: AppSpacing.sm),
@@ -239,21 +239,39 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
     );
   }
 
-  Widget _muscles(Exercise exercise) {
-    final secondary = exercise.secondaryMuscles
-        .map(translateMuscle)
-        .where((label) => label != translateTarget(exercise.target))
-        .toList(growable: false);
-
+  /// Datos con los mismos nombres que los filtros del catálogo.
+  Widget _facts(Exercise exercise) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Objetivo: ${translateTarget(exercise.target)}'),
-        if (exercise.muscleGroup != null)
-          Text('Grupo: ${translateMuscle(exercise.muscleGroup!)}'),
-        if (secondary.isNotEmpty) Text('Secundarios: ${secondary.join(', ')}'),
+        Text(
+          '${ExerciseFieldLabels.bodyPart}: '
+          '${translateBodyPart(exercise.bodyPart)}',
+        ),
+        Text(
+          '${ExerciseFieldLabels.equipment}: '
+          '${translateEquipment(exercise.equipment)}',
+        ),
+        Text(
+          '${ExerciseFieldLabels.target}: ${translateTarget(exercise.target)}',
+        ),
+        if (exercise.level != null)
+          Text(
+            '${ExerciseFieldLabels.level}: ${translateLevel(exercise.level!)}',
+          ),
       ],
     );
+  }
+
+  /// `muscleGroup` y `secondaryMuscles` en una sola lista, sin repetir el
+  /// músculo objetivo ni duplicados.
+  List<String> _secondaryMuscles(Exercise exercise) {
+    final target = translateTarget(exercise.target);
+    final labels = <String>{
+      if (exercise.muscleGroup != null) translateMuscle(exercise.muscleGroup!),
+      ...exercise.secondaryMuscles.map(translateMuscle),
+    }..remove(target);
+    return labels.toList(growable: false);
   }
 
   Widget _attribution(String attribution) {

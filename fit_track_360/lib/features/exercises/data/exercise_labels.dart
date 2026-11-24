@@ -1,7 +1,17 @@
-/// Traducciones de `bodyPart`, `equipment` y `target` del dataset
+/// Traducciones de `bodyPart`, `equipment`, `target` y `level` del dataset
 /// (`fit_track_api/seed/exercises.es.json`). Un valor desconocido conserva el
 /// texto original con la inicial en mayúscula; nunca se inventa una etiqueta.
 library;
+
+/// Nombres de los campos del ejercicio. Filtros y detalle usan exactamente
+/// estos textos para que el usuario reconozca el mismo dato en ambos lados.
+abstract final class ExerciseFieldLabels {
+  static const String bodyPart = 'Zona del cuerpo';
+  static const String equipment = 'Equipo';
+  static const String target = 'Músculo objetivo';
+  static const String level = 'Nivel';
+  static const String secondaryMuscles = 'Músculos secundarios';
+}
 
 /// Valores de `bodyPart` del dataset (grupo muscular).
 const List<String> bodyPartOptions = <String>[
@@ -172,6 +182,14 @@ const Map<String, String> _muscleLabels = <String, String>{
   'wrists': 'Muñecas',
 };
 
+/// Valores esperados de `level`; el seed actual aún no trae ninguno.
+const Map<String, String> _levelLabels = <String, String>{
+  'beginner': 'Principiante',
+  'intermediate': 'Intermedio',
+  'advanced': 'Avanzado',
+  'expert': 'Experto',
+};
+
 /// Etiqueta en español de `bodyPart`.
 String translateBodyPart(String value) =>
     _bodyPartLabels[value] ?? _humanize(value);
@@ -183,6 +201,10 @@ String translateEquipment(String value) =>
 /// Etiqueta en español de `target`.
 String translateTarget(String value) =>
     _targetLabels[value] ?? _humanize(value);
+
+/// Etiqueta en español de `level` (sin importar mayúsculas).
+String translateLevel(String value) =>
+    _levelLabels[value.trim().toLowerCase()] ?? _humanize(value);
 
 /// Etiqueta de un músculo cualquiera de `muscleGroup` o `secondaryMuscles`,
 /// que usan un vocabulario más amplio que `target`.

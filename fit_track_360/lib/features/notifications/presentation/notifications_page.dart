@@ -33,6 +33,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   bool _ownsViewModel = false;
   bool _didTriggerInitialLoad = false;
   bool _showingMutationError = false;
+  bool _showingConfirmation = false;
   final Set<String> _pendingDismissIds = <String>{};
 
   @override
@@ -90,27 +91,51 @@ class _NotificationsPageState extends State<NotificationsPage> {
     final viewModel = _viewModel;
     if (viewModel == null || !mounted) return;
     final error = viewModel.mutationError;
-    if (error == null || _showingMutationError) return;
-    _showingMutationError = true;
-    scheduleMicrotask(() {
-      if (!mounted) return;
-      viewModel.clearMutationError();
-      _showingMutationError = false;
-      final messenger = ScaffoldMessenger.maybeOf(context);
-      if (messenger == null) return;
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              error,
-              style: const TextStyle(color: AppColors.textPrimary),
-            ),
-            backgroundColor: AppColors.bgMid,
-            behavior: SnackBarBehavior.floating,
+    if (error != null && !_showingMutationError) {
+      _showingMutationError = true;
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        viewModel.clearMutationError();
+        _showingMutationError = false;
+        _showSnackBar(error);
+      });
+    }
+    final confirmation = viewModel.confirmationMessage;
+    if (confirmation != null && !_showingConfirmation) {
+      _showingConfirmation = true;
+      scheduleMicrotask(() {
+        if (!mounted) return;
+        viewModel.clearConfirmationMessage();
+        _showingConfirmation = false;
+        _showSnackBar(confirmation);
+      });
+    }
+  }
+
+  void _showSnackBar(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            message,
+            style: const TextStyle(color: AppColors.textPrimary),
           ),
-        );
-    });
+          backgroundColor: AppColors.bgMid,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  /// Tocar la tarjeta solo marca como leída y abre su destino, si lo tiene.
+  Future<void> _openNotification(String id) async {
+    final viewModel = _viewModel;
+    if (viewModel == null) return;
+    final route = await viewModel.openNotification(id);
+    if (!mounted || route == null || !route.startsWith('/')) return;
+    context.push(route);
   }
 
   /// Permite desmontar el [Dismissible] en el frame actual aunque el API falle
@@ -161,6 +186,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                       viewModel: viewModel,
                       pendingDismissIds: _pendingDismissIds,
                       onDismissNotification: _onDismissNotification,
+                      onOpenNotification: _openNotification,
                     ),
                   ),
                 ],
@@ -452,11 +478,13 @@ class _NotificationList extends StatelessWidget {
     required this.viewModel,
     required this.pendingDismissIds,
     required this.onDismissNotification,
+    required this.onOpenNotification,
   });
 
   final NotificationsViewModel viewModel;
   final Set<String> pendingDismissIds;
   final ValueChanged<String> onDismissNotification;
+  final ValueChanged<String> onOpenNotification;
 
   @override
   Widget build(BuildContext context) {
@@ -491,11 +519,20 @@ class _NotificationList extends StatelessWidget {
 
     final notifications = viewModel.filteredNotifications;
     if (notifications.isEmpty) {
+      // Solo el filtro por estado de lectura está expuesto en la UI, así que
+      // el copy habla de ese estado y la acción regresa a «Todas».
+      final unreadFilter =
+          viewModel.readFilter == NotificationsReadFilter.unread;
       return _EmptyState(
-        icon: Icons.filter_list_off_rounded,
-        title: 'Sin resultados con este filtro',
-        message: 'Prueba con otro estado de lectura o limpia los filtros.',
-        actionLabel: 'Limpiar filtros',
+        icon: unreadFilter
+            ? Icons.done_all_rounded
+            : Icons.mark_email_read_outlined,
+        title: unreadFilter ? 'Estás al día' : 'Sin notificaciones leídas',
+        message: unreadFilter
+            ? 'No tienes notificaciones sin leer.'
+            : 'Las notificaciones que abras aparecerán aquí.',
+        actionLabel: 'Ver todas',
+        actionIcon: Icons.list_rounded,
         onAction: viewModel.clearFilters,
       );
     }
@@ -557,6 +594,7 @@ class _NotificationList extends StatelessWidget {
           onDismissed: (_) => onDismissNotification(notification.id),
           child: _NotificationCard(
             notification: notification,
+            onOpen: () => onOpenNotification(notification.id),
             onToggleRead: () => viewModel.toggleRead(notification.id),
           ),
         );
@@ -568,10 +606,16 @@ class _NotificationList extends StatelessWidget {
 class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.notification,
+    required this.onOpen,
     required this.onToggleRead,
   });
 
   final AppNotification notification;
+
+  /// Tocar la tarjeta: marca como leída y navega si hay destino.
+  final VoidCallback onOpen;
+
+  /// Botón de icono: único control que alterna leída/no leída.
   final VoidCallback onToggleRead;
 
   @override
@@ -608,7 +652,7 @@ class _NotificationCard extends StatelessWidget {
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
-              onTap: onToggleRead,
+              onTap: onOpen,
               borderRadius: BorderRadius.circular(AppRadii.card),
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -781,6 +825,7 @@ class _EmptyState extends StatelessWidget {
     required this.title,
     required this.message,
     this.actionLabel,
+    this.actionIcon = Icons.refresh_rounded,
     this.onAction,
   });
 
@@ -788,6 +833,7 @@ class _EmptyState extends StatelessWidget {
   final String title;
   final String message;
   final String? actionLabel;
+  final IconData actionIcon;
   final VoidCallback? onAction;
 
   @override
@@ -832,7 +878,7 @@ class _EmptyState extends StatelessWidget {
               if (actionLabel != null && onAction != null) ...[
                 const SizedBox(height: 16),
                 _ActionPillButton(
-                  icon: Icons.refresh_rounded,
+                  icon: actionIcon,
                   label: actionLabel!,
                   onPressed: onAction,
                 ),

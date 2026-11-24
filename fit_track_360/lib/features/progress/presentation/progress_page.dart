@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../design_system/templates/app_scaffold_template.dart';
@@ -30,18 +32,19 @@ class ProgressPage extends StatefulWidget {
     this.currentPhotoSlot,
     this.usePreviewData = false,
     this.selectedCheckInPhotoLabel,
+    this.selectedCheckInPhotoFile,
     this.isSubmittingCheckIn = false,
     this.checkInFeedback,
+    this.checkInFeedbackTone = ProgressFeedbackTone.success,
     this.checkInSavedCount = 0,
     this.onBack,
     this.onRangeChanged,
     this.onSelectCheckInPhoto,
+    this.onRemoveCheckInPhoto,
     this.onSubmitCheckIn,
-    this.onHistoryEntryTap,
     this.onComparePhotos,
     this.onAddPhoto,
     this.onRetryChart,
-    this.onRetryCheckIn,
     this.onRetryHistory,
     this.onRetryComparison,
   });
@@ -60,20 +63,21 @@ class ProgressPage extends StatefulWidget {
   /// pasan. Producción lo deja en `false`.
   final bool usePreviewData;
   final String? selectedCheckInPhotoLabel;
+  final File? selectedCheckInPhotoFile;
   final bool isSubmittingCheckIn;
   final String? checkInFeedback;
+  final ProgressFeedbackTone checkInFeedbackTone;
 
   /// Métricas guardadas en esta sesión; limpia el formulario al cambiar.
   final int checkInSavedCount;
   final VoidCallback? onBack;
   final ValueChanged<ProgressRange>? onRangeChanged;
   final VoidCallback? onSelectCheckInPhoto;
+  final VoidCallback? onRemoveCheckInPhoto;
   final ValueChanged<ProgressCheckInDraft>? onSubmitCheckIn;
-  final ValueChanged<ProgressHistoryEntry>? onHistoryEntryTap;
   final VoidCallback? onComparePhotos;
   final VoidCallback? onAddPhoto;
   final VoidCallback? onRetryChart;
-  final VoidCallback? onRetryCheckIn;
   final VoidCallback? onRetryHistory;
   final VoidCallback? onRetryComparison;
 
@@ -248,18 +252,19 @@ class _ProgressPageState extends State<ProgressPage> {
             ProgressCheckInCard(
               status: widget.checkInStatus,
               selectedPhotoLabel: widget.selectedCheckInPhotoLabel,
+              selectedPhotoFile: widget.selectedCheckInPhotoFile,
               isSubmitting: widget.isSubmittingCheckIn,
               feedbackMessage: widget.checkInFeedback,
+              feedbackTone: widget.checkInFeedbackTone,
               savedCount: widget.checkInSavedCount,
               onSelectPhoto: widget.onSelectCheckInPhoto,
+              onRemovePhoto: widget.onRemoveCheckInPhoto,
               onSubmit: widget.onSubmitCheckIn,
-              onRetry: widget.onRetryCheckIn,
             ),
             const SizedBox(height: 16),
             ProgressHistoryCard(
               status: widget.historyStatus,
               entries: historyEntries,
-              onEntryTap: widget.onHistoryEntryTap,
               onRetry: widget.onRetryHistory,
             ),
             const SizedBox(height: 16),

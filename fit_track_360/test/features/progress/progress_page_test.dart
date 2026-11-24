@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fit_track_360/features/progress/presentation/progress_page.dart';
 import 'package:fit_track_360/features/progress/presentation/state/progress_view_state.dart';
 import 'package:flutter/material.dart';
@@ -367,5 +369,118 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Tu peso aún no se guarda (#122).'), findsOneWidget);
+  });
+
+  group('#229 check-in y gráfica', () {
+    ProgressChartData chart(int count) => ProgressChartData(
+      currentWeightKg: 74.2,
+      periodDeltaKg: -1.4,
+      averageWeightKg: 74.9,
+      points: [
+        for (var i = 0; i < count; i++)
+          ProgressChartPoint(label: 'P$i', weightKg: 76 - i * 0.3),
+      ],
+    );
+
+    testWidgets('la foto elegida muestra miniatura y se puede quitar', (
+      tester,
+    ) async {
+      var removed = 0;
+      await tester.pumpWidget(
+        wrap(
+          ProgressPage(
+            selectedCheckInPhotoLabel: 'selfie.jpg',
+            selectedCheckInPhotoFile: File('/tmp/no-existe-229.jpg'),
+            onRemoveCheckInPhoto: () => removed++,
+          ),
+        ),
+      );
+      final remove = find.byKey(const Key('checkin-remove-photo'));
+      await tester.ensureVisible(remove);
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('checkin-photo-thumbnail')), findsOneWidget);
+      expect(find.text('Quitar'), findsOneWidget);
+      await tester.tap(remove);
+      expect(removed, 1);
+    });
+
+    testWidgets('sin foto elegida no ofrece «Quitar»', (tester) async {
+      await tester.pumpWidget(wrap(ProgressPage(onRemoveCheckInPhoto: () {})));
+      expect(find.byKey(const Key('checkin-remove-photo')), findsNothing);
+      expect(find.byKey(const Key('checkin-photo-thumbnail')), findsNothing);
+    });
+
+    testWidgets('el aviso de éxito y el de error se distinguen', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        wrap(
+          const ProgressPage(
+            checkInFeedback: 'Check-in registrado correctamente.',
+            checkInFeedbackTone: ProgressFeedbackTone.success,
+          ),
+        ),
+      );
+      expect(
+        find.byKey(const Key('progress-feedback-success')),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('progress-feedback-error')), findsNothing);
+      expect(find.byIcon(Icons.check_circle_outline_rounded), findsOneWidget);
+
+      await tester.pumpWidget(
+        wrap(
+          const ProgressPage(
+            checkInFeedback: 'Peso inválido',
+            checkInFeedbackTone: ProgressFeedbackTone.error,
+          ),
+        ),
+      );
+      expect(find.byKey(const Key('progress-feedback-error')), findsOneWidget);
+      expect(find.byKey(const Key('progress-feedback-success')), findsNothing);
+      expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
+    });
+
+    testWidgets('la gráfica tiene un resumen para lectores de pantalla', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(wrap(ProgressPage(chartData: chart(3))));
+
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            r'^Gráfica de evolución de peso, últimos 30 días: 3 registros '
+            r'del P0 al P2\. Peso actual 74\.2 kg, variación -1\.4 kg, '
+            r'promedio 74\.9 kg',
+          ),
+        ),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('las etiquetas del eje X quedan bajo su punto', (tester) async {
+      await tester.pumpWidget(wrap(ProgressPage(chartData: chart(6))));
+      await tester.pumpAndSettle();
+
+      final plot = tester.getRect(
+        find.byKey(const Key('progress-weight-chart-plot')),
+      );
+      final first = tester.getRect(
+        find.byKey(const Key('progress-chart-x-label-0')),
+      );
+      final middle = tester.getRect(
+        find.byKey(const Key('progress-chart-x-label-3')),
+      );
+      final last = tester.getRect(
+        find.byKey(const Key('progress-chart-x-label-5')),
+      );
+
+      expect(first.left, closeTo(plot.left, 0.5));
+      expect(last.right, closeTo(plot.right, 0.5));
+      expect(middle.center.dx, closeTo(plot.left + plot.width * 3 / 5, 0.5));
+    });
   });
 }

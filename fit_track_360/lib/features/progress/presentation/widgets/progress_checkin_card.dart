@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../../design_system/components/primary_button.dart';
@@ -8,6 +10,7 @@ import '../../../../design_system/widgets/ds_text_field.dart';
 import '../../domain/body_weight_validation.dart';
 import '../state/progress_view_state.dart';
 import 'progress_section_shell.dart';
+import 'progress_status_banner.dart';
 
 /// Formulario Liquid Glass de check-in diario: peso, medidas opcionales, notas y foto P1.
 class ProgressCheckInCard extends StatefulWidget {
@@ -19,10 +22,13 @@ class ProgressCheckInCard extends StatefulWidget {
     this.initialWaistText = '',
     this.initialNotesText = '',
     this.selectedPhotoLabel,
+    this.selectedPhotoFile,
     this.isSubmitting = false,
     this.feedbackMessage,
+    this.feedbackTone = ProgressFeedbackTone.success,
     this.savedCount = 0,
     this.onSelectPhoto,
+    this.onRemovePhoto,
     this.onSubmit,
     this.onRetry,
   });
@@ -33,15 +39,22 @@ class ProgressCheckInCard extends StatefulWidget {
   final String initialWaistText;
   final String initialNotesText;
   final String? selectedPhotoLabel;
+
+  /// Archivo elegido para la miniatura (opcional; sin él se muestra un icono).
+  final File? selectedPhotoFile;
   final bool isSubmitting;
 
   /// Resultado del último envío (éxito o error decidido por el ViewModel).
   final String? feedbackMessage;
 
+  /// Tono del aviso: éxito, aviso parcial o error.
+  final ProgressFeedbackTone feedbackTone;
+
   /// Contador de métricas guardadas (ViewModel). Cuando cambia, el
   /// formulario se limpia.
   final int savedCount;
   final VoidCallback? onSelectPhoto;
+  final VoidCallback? onRemovePhoto;
   final ValueChanged<ProgressCheckInDraft>? onSubmit;
   final VoidCallback? onRetry;
 
@@ -228,23 +241,38 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
           const SizedBox(height: 14),
           _PhotoSlotButton(
             selectedPhotoLabel: widget.selectedPhotoLabel,
+            selectedPhotoFile: widget.selectedPhotoFile,
             hasPhoto: hasPhoto,
             enabled: !widget.isSubmitting,
             onTap: widget.onSelectPhoto,
           ),
+          if (hasPhoto && widget.onRemovePhoto != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: const Key('checkin-remove-photo'),
+                onPressed: widget.isSubmitting ? null : widget.onRemovePhoto,
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+                label: const Text(
+                  'Quitar',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
           PrimaryButton(
             label: widget.isSubmitting ? 'Guardando...' : 'Guardar check-in',
             onPressed: widget.isSubmitting ? null : _handleSubmit,
           ),
           if (widget.feedbackMessage != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              widget.feedbackMessage!,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textSecondary,
-              ),
+            const SizedBox(height: 12),
+            ProgressStatusBanner(
+              message: widget.feedbackMessage!,
+              tone: widget.feedbackTone,
             ),
           ],
         ],
@@ -256,12 +284,14 @@ class _ProgressCheckInCardState extends State<ProgressCheckInCard> {
 class _PhotoSlotButton extends StatelessWidget {
   const _PhotoSlotButton({
     required this.selectedPhotoLabel,
+    required this.selectedPhotoFile,
     required this.hasPhoto,
     required this.enabled,
     this.onTap,
   });
 
   final String? selectedPhotoLabel;
+  final File? selectedPhotoFile;
   final bool hasPhoto;
   final bool enabled;
   final VoidCallback? onTap;
@@ -271,6 +301,7 @@ class _PhotoSlotButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        key: const Key('checkin-photo-slot'),
         onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(AppRadii.inner),
         child: Ink(
@@ -289,18 +320,22 @@ class _PhotoSlotButton extends StatelessWidget {
               Container(
                 width: 44,
                 height: 44,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(AppRadii.option),
                   color: Colors.white.withValues(alpha: 0.08),
                   border: Border.all(color: AppColors.glassBorder),
                 ),
-                child: Icon(
-                  hasPhoto
-                      ? Icons.photo_library_outlined
-                      : Icons.add_a_photo_outlined,
-                  color: AppColors.textPrimary,
-                  size: 20,
-                ),
+                child: hasPhoto && selectedPhotoFile != null
+                    ? Image.file(
+                        selectedPhotoFile!,
+                        key: const Key('checkin-photo-thumbnail'),
+                        fit: BoxFit.cover,
+                        semanticLabel: 'Miniatura de la foto elegida',
+                        errorBuilder: (context, error, stackTrace) =>
+                            const _PhotoSlotIcon(hasPhoto: true),
+                      )
+                    : _PhotoSlotIcon(hasPhoto: hasPhoto),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -339,6 +374,21 @@ class _PhotoSlotButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PhotoSlotIcon extends StatelessWidget {
+  const _PhotoSlotIcon({required this.hasPhoto});
+
+  final bool hasPhoto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Icon(
+      hasPhoto ? Icons.photo_library_outlined : Icons.add_a_photo_outlined,
+      color: AppColors.textPrimary,
+      size: 20,
     );
   }
 }

@@ -37,8 +37,8 @@ const List<GlassNavDestination> appShellDestinations = [
   ),
   GlassNavDestination(
     label: 'Progreso',
-    icon: Icons.photo_camera_outlined,
-    selectedIcon: Icons.photo_camera_rounded,
+    icon: Icons.trending_up_outlined,
+    selectedIcon: Icons.trending_up_rounded,
   ),
   GlassNavDestination(
     label: 'Perfil',

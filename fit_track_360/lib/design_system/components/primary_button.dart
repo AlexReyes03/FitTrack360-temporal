@@ -12,11 +12,20 @@ class PrimaryButton extends StatefulWidget {
   final VoidCallback? onPressed;
   final PrimaryButtonVariant variant;
 
+  /// Muestra un spinner y bloquea toques (evita el doble envío) sin el look
+  /// deshabilitado: la acción sigue en curso, no está prohibida.
+  final bool isLoading;
+
+  /// Etiqueta durante la carga (p. ej. «Enviando…»); por defecto [label].
+  final String? loadingLabel;
+
   const PrimaryButton({
     super.key,
     required this.label,
     this.onPressed,
     this.variant = PrimaryButtonVariant.primary,
+    this.isLoading = false,
+    this.loadingLabel,
   });
 
   @override
@@ -59,8 +68,17 @@ class _PrimaryButtonState extends State<PrimaryButton> {
   );
 
   @override
+  void didUpdateWidget(PrimaryButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_pressed && (widget.onPressed == null || widget.isLoading)) {
+      _pressed = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null;
+    final action = widget.isLoading ? null : widget.onPressed;
+    final enabled = action != null;
     final destructive = widget.variant == PrimaryButtonVariant.destructive;
 
     final gradient = destructive
@@ -76,32 +94,65 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         ? AppTypography.cta.copyWith(color: AppColors.accentWhite)
         : AppTypography.cta;
 
-    return Opacity(
-      opacity: enabled ? 1 : 0.55,
-      child: GestureDetector(
-        onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-        onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-        onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
-        onTap: widget.onPressed,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          transform: Matrix4.translationValues(0, _pressed ? -1 : 0, 0),
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 32),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadii.pill),
-            gradient: gradient,
-            border: Border.all(color: borderColor),
-            boxShadow: [
-              BoxShadow(
-                color: shadowColor,
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
+    final label = widget.isLoading
+        ? (widget.loadingLabel ?? widget.label)
+        : widget.label;
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      onTap: action,
+      excludeSemantics: true,
+      child: Opacity(
+        opacity: widget.onPressed != null ? 1 : 0.55,
+        child: GestureDetector(
+          onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+          onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+          onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
+          onTap: action,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            transform: Matrix4.translationValues(0, _pressed ? -1 : 0, 0),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 32),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadii.pill),
+              gradient: gradient,
+              border: Border.all(color: borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: shadowColor,
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (widget.isLoading) ...[
+                  SizedBox.square(
+                    key: const ValueKey('primary-button-spinner'),
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: labelStyle.color,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: labelStyle,
+                  ),
+                ),
+              ],
+            ),
           ),
-          child: Center(child: Text(widget.label, style: labelStyle)),
         ),
       ),
     );

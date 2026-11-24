@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_client.dart';
@@ -10,6 +11,7 @@ import '../../../core/notifications/local_reminder_service.dart';
 import '../../../core/security/biometric_service.dart';
 import '../../../core/security/local_biometric_service.dart';
 import '../../../core/widgets/offline_banner.dart';
+import '../../../core/widgets/remote_state_views.dart';
 import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
@@ -29,6 +31,7 @@ import '../domain/profile_validation.dart';
 import '../domain/user_profile.dart';
 import 'privacy_notice_page.dart';
 import 'profile_view_model.dart';
+import 'widgets/profile_controls.dart';
 
 /// Títulos y valores sobre el fondo oscuro: siempre `textPrimary`.
 /// `AppTypography.cta` es solo para texto sobre botones claros.
@@ -42,8 +45,11 @@ const TextStyle _secondary = TextStyle(
   fontSize: 14,
 );
 
-/// Perfil (W12-12): datos, metas, preferencias, P3, O1, exportación,
-/// aviso de privacidad y cierre de sesión.
+/// Perfil (W12-12, UX-11): datos, metas, preferencias, P3, O1, exportación,
+/// aviso de privacidad, eliminación de cuenta y cierre de sesión.
+///
+/// Regla de guardado: el formulario (nombre, metas y descanso) se guarda con
+/// «Guardar cambios»; unidades e interruptores se guardan al tocarlos.
 class ProfilePage extends StatefulWidget {
   const ProfilePage({
     super.key,
@@ -85,10 +91,9 @@ class _ProfilePageState extends State<ProfilePage> {
   final _carbs = TextEditingController();
   final _fat = TextEditingController();
   final _rest = TextEditingController();
-  WeightUnit _weightUnit = WeightUnit.kg;
-  DistanceUnit _distanceUnit = DistanceUnit.km;
   UserProfile? _filledFrom;
   bool _loggingOut = false;
+  bool _redirectingToLogin = false;
 
   @override
   void didChangeDependencies() {
@@ -117,12 +122,24 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _onChange() {
+    if (_vm.sessionExpired) {
+      _goToLogin();
+      return;
+    }
     final profile = _vm.profile;
-    if (profile != null && !identical(profile, _filledFrom)) {
+    if (profile != null && _formChanged(_filledFrom, profile)) {
       _fill(profile);
     }
     if (mounted) setState(() {});
   }
+
+  /// Una preferencia guardada al instante no debe borrar lo que el usuario
+  /// lleva escrito en el formulario.
+  bool _formChanged(UserProfile? before, UserProfile after) =>
+      before == null ||
+      before.displayName != after.displayName ||
+      before.goals != after.goals ||
+      before.preferences.restSeconds != after.preferences.restSeconds;
 
   void _fill(UserProfile profile) {
     _filledFrom = profile;
@@ -132,8 +149,13 @@ class _ProfilePageState extends State<ProfilePage> {
     _carbs.text = '${profile.goals.carbsGoalG}';
     _fat.text = '${profile.goals.fatGoalG}';
     _rest.text = '${profile.preferences.restSeconds}';
-    _weightUnit = profile.preferences.weightUnit;
-    _distanceUnit = profile.preferences.distanceUnit;
+  }
+
+  /// Igual que Inicio: una sesión rechazada por el API vuelve a `/login`.
+  void _goToLogin() {
+    if (_redirectingToLogin || !mounted) return;
+    _redirectingToLogin = true;
+    context.go('/login');
   }
 
   @override
@@ -164,8 +186,6 @@ class _ProfilePageState extends State<ProfilePage> {
         fatGoalG: _fat.text,
         restSeconds: _rest.text,
       ),
-      weightUnit: _weightUnit,
-      distanceUnit: _distanceUnit,
     );
   }
 
@@ -173,31 +193,23 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _export() async {
     final json = await _vm.exportData(origin: _exportOrigin());
     if (json == null || !mounted) return;
-    await showDialog<void>(
+    await showProfileGlassDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.bgMid,
-        title: const Text(
-          'Tus datos exportados',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: SingleChildScrollView(
-          child: SelectableText(
-            json,
-            style: const TextStyle(color: AppColors.textSecondary),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cerrar',
-              style: TextStyle(color: AppColors.textPrimary),
-            ),
-          ),
-        ],
-      ),
+      builder: (context) => _ExportFallbackDialog(json: json),
     );
+  }
+
+  /// Confirmación destructiva antes de eliminar la cuenta.
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showProfileGlassDialog<bool>(
+      context: context,
+      builder: (context) => const _DeleteAccountDialog(),
+    );
+    if (confirmed != true || !mounted) return;
+    final deleted = await _vm.deleteAccount();
+    if (!deleted || !mounted) return;
+    NotificationsScope.maybeOf(context)?.clearOnLogout();
+    _goToLogin();
   }
 
   /// Rectángulo global de la fila «Exportar mis datos» (ancla en iPad).
@@ -250,22 +262,29 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
             Expanded(
-              child: _vm.state.when(
-                loading: () => const Center(
-                  child: CircularProgressIndicator(
-                    color: AppColors.accentWhite,
-                  ),
-                ),
-                error: (_, _) => _StatusMessage(
-                  text: 'No pudimos cargar tu perfil.',
-                  onRetry: _vm.load,
-                ),
-                empty: () => _StatusMessage(
-                  text: 'Aún no hay datos de perfil.',
-                  onRetry: _vm.load,
-                ),
-                data: (profile) => _content(profile, embedded: embedded),
-              ),
+              // Con datos, el contenido trae su propio scroll; carga, error y
+              // vacío usan las vistas remotas del DS dentro de una lista.
+              child: _vm.profile != null
+                  ? _content(_vm.profile!, embedded: embedded)
+                  : ListView(
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        AsyncStateView<UserProfile>(
+                          state: _vm.state,
+                          loadingMessage: 'Cargando tu perfil...',
+                          errorTitle: 'No pudimos cargar tu perfil.',
+                          errorMessage:
+                              'Revisa tu conexión e intenta de nuevo.',
+                          onRetry: _vm.load,
+                          emptyTitle: 'Aún no hay datos de perfil.',
+                          emptyMessage: 'Intenta cargarlo de nuevo.',
+                          emptyIcon: Icons.person_outline_rounded,
+                          emptyActionLabel: 'Reintentar',
+                          onEmptyAction: _vm.load,
+                          dataBuilder: (_) => const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -280,6 +299,10 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _content(UserProfile profile, {required bool embedded}) {
     final errors = _vm.fieldErrors;
     final prefs = profile.preferences;
+    final formFeedback = _vm.formFeedback;
+    final preferencesFeedback = _vm.preferencesFeedback;
+    final dataFeedback = _vm.dataFeedback;
+    final prefsBusy = _vm.updatingPreferences || _vm.savingForm;
     return ListView(
       padding: EdgeInsets.fromLTRB(24, embedded ? 12 : 24, 24, 32),
       children: [
@@ -328,6 +351,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 key: const Key('goals-calories-value'),
                 style: _sectionTitle.copyWith(fontSize: 16),
               ),
+              const SizedBox(height: 4),
+              const Text(
+                'Edita tus datos y pulsa «Guardar cambios».',
+                style: _secondary,
+              ),
               const SizedBox(height: 12),
               DsTextField(
                 controller: _name,
@@ -362,8 +390,6 @@ class _ProfilePageState extends State<ProfilePage> {
                 keyboardType: TextInputType.number,
                 errorText: errors['fatGoalG'],
               ),
-              const SizedBox(height: 20),
-              Text('Preferencias', style: _sectionTitle),
               const SizedBox(height: 12),
               DsTextField(
                 controller: _rest,
@@ -371,92 +397,82 @@ class _ProfilePageState extends State<ProfilePage> {
                 keyboardType: TextInputType.number,
                 errorText: errors['restSeconds'],
               ),
-              const SizedBox(height: 12),
-              _UnitRow<WeightUnit>(
-                label: 'Peso',
-                values: WeightUnit.values,
-                selected: _weightUnit,
-                onSelected: (u) => setState(() => _weightUnit = u),
-              ),
-              _UnitRow<DistanceUnit>(
-                label: 'Distancia',
-                values: DistanceUnit.values,
-                selected: _distanceUnit,
-                onSelected: (u) => setState(() => _distanceUnit = u),
-              ),
               const SizedBox(height: 16),
               PrimaryButton(
-                label: _vm.saving ? 'Guardando...' : 'Guardar cambios',
-                onPressed: _vm.saving ? null : _save,
+                label: _vm.savingForm ? 'Guardando...' : 'Guardar cambios',
+                onPressed: _vm.savingForm || _vm.updatingPreferences
+                    ? null
+                    : _save,
               ),
+              if (formFeedback != null)
+                ProfileFeedbackBanner(
+                  key: const Key('profile-form-feedback'),
+                  feedback: formFeedback,
+                ),
             ],
           ),
         ),
-        if (_vm.message != null) ...[
-          const SizedBox(height: 16),
-          Text(
-            _vm.message!,
-            key: const Key('profile-message'),
-            style: const TextStyle(color: AppColors.warningText),
-          ),
-          if (_vm.showOpenSettings)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: _vm.openSystemSettings,
-                child: const Text(
-                  'Abrir ajustes',
-                  style: TextStyle(color: AppColors.textPrimary),
-                ),
-              ),
-            ),
-        ],
         const SizedBox(height: 16),
         GlassSurface(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Notificaciones y seguridad', style: _sectionTitle),
-              _Transparent(
-                child: SwitchListTile(
-                  key: const Key('reminder-switch'),
-                  contentPadding: EdgeInsets.zero,
-                  activeThumbColor: AppColors.accentWhite,
-                  value: _vm.reminderSupported && prefs.notificationsEnabled,
-                  onChanged: _vm.reminderSupported && !_vm.saving
-                      ? _vm.setReminder
-                      : null,
-                  title: const Text(
-                    'Recordatorio diario',
-                    style: TextStyle(color: AppColors.textPrimary),
-                  ),
-                  subtitle: Text(
-                    _vm.reminderSupported
-                        ? 'Te avisamos una vez al día para entrenar o registrar '
-                              'tu comida. Te pediremos permiso al activarlo.'
-                        : 'Tu dispositivo no admite recordatorios por ahora.',
-                    style: _secondary,
-                  ),
-                ),
+              Text('Preferencias', style: _sectionTitle),
+              const SizedBox(height: 4),
+              const Text(
+                'Estos ajustes se guardan en cuanto los cambias.',
+                style: _secondary,
+              ),
+              const SizedBox(height: 8),
+              ProfileSegmentedSelector<WeightUnit>(
+                key: const Key('weight-unit-selector'),
+                label: 'Unidad de peso',
+                values: WeightUnit.values,
+                selected: prefs.weightUnit,
+                labelOf: (unit) => unit.label,
+                onSelected: prefsBusy ? null : _vm.setWeightUnit,
+              ),
+              ProfileSegmentedSelector<DistanceUnit>(
+                key: const Key('distance-unit-selector'),
+                label: 'Unidad de distancia',
+                values: DistanceUnit.values,
+                selected: prefs.distanceUnit,
+                labelOf: (unit) => unit.label,
+                onSelected: prefsBusy ? null : _vm.setDistanceUnit,
+              ),
+              const SizedBox(height: 4),
+              ProfileSwitchRow(
+                key: const Key('reminder-switch'),
+                title: 'Recordatorio diario',
+                subtitle: _vm.reminderSupported
+                    ? 'Te avisamos una vez al día para entrenar o registrar '
+                          'tu comida. Te pediremos permiso al activarlo.'
+                    : 'Tu dispositivo no admite recordatorios por ahora.',
+                value: _vm.reminderSupported && prefs.notificationsEnabled,
+                onChanged: _vm.reminderSupported && !prefsBusy
+                    ? _vm.setReminder
+                    : null,
               ),
               if (_vm.biometricAvailable)
-                _Transparent(
-                  child: SwitchListTile(
-                    key: const Key('biometric-switch'),
-                    contentPadding: EdgeInsets.zero,
-                    activeThumbColor: AppColors.accentWhite,
-                    value: prefs.biometricEnabled,
-                    onChanged: _vm.saving ? null : _vm.setBiometric,
-                    title: const Text(
-                      'Desbloqueo con biometría',
-                      style: TextStyle(color: AppColors.textPrimary),
-                    ),
-                    subtitle: const Text(
+                ProfileSwitchRow(
+                  key: const Key('biometric-switch'),
+                  title: 'Desbloqueo con biometría',
+                  subtitle:
                       'Usa tu huella o rostro. Ningún dato biométrico sale del '
                       'dispositivo.',
-                      style: _secondary,
-                    ),
-                  ),
+                  value: prefs.biometricEnabled,
+                  onChanged: prefsBusy ? null : _vm.setBiometric,
+                ),
+              if (preferencesFeedback != null)
+                ProfileFeedbackBanner(
+                  key: const Key('profile-preferences-feedback'),
+                  feedback: preferencesFeedback,
+                  action: _vm.showOpenSettings
+                      ? ProfileGlassButton(
+                          label: 'Abrir ajustes',
+                          onPressed: _vm.openSystemSettings,
+                        )
+                      : null,
                 ),
             ],
           ),
@@ -469,21 +485,38 @@ class _ProfilePageState extends State<ProfilePage> {
               Text('Tus datos', style: _sectionTitle),
               KeyedSubtree(
                 key: _exportKey,
-                child: _LinkRow(
-                  label: 'Exportar mis datos',
+                child: ProfileActionRow(
+                  label: _vm.exporting ? 'Exportando...' : 'Exportar mis datos',
                   icon: Icons.ios_share,
+                  busy: _vm.exporting,
                   onTap: _export,
                 ),
               ),
-              _LinkRow(
+              ProfileActionRow(
                 label: 'Aviso de privacidad',
                 icon: Icons.privacy_tip_outlined,
+                // TODO(#230): usar la ruta `/aviso-privacidad` cuando exista.
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const PrivacyNoticePage(),
                   ),
                 ),
               ),
+              ProfileActionRow(
+                key: const Key('delete-account-row'),
+                label: _vm.deletingAccount
+                    ? 'Eliminando...'
+                    : 'Eliminar mi cuenta',
+                icon: Icons.delete_outline_rounded,
+                destructive: true,
+                busy: _vm.deletingAccount,
+                onTap: _confirmDeleteAccount,
+              ),
+              if (dataFeedback != null)
+                ProfileFeedbackBanner(
+                  key: const Key('profile-data-feedback'),
+                  feedback: dataFeedback,
+                ),
             ],
           ),
         ),
@@ -499,111 +532,110 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 }
 
-class _StatusMessage extends StatelessWidget {
-  const _StatusMessage({required this.text, required this.onRetry});
+/// Respaldo cuando la hoja de compartir no abre: JSON seleccionable y
+/// botón «Copiar» al portapapeles.
+class _ExportFallbackDialog extends StatefulWidget {
+  const _ExportFallbackDialog({required this.json});
 
-  final String text;
-  final VoidCallback onRetry;
+  final String json;
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: GlassSurface(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textPrimary),
-              ),
-              const SizedBox(height: 16),
-              PrimaryButton(label: 'Reintentar', onPressed: onRetry),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  State<_ExportFallbackDialog> createState() => _ExportFallbackDialogState();
 }
 
-class _UnitRow<T extends Enum> extends StatelessWidget {
-  const _UnitRow({
-    required this.label,
-    required this.values,
-    required this.selected,
-    required this.onSelected,
-  });
+class _ExportFallbackDialogState extends State<_ExportFallbackDialog> {
+  bool _copied = false;
 
-  final String label;
-  final List<T> values;
-  final T selected;
-  final ValueChanged<T> onSelected;
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.json));
+    if (mounted) setState(() => _copied = true);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(child: Text(label, style: _secondary)),
-        for (final value in values)
-          Padding(
-            padding: const EdgeInsets.only(left: 8),
-            child: ChoiceChip(
-              label: Text(value.name),
-              selected: value == selected,
-              onSelected: (_) => onSelected(value),
-              selectedColor: AppColors.accentWhite,
-              backgroundColor: AppColors.controlFillIdle,
-              labelStyle: TextStyle(
-                color: value == selected
-                    ? AppColors.textOnAccent
-                    : AppColors.textPrimary,
+        Text('Tus datos exportados', style: _sectionTitle),
+        const SizedBox(height: 6),
+        const Text(
+          'Copia este texto y guárdalo donde prefieras.',
+          style: _secondary,
+        ),
+        const SizedBox(height: 12),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 320),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xB807080C),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.glassBorder),
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              child: SelectableText(
+                widget.json,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  height: 1.4,
+                ),
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 16),
+        PrimaryButton(
+          key: const Key('export-copy-button'),
+          label: _copied ? 'Copiado' : 'Copiar',
+          onPressed: _copy,
+        ),
+        const SizedBox(height: 10),
+        ProfileGlassButton(
+          label: 'Cerrar',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ],
     );
   }
 }
 
-class _LinkRow extends StatelessWidget {
-  const _LinkRow({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
+/// Confirmación destructiva: devuelve true solo si el usuario confirma.
+class _DeleteAccountDialog extends StatelessWidget {
+  const _DeleteAccountDialog();
 
   @override
   Widget build(BuildContext context) {
-    return _Transparent(
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Icon(icon, color: AppColors.textSecondary),
-        title: Text(
-          label,
-          style: const TextStyle(color: AppColors.textPrimary),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('¿Eliminar tu cuenta?', style: _sectionTitle),
+        const SizedBox(height: 8),
+        const Text(
+          'Borraremos tu perfil, entrenamientos, rutinas, comidas, medidas y '
+          'fotos. No podrás recuperarlos. Si quieres conservar una copia, '
+          'exporta tus datos antes.',
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            height: 1.45,
+          ),
         ),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.textMuted),
-        onTap: onTap,
-      ),
+        const SizedBox(height: 20),
+        PrimaryButton(
+          key: const Key('delete-account-confirm'),
+          label: 'Sí, eliminar mi cuenta',
+          variant: PrimaryButtonVariant.destructive,
+          onPressed: () => Navigator.of(context).pop(true),
+        ),
+        const SizedBox(height: 10),
+        ProfileGlassButton(
+          label: 'Cancelar',
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+      ],
     );
   }
-}
-
-/// Material transparente para que las filas pinten su tinta sobre el vidrio.
-class _Transparent extends StatelessWidget {
-  const _Transparent({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) =>
-      Material(type: MaterialType.transparency, child: child);
 }

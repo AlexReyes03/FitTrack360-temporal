@@ -1,6 +1,9 @@
 import 'dart:async';
 
+import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
+import 'package:fit_track_360/core/widgets/remote_state_views.dart';
+import 'package:fit_track_360/design_system/components/glass_surface.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/design_system/components/primary_button.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
@@ -10,10 +13,13 @@ import 'package:fit_track_360/features/notifications/domain/app_notification.dar
 import 'package:fit_track_360/features/notifications/presentation/notifications_scope.dart';
 import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
 import 'package:fit_track_360/features/notifications/presentation/push_device_scope.dart';
+import 'package:fit_track_360/features/settings/domain/profile_repository.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
+import 'package:fit_track_360/features/settings/presentation/privacy_notice_page.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_page.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_view_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
@@ -777,6 +783,294 @@ void main() {
         expect(scopedPush.disposeCalls, 0);
       },
     );
+  });
+
+  group('UX-11 sesión expirada', () {
+    testWidgets('al cargar el perfil con sesión expirada lleva a login', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      deps.repository.fetchError = const SessionExpiredException();
+      await _pump(tester, deps);
+
+      expect(find.text('login'), findsOneWidget);
+      expect(find.text('No pudimos cargar tu perfil.'), findsNothing);
+    });
+
+    testWidgets('al exportar con sesión expirada lleva a login', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      deps.repository.exportError = const SessionExpiredException();
+      await _pump(tester, deps);
+
+      await tester.tap(find.text('Exportar mis datos'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('login'), findsOneWidget);
+    });
+  });
+
+  group('UX-11 estados de carga con el DS', () {
+    testWidgets('el error usa RemoteErrorView con reintentar', (tester) async {
+      final deps = _Deps();
+      deps.repository.fetchError = Exception('500');
+      await _pump(tester, deps);
+
+      expect(find.byType(RemoteErrorView), findsOneWidget);
+    });
+
+    testWidgets('el vacío usa RemoteEmptyView', (tester) async {
+      final deps = _Deps(repository: FakeProfileRepository()..profile = null);
+      await _pump(tester, deps);
+
+      expect(find.byType(RemoteEmptyView), findsOneWidget);
+    });
+  });
+
+  group('UX-11 regla de guardado y feedback', () {
+    testWidgets('tocar un interruptor no pone «Guardar cambios» en Guardando', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+      deps.repository.updateGate = Completer<void>();
+
+      await tester.tap(find.byKey(const Key('reminder-switch')));
+      await tester.pump();
+
+      expect(find.text('Guardando...'), findsNothing);
+      expect(find.text('Guardar cambios'), findsOneWidget);
+
+      deps.repository.updateGate!.complete();
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('profile-preferences-feedback')),
+          matching: find.text(preferenceSavedMessage),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('las unidades se leen completas y se guardan al tocarlas', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+
+      for (final label in ['Kilogramos', 'Libras', 'Kilómetros', 'Millas']) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      expect(find.text('mi'), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
+
+      await tester.tap(find.text('Libras'));
+      await tester.pumpAndSettle();
+
+      expect(deps.repository.updates, hasLength(1));
+      expect(
+        deps.repository.updates.single.preferences!.weightUnit,
+        WeightUnit.lb,
+      );
+      expect(find.text(preferenceSavedMessage), findsOneWidget);
+    });
+
+    testWidgets('éxito del formulario aparece junto al botón y no en ámbar', (
+      tester,
+    ) async {
+      await _pump(tester, _Deps());
+
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      final feedback = find.byKey(const Key('profile-form-feedback'));
+      final text = tester.widget<Text>(
+        find.descendant(of: feedback, matching: find.text(formSavedMessage)),
+      );
+      expect(text.style?.color, isNot(AppColors.warningText));
+      expect(text.style?.color, isNot(AppColors.dangerText));
+    });
+
+    testWidgets('el error al guardar usa el color de peligro', (tester) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+      deps.repository.updateError = Exception('500');
+
+      await tester.tap(find.text('Guardar cambios'));
+      await tester.pumpAndSettle();
+
+      final text = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const Key('profile-form-feedback')),
+          matching: find.text(saveFailedMessage),
+        ),
+      );
+      expect(text.style?.color, AppColors.dangerText);
+    });
+
+    testWidgets('no quedan filas Material crudas en Perfil', (tester) async {
+      await _pump(tester, _Deps());
+
+      expect(find.byType(ListTile), findsNothing);
+      expect(find.byType(SwitchListTile), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
+      expect(find.byType(TextButton), findsNothing);
+    });
+  });
+
+  group('UX-11 exportación', () {
+    testWidgets('muestra «Exportando...» y no permite tocar dos veces', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      deps.repository
+        ..exportJson = '{"a":1}'
+        ..exportGate = Completer<void>();
+      await _pump(tester, deps);
+
+      await tester.tap(find.text('Exportar mis datos'));
+      await tester.pump();
+      expect(find.text('Exportando...'), findsOneWidget);
+
+      await tester.tap(find.text('Exportando...'));
+      await tester.pump();
+      deps.repository.exportGate!.complete();
+      await tester.pumpAndSettle();
+
+      expect(deps.repository.exportCalls, 1);
+      expect(find.text('Exportar mis datos'), findsOneWidget);
+    });
+
+    testWidgets('el diálogo de respaldo es glass y permite copiar', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final deps = _Deps(sharer: FakeExportSharer(error: Exception('plugin')));
+      deps.repository.exportJson = '{"profile":{"displayName":"Ana"}}';
+      await _pump(tester, deps);
+
+      await tester.tap(find.text('Exportar mis datos'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(Dialog),
+          matching: find.byType(GlassSurface),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Copiar'));
+      await tester.pumpAndSettle();
+
+      expect(copied, '{"profile":{"displayName":"Ana"}}');
+      expect(find.text('Copiado'), findsOneWidget);
+
+      await tester.tap(find.text('Cerrar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Tus datos exportados'), findsNothing);
+    });
+  });
+
+  group('UX-11 eliminar cuenta', () {
+    testWidgets('cancelar la confirmación no elimina nada', (tester) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      expect(find.text('¿Eliminar tu cuenta?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      expect(deps.repository.deleteCalls, 0);
+      expect(find.byKey(const Key('profile-name')), findsOneWidget);
+    });
+
+    testWidgets('confirmar elimina la cuenta, limpia la sesión y va a login', (
+      tester,
+    ) async {
+      final deps = _Deps();
+      await _pump(tester, deps);
+
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      final confirm = find.byKey(const Key('delete-account-confirm'));
+      expect(
+        tester.widget<PrimaryButton>(confirm).variant,
+        PrimaryButtonVariant.destructive,
+      );
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+
+      expect(deps.repository.deleteCalls, 1);
+      expect(deps.storage.accessToken, isNull);
+      expect(find.text('login'), findsOneWidget);
+    });
+
+    testWidgets('si falla, muestra el error junto a la acción', (tester) async {
+      final deps = _Deps();
+      deps.repository.deleteError = const AccountDeletionException();
+      await _pump(tester, deps);
+
+      await tester.tap(find.text('Eliminar mi cuenta'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('delete-account-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('profile-data-feedback')),
+          matching: find.text(accountDeletionFailedMessage),
+        ),
+        findsOneWidget,
+      );
+      expect(deps.storage.accessToken, 'access');
+    });
+  });
+
+  group('UX-11 aviso de privacidad', () {
+    testWidgets('sin jerga técnica y explica cómo eliminar la cuenta', (
+      tester,
+    ) async {
+      final allText = privacyNoticeSections
+          .map((section) => '${section.$1} ${section.$2}')
+          .join(' ');
+      for (final term in ['API', 'Firebase', 'EXIF', 'metadatos técnicos']) {
+        expect(allText, isNot(contains(term)), reason: term);
+      }
+      expect(allText, contains('Eliminar mi cuenta'));
+      expect(allText, contains('Exportar mis datos'));
+
+      await _pump(tester, _Deps());
+      await tester.tap(find.text('Aviso de privacidad'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(PrivacyNoticePage), findsOneWidget);
+      expect(find.byType(AppBar), findsNothing);
+      expect(find.text('Aviso de privacidad'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Volver'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PrivacyNoticePage), findsNothing);
+    });
   });
 }
 

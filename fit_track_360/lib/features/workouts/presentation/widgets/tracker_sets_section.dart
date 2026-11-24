@@ -8,6 +8,7 @@ import '../../../../design_system/tokens/app_typography.dart';
 import '../../domain/exercise_reference.dart';
 import 'previous_set_reference.dart';
 import 'tracker_controls.dart';
+import 'workout_number_field.dart';
 
 /// Modelo visual de una fila de serie en el tracker.
 class TrackerSetItem {
@@ -274,13 +275,14 @@ class _TrackerSetRowState extends State<_TrackerSetRow> {
           Row(
             children: [
               Expanded(
-                child: _NumericStepperField(
+                child: WorkoutStepperField(
                   label: 'Peso (kg)',
                   controller: _weightController,
                   hasError: item.hasWeightError,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
+                  inputFormatters: WorkoutInputFormatters.decimal,
                   decrementTooltip: 'Disminuir peso',
                   incrementTooltip: 'Aumentar peso',
                   onChanged: widget.onWeightChanged,
@@ -290,11 +292,11 @@ class _TrackerSetRowState extends State<_TrackerSetRow> {
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: _NumericStepperField(
+                child: WorkoutStepperField(
                   label: 'Repeticiones',
                   controller: _repsController,
                   hasError: item.hasRepsError,
-                  keyboardType: TextInputType.number,
+                  inputFormatters: WorkoutInputFormatters.integer,
                   decrementTooltip: 'Disminuir repeticiones',
                   incrementTooltip: 'Aumentar repeticiones',
                   onChanged: widget.onRepsChanged,
@@ -316,107 +318,6 @@ class _TrackerSetRowState extends State<_TrackerSetRow> {
           ],
         ],
       ),
-    );
-  }
-}
-
-class _NumericStepperField extends StatelessWidget {
-  const _NumericStepperField({
-    required this.label,
-    required this.controller,
-    required this.hasError,
-    required this.keyboardType,
-    required this.decrementTooltip,
-    required this.incrementTooltip,
-    this.onChanged,
-    this.onDecrement,
-    this.onIncrement,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final bool hasError;
-  final TextInputType keyboardType;
-  final String decrementTooltip;
-  final String incrementTooltip;
-  final ValueChanged<String>? onChanged;
-  final VoidCallback? onDecrement;
-  final VoidCallback? onIncrement;
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = hasError
-        ? AppColors.dangerBorder
-        : Colors.white.withValues(alpha: 0.18);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: AppTypography.body.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: hasError ? AppColors.dangerText : AppColors.textSecondary,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            TrackerIconControl(
-              icon: Icons.remove_rounded,
-              tooltip: decrementTooltip,
-              size: 34,
-              onPressed: onDecrement,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                keyboardType: keyboardType,
-                textAlign: TextAlign.center,
-                onChanged: onChanged,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: [FontFeature.tabularFigures()],
-                ),
-                cursorColor: AppColors.accentWhite,
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: true,
-                  fillColor: const Color(0xB807080C),
-                  contentPadding: const EdgeInsets.symmetric(
-                    vertical: 9,
-                    horizontal: 8,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.badge + 2),
-                    borderSide: BorderSide(color: borderColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppRadii.badge + 2),
-                    borderSide: BorderSide(
-                      color: hasError
-                          ? AppColors.dangerBorder
-                          : Colors.white.withValues(alpha: 0.6),
-                      width: 1.5,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            TrackerIconControl(
-              icon: Icons.add_rounded,
-              tooltip: incrementTooltip,
-              size: 34,
-              onPressed: onIncrement,
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

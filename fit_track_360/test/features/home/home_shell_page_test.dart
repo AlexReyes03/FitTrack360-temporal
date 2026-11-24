@@ -5,6 +5,7 @@ import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/network/connectivity_service.dart';
 import 'package:fit_track_360/core/notifications/fcm_messaging_gateway.dart';
 import 'package:fit_track_360/core/session_storage.dart';
+import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
 import 'package:fit_track_360/features/home/presentation/app_shell_page.dart';
 import 'package:fit_track_360/features/home/presentation/home_shell_page.dart';
@@ -177,34 +178,42 @@ http.Response _profile({bool? notificationsEnabled}) => http.Response.bytes(
   200,
 );
 
-http.Response _dashboardEmpty() => http.Response.bytes(
-  utf8.encode(
-    jsonEncode({
-      'date': '2026-11-19',
-      'utcOffsetMinutes': -360,
-      'nutrition': {
-        'mealsLogged': 0,
-        'consumed': {'calories': 0, 'proteinG': 0, 'carbsG': 0, 'fatG': 0},
-        'goals': {
-          'dailyCalorieGoal': 2000,
-          'proteinGoalG': 150,
-          'carbsGoalG': 200,
-          'fatGoalG': 60,
-        },
-        'remaining': {
-          'calories': 2000,
-          'proteinG': 150,
-          'carbsG': 200,
-          'fatG': 60,
-        },
-      },
-      'session': null,
-      'latestMetric': null,
-    }),
-  ),
-  200,
-  headers: {'content-type': 'application/json'},
-);
+http.Response _dashboardEmpty() => _dashboard();
+
+http.Response _dashboard({int mealsLogged = 0, int calories = 0}) =>
+    http.Response.bytes(
+      utf8.encode(
+        jsonEncode({
+          'date': '2026-11-19',
+          'utcOffsetMinutes': -360,
+          'nutrition': {
+            'mealsLogged': mealsLogged,
+            'consumed': {
+              'calories': calories,
+              'proteinG': 0,
+              'carbsG': 0,
+              'fatG': 0,
+            },
+            'goals': {
+              'dailyCalorieGoal': 2000,
+              'proteinGoalG': 150,
+              'carbsGoalG': 200,
+              'fatGoalG': 60,
+            },
+            'remaining': {
+              'calories': 2000,
+              'proteinG': 150,
+              'carbsG': 200,
+              'fatG': 60,
+            },
+          },
+          'session': null,
+          'latestMetric': null,
+        }),
+      ),
+      200,
+      headers: {'content-type': 'application/json'},
+    );
 
 Future<http.Response> _route(http.Request request) async {
   final path = request.url.path;
@@ -628,6 +637,47 @@ void main() {
     expect(dashboardCalls, 2);
   });
 
+  testWidgets('deslizar hacia abajo recarga perfil y dashboard', (
+    tester,
+  ) async {
+    var profileCalls = 0;
+    var dashboardCalls = 0;
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient((request) async {
+        if (request.url.path.endsWith('/users/me')) {
+          profileCalls++;
+          return _profile();
+        }
+        dashboardCalls++;
+        return dashboardCalls == 1
+            ? _dashboardEmpty()
+            : _dashboard(mealsLogged: 1, calories: 1234);
+      }),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Aún no registras comidas hoy'), findsOneWidget);
+
+    final indicator = tester.widget<RefreshIndicator>(
+      find.byType(RefreshIndicator),
+    );
+    expect(indicator.color, AppColors.accentWhite);
+    expect(indicator.backgroundColor, AppColors.bgMid);
+
+    await tester.fling(
+      find.text('Nutrición de hoy'),
+      const Offset(0, 400),
+      1000,
+    );
+    await tester.pumpAndSettle();
+
+    expect(dashboardCalls, 2);
+    expect(profileCalls, 2);
+    expect(find.text('1234'), findsOneWidget);
+  });
+
   testWidgets('no desborda en una pantalla estrecha', (tester) async {
     tester.view.physicalSize = const Size(320, 640);
     tester.view.devicePixelRatio = 1;
@@ -646,6 +696,104 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Entrenar'), findsOneWidget);
+  });
+
+  testWidgets('al volver a la pestaña Inicio recarga el dashboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 6000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    var dashboardCalls = 0;
+    var mealsLogged = 0;
+    final push = _FakePushDeviceLifecycle();
+    final router = GoRouter(
+      initialLocation: '/app',
+      routes: [
+        StatefulShellRoute.indexedStack(
+          builder: (context, state, navigationShell) => AppShellPage(
+            navigationShell: navigationShell,
+            pushDeviceService: push,
+          ),
+          branches: [
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/app',
+                  builder: (context, state) => HomeShellPage(
+                    apiClient: ApiClient(
+                      storage: storage,
+                      httpClient: MockClient((request) async {
+                        if (request.url.path.endsWith('/users/me')) {
+                          return _profile();
+                        }
+                        dashboardCalls++;
+                        return _dashboard(
+                          mealsLogged: mealsLogged,
+                          calories: mealsLogged * 640,
+                        );
+                      }),
+                    ),
+                    sessionStorage: storage,
+                    connectivityService: FakeConnectivityService(online: true),
+                    stepsSensor: FakeStepsSensor(
+                      snapshots: [StepsSnapshot.unavailableDevice],
+                    ),
+                    pushDeviceService: push,
+                  ),
+                ),
+              ],
+            ),
+            for (final path in const [
+              '/app/entrenamientos',
+              '/app/comidas',
+              '/app/ejercicios',
+              '/app/progreso',
+              '/app/perfil',
+            ])
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: path,
+                    builder: (context, state) => Text('vista $path'),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    expect(dashboardCalls, 1);
+    expect(find.textContaining('Aún no registras comidas hoy'), findsOneWidget);
+
+    Finder tab(String label) => find.descendant(
+      of: find.byType(GlassBottomNavBar),
+      matching: find.text(label),
+    );
+
+    // El usuario registra una comida en otra pestaña.
+    await tester.tap(tab('Comidas'));
+    await tester.pumpAndSettle();
+    expect(dashboardCalls, 1);
+    mealsLogged = 1;
+
+    await tester.tap(tab('Inicio'));
+    await tester.pumpAndSettle();
+
+    expect(dashboardCalls, 2);
+    expect(find.text('640'), findsOneWidget);
+    // Refrescar no vuelve a sincronizar FCM: eso es de Perfil.
+    expect(push.syncCalls, hasLength(1));
+    expect(find.textContaining('Aún no registras comidas hoy'), findsNothing);
+
+    // Tocar Inicio estando ya en Inicio no dispara otra recarga.
+    await tester.tap(tab('Inicio'));
+    await tester.pumpAndSettle();
+    expect(dashboardCalls, 2);
+    expect(tester.takeException(), isNull);
   });
 
   group('ciclo de vida FCM silencioso (W13-7)', () {

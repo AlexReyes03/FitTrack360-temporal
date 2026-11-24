@@ -297,6 +297,63 @@ void main() {
     expect(vm.nutrition, isA<AsyncData>());
     vm.dispose();
   });
+
+  test('refresh conserva los bloques visibles mientras recarga', () async {
+    final repo = FakeDashboardRepository(
+      todayResult: sampleDashboard(
+        session: sampleSession(),
+        metric: sampleMetric(),
+      ),
+    );
+    final vm = HomeDashboardViewModel(
+      repository: repo,
+      stepsSensor: FakeStepsSensor(
+        snapshots: [StepsSnapshot.unavailableDevice],
+      ),
+      now: () => fixedNow,
+    );
+    await vm.load();
+
+    repo.todayResult = sampleDashboard(mealsLogged: 0);
+    final pending = vm.refresh();
+
+    // Sin esqueletos: el usuario sigue viendo lo anterior mientras recarga.
+    expect(vm.nutrition, isA<AsyncData>());
+    expect(vm.session, isA<AsyncData>());
+    expect(vm.metric, isA<AsyncData>());
+
+    await pending;
+    expect(repo.todayCalls, 2);
+    expect(vm.nutrition, isA<AsyncEmpty>());
+    expect(vm.session, isA<AsyncEmpty>());
+    expect(vm.metric, isA<AsyncEmpty>());
+
+    vm.dispose();
+  });
+
+  test('refresh tras un error vuelve a mostrar la carga', () async {
+    final repo = FakeDashboardRepository(error: Exception('500'));
+    final vm = HomeDashboardViewModel(
+      repository: repo,
+      stepsSensor: FakeStepsSensor(
+        snapshots: [StepsSnapshot.unavailableDevice],
+      ),
+      now: () => fixedNow,
+    );
+    await vm.load();
+    expect(vm.nutrition, isA<AsyncError>());
+
+    repo
+      ..error = null
+      ..todayResult = sampleDashboard();
+    final pending = vm.refresh();
+    expect(vm.nutrition, isA<AsyncLoading>());
+
+    await pending;
+    expect(vm.nutrition, isA<AsyncData>());
+
+    vm.dispose();
+  });
 }
 
 class _ScriptedRepository implements DashboardRepository {

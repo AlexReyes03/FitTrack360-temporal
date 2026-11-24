@@ -61,12 +61,19 @@ class HomeDashboardViewModel extends ChangeNotifier {
 
   /// Carga el resumen remoto. La primera vez prepara el bloque de pasos sin
   /// mostrar diálogos del sistema (el permiso se pide en contexto).
-  Future<void> load() async {
+  Future<void> load() => _fetch(keepVisible: false);
+
+  /// Recarga sin esqueletos: los bloques con datos o vacíos se quedan a la
+  /// vista hasta que llega la respuesta (pull-to-refresh y volver a Inicio).
+  /// Un bloque en error sí vuelve a mostrar la carga.
+  Future<void> refresh() => _fetch(keepVisible: true);
+
+  Future<void> _fetch({required bool keepVisible}) async {
     final sequence = ++_loadSequence;
     _sessionExpired = false;
-    _nutrition = const AsyncLoading();
-    _session = const AsyncLoading();
-    _metric = const AsyncLoading();
+    _nutrition = _loadingUnlessVisible(_nutrition, keepVisible);
+    _session = _loadingUnlessVisible(_session, keepVisible);
+    _metric = _loadingUnlessVisible(_metric, keepVisible);
     _notify();
 
     unawaited(_initSteps());
@@ -125,6 +132,16 @@ class HomeDashboardViewModel extends ChangeNotifier {
       _metric = AsyncData(_mapMetric(metric, _now()));
     }
     _notify();
+  }
+
+  static AsyncState<T> _loadingUnlessVisible<T>(
+    AsyncState<T> current,
+    bool keepVisible,
+  ) {
+    if (keepVisible && (current is AsyncData<T> || current is AsyncEmpty<T>)) {
+      return current;
+    }
+    return AsyncLoading<T>();
   }
 
   bool _isStale(int sequence) => _disposed || sequence != _loadSequence;

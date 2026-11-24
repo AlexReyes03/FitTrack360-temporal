@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,12 +9,14 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/session_storage.dart';
 import '../../../core/widgets/offline_banner.dart';
+import '../../../design_system/tokens/app_colors.dart';
 import '../../notifications/data/push_device_lifecycle_service.dart';
 import '../../notifications/presentation/push_device_scope.dart';
 import '../data/dashboard_api_repository.dart';
 import '../data/pedometer_steps_sensor.dart';
 import '../domain/steps_sensor.dart';
 import 'home_dashboard_view_model.dart';
+import 'widgets/app_shell_tab_scope.dart';
 import 'widgets/dashboard_block_shell.dart';
 import 'widgets/dashboard_metric_card.dart';
 import 'widgets/dashboard_nutrition_card.dart';
@@ -26,7 +29,8 @@ import 'widgets/quick_actions_row.dart';
 ///
 /// Carga el perfil con el cliente HTTP y muestra el dashboard. El cierre de
 /// sesión vive en Perfil. Muestra [OfflineBanner] sin red y recarga el perfil
-/// y el dashboard al recuperarla.
+/// y el dashboard al recuperarla, al deslizar hacia abajo y al volver a la
+/// pestaña Inicio desde otra (vía [AppShellTabScope]).
 class HomeShellPage extends StatefulWidget {
   const HomeShellPage({
     super.key,
@@ -62,6 +66,8 @@ class _HomeShellPageState extends State<HomeShellPage> {
   late final HomeDashboardViewModel _dashboard;
   late final bool _ownsDashboard;
   StreamSubscription<bool>? _connectivitySubscription;
+  ValueListenable<int>? _shellTab;
+  int? _lastShellTab;
 
   String? _displayName;
   bool _loadingProfile = false;
@@ -113,6 +119,22 @@ class _HomeShellPageState extends State<HomeShellPage> {
     _didInitializeDependencies = true;
     _resolvePushDeviceService();
     _loadProfile();
+    final shellTab = _shellTab = AppShellTabScope.maybeOf(context);
+    if (shellTab != null) {
+      _lastShellTab = shellTab.value;
+      shellTab.addListener(_onShellTabChanged);
+    }
+  }
+
+  /// Al regresar a Inicio desde otra pestaña refresca perfil y resumen, por si
+  /// el usuario registró una comida, un entrenamiento o cambió sus metas.
+  void _onShellTabChanged() {
+    final tab = _shellTab?.value;
+    final previous = _lastShellTab;
+    _lastShellTab = tab;
+    if (tab == appShellHomeTabIndex && previous != appShellHomeTabIndex) {
+      unawaited(_refreshAll());
+    }
   }
 
   void _onDashboardChanged() {
@@ -128,6 +150,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _shellTab?.removeListener(_onShellTabChanged);
     _dashboard.removeListener(_onDashboardChanged);
     if (_ownsDashboard) {
       _dashboard.dispose();
@@ -140,7 +163,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
     super.dispose();
   }
 
-  Future<void> _loadProfile() async {
+  /// [syncPush] en `false` solo actualiza el saludo: al refrescar (deslizar o
+  /// volver a Inicio) el ciclo de vida FCM sigue en manos de Perfil.
+  Future<void> _loadProfile({bool syncPush = true}) async {
     // Dos cargas simultaneas con ID token vencido fuerzan un solo refresh.
     if (_loadingProfile) return;
     _loadingProfile = true;
@@ -148,7 +173,9 @@ class _HomeShellPageState extends State<HomeShellPage> {
       final profile = await _api.me();
       if (!mounted) return;
       setState(() => _displayName = profile.displayName);
-      unawaited(_syncPushSilently(profile.notificationsEnabled));
+      if (syncPush) {
+        unawaited(_syncPushSilently(profile.notificationsEnabled));
+      }
     } on SessionExpiredException {
       _goToLogin();
     } catch (_) {
@@ -173,6 +200,10 @@ class _HomeShellPageState extends State<HomeShellPage> {
     await Future.wait([_loadProfile(), _dashboard.load()]);
   }
 
+  Future<void> _refreshAll() async {
+    await Future.wait([_loadProfile(syncPush: false), _dashboard.refresh()]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -185,60 +216,67 @@ class _HomeShellPageState extends State<HomeShellPage> {
             child: ListenableBuilder(
               listenable: _dashboard,
               builder: (context, _) {
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      HomeDashboardContent(
-                        displayName: _displayName,
-                        nutritionStatus: _blockStatus(_dashboard.nutrition),
-                        nutritionData:
-                            _dashboard.nutrition.dataOrNull ??
-                            DashboardNutritionData.preview,
-                        onRetryNutrition: _dashboard.load,
-                        sessionStatus: _blockStatus(_dashboard.session),
-                        sessionData:
-                            _dashboard.session.dataOrNull ??
-                            DashboardSessionData.preview,
-                        onRetrySession: _dashboard.load,
-                        metricStatus: _blockStatus(_dashboard.metric),
-                        metricData:
-                            _dashboard.metric.dataOrNull ??
-                            DashboardMetricData.preview,
-                        onRetryMetric: _dashboard.load,
-                        stepsStatus: _blockStatus(_dashboard.steps),
-                        stepsData:
-                            _dashboard.steps.dataOrNull ??
-                            DashboardStepsData.preview,
-                        stepsUnavailable: _dashboard.stepsUnavailable,
-                        stepsUnavailableReason:
-                            _dashboard.stepsUnavailableReason,
-                        stepsNeedPermission: _dashboard.stepsNeedPermission,
-                        stepsCanOpenSettings: _dashboard.stepsCanOpenSettings,
-                        onRetrySteps: _dashboard.retrySteps,
-                        onEnableSteps: _dashboard.enableSteps,
-                        onOpenStepsSettings: () =>
-                            unawaited(_dashboard.openStepsSettings()),
-                        onOpenWorkout: () => context.go('/app/entrenamientos'),
-                        onOpenMeals: () => context.go('/app/comidas'),
-                        onOpenPhoto: () => context.push('/app/foto'),
-                        onOpenProgress: () => context.go('/app/progreso'),
-                      ),
-                      const SizedBox(height: 18),
-                      // Acceso extra no cubierto por DashboardQuickActions.
-                      QuickActionsRow(
-                        title: null,
-                        actions: [
-                          QuickActionItem(
-                            label: 'Tracker diario',
-                            subtitle: 'Próximamente',
-                            icon: Icons.insights_rounded,
-                            onTap: () => context.push('/app/tracker'),
-                          ),
-                        ],
-                      ),
-                    ],
+                return RefreshIndicator(
+                  onRefresh: _refreshAll,
+                  color: AppColors.accentWhite,
+                  backgroundColor: AppColors.bgMid,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        HomeDashboardContent(
+                          displayName: _displayName,
+                          nutritionStatus: _blockStatus(_dashboard.nutrition),
+                          nutritionData:
+                              _dashboard.nutrition.dataOrNull ??
+                              DashboardNutritionData.preview,
+                          onRetryNutrition: _dashboard.load,
+                          sessionStatus: _blockStatus(_dashboard.session),
+                          sessionData:
+                              _dashboard.session.dataOrNull ??
+                              DashboardSessionData.preview,
+                          onRetrySession: _dashboard.load,
+                          metricStatus: _blockStatus(_dashboard.metric),
+                          metricData:
+                              _dashboard.metric.dataOrNull ??
+                              DashboardMetricData.preview,
+                          onRetryMetric: _dashboard.load,
+                          stepsStatus: _blockStatus(_dashboard.steps),
+                          stepsData:
+                              _dashboard.steps.dataOrNull ??
+                              DashboardStepsData.preview,
+                          stepsUnavailable: _dashboard.stepsUnavailable,
+                          stepsUnavailableReason:
+                              _dashboard.stepsUnavailableReason,
+                          stepsNeedPermission: _dashboard.stepsNeedPermission,
+                          stepsCanOpenSettings: _dashboard.stepsCanOpenSettings,
+                          onRetrySteps: _dashboard.retrySteps,
+                          onEnableSteps: _dashboard.enableSteps,
+                          onOpenStepsSettings: () =>
+                              unawaited(_dashboard.openStepsSettings()),
+                          onOpenWorkout: () =>
+                              context.go('/app/entrenamientos'),
+                          onOpenMeals: () => context.go('/app/comidas'),
+                          onOpenPhoto: () => context.push('/app/foto'),
+                          onOpenProgress: () => context.go('/app/progreso'),
+                        ),
+                        const SizedBox(height: 18),
+                        // Acceso extra no cubierto por DashboardQuickActions.
+                        QuickActionsRow(
+                          title: null,
+                          actions: [
+                            QuickActionItem(
+                              label: 'Tracker diario',
+                              subtitle: 'Próximamente',
+                              icon: Icons.insights_rounded,
+                              onTap: () => context.push('/app/tracker'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 );
               },

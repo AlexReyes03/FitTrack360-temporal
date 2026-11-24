@@ -9,6 +9,7 @@ import '../../notifications/data/push_device_lifecycle_service.dart';
 import '../../notifications/presentation/notifications_scope.dart';
 import '../../notifications/presentation/push_device_scope.dart';
 import 'widgets/app_shell_header.dart';
+import 'widgets/app_shell_tab_scope.dart';
 import 'widgets/glass_bottom_nav_bar.dart';
 import 'widgets/home_navigation_shell.dart';
 
@@ -74,6 +75,21 @@ class _AppShellPageState extends State<AppShellPage> {
   PushDeviceLifecycle? _pushDeviceService;
   PushDeviceLifecycle? _ownedPushDeviceService;
   bool _providesPushDeviceScope = false;
+  late final ValueNotifier<int> _currentTab = ValueNotifier(
+    widget.navigationShell.currentIndex,
+  );
+
+  @override
+  void didUpdateWidget(AppShellPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final index = widget.navigationShell.currentIndex;
+    if (index == _currentTab.value) return;
+    // Se publica tras el frame: los oyentes (Inicio) pueden recargar y
+    // notificar sin marcar widgets durante el build del shell.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _currentTab.value = widget.navigationShell.currentIndex;
+    });
+  }
 
   @override
   void didChangeDependencies() {
@@ -115,6 +131,7 @@ class _AppShellPageState extends State<AppShellPage> {
       unawaited(ownedPush.dispose());
     }
     _ownedClient?.dispose();
+    _currentTab.dispose();
     super.dispose();
   }
 
@@ -135,7 +152,10 @@ class _AppShellPageState extends State<AppShellPage> {
         index,
         initialLocation: index == widget.navigationShell.currentIndex,
       ),
-      body: widget.navigationShell,
+      body: AppShellTabScope(
+        currentTab: _currentTab,
+        child: widget.navigationShell,
+      ),
     );
     if (_providesPushDeviceScope && _pushDeviceService != null) {
       return PushDeviceScope(service: _pushDeviceService!, child: shell);

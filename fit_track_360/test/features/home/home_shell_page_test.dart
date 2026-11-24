@@ -493,7 +493,7 @@ void main() {
   });
 
   for (final (label, path, page) in [
-    ('Entrenamiento', '/app/entrenamientos', 'Pantalla entrenamientos'),
+    ('Entrenar', '/app/entrenamientos', 'Pantalla entrenamientos'),
     ('Comida', '/app/comidas', 'Pantalla comidas'),
     ('Foto progreso', '/app/foto', 'Pantalla foto'),
   ]) {
@@ -531,7 +531,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar'), findsOneWidget);
     expect(find.text('Comida'), findsOneWidget);
     expect(find.text('Foto progreso'), findsOneWidget);
     expect(find.text('Reintentar'), findsNothing);
@@ -562,8 +562,8 @@ void main() {
     );
     expect(find.text('Reintentar'), findsNWidgets(3));
 
-    await tester.ensureVisible(find.text('Entrenamiento'));
-    await tester.tap(find.text('Entrenamiento'));
+    await tester.ensureVisible(find.text('Entrenar'));
+    await tester.tap(find.text('Entrenar'));
     await tester.pumpAndSettle();
     expect(find.text('Pantalla entrenamientos'), findsOneWidget);
   });
@@ -617,7 +617,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar'), findsOneWidget);
   });
 
   group('ciclo de vida FCM silencioso (W13-7)', () {

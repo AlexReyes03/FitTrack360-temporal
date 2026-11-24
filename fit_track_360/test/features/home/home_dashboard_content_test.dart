@@ -20,7 +20,7 @@ void main() {
     expect(find.text('Contenido proximo'), findsNothing);
     expect(find.text('Hola, Alex'), findsOneWidget);
     expect(find.text('Accesos rápidos'), findsOneWidget);
-    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar'), findsOneWidget);
     expect(find.text('Comida'), findsOneWidget);
     expect(find.text('Foto progreso'), findsOneWidget);
     expect(find.text('Nutrición de hoy'), findsOneWidget);
@@ -80,7 +80,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Entrenamiento'));
+    await tester.tap(find.text('Entrenar'));
     await tester.tap(find.text('Comida'));
     await tester.tap(find.text('Foto progreso'));
 
@@ -129,7 +129,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Entrenamiento'));
+    await tester.tap(find.text('Entrenar'));
     await tester.tap(find.text('Comida'));
     await tester.tap(find.text('Foto progreso'));
 
@@ -151,7 +151,7 @@ void main() {
     await tester.pumpWidget(wrap(const HomeDashboardContent()));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar'), findsOneWidget);
     expect(find.text('Comida'), findsOneWidget);
     expect(find.text('Foto progreso'), findsOneWidget);
   });

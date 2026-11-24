@@ -12,7 +12,10 @@ import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
 import '../data/workouts_api.dart';
 import '../data/workout_session.dart';
-import 'workouts_page.dart';
+import 'tracker_session_page.dart';
+import 'workout_form_page.dart';
+import 'widgets/tracker_controls.dart';
+import 'widgets/workout_dialogs.dart';
 import '../data/workouts_repository_impl.dart';
 import '../domain/workout_summary.dart';
 import '../domain/workout_summary_sharer.dart';
@@ -53,9 +56,9 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   Future<void> _editSession() async {
     final session = _viewModel.session;
     if (session == null) return;
-    final changed = await Navigator.of(context).push<bool>(
+    final changed = await Navigator.of(context, rootNavigator: true).push<bool>(
       MaterialPageRoute(
-        builder: (_) => WorkoutsPage(
+        builder: (_) => WorkoutFormPage(
           api: _api,
           editingSession: session,
           profileClient: _client,
@@ -66,22 +69,11 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   }
 
   Future<void> _deleteSession() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar sesión'),
-        content: const Text('¿Deseas eliminar esta sesión?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
+    final confirm = await showWorkoutConfirmDialog(
+      context,
+      title: '¿Eliminar esta sesión?',
+      message: 'Se borrarán sus series y notas. No se puede deshacer.',
+      confirmLabel: 'Eliminar',
     );
     if (confirm != true || !mounted) return;
     setState(() {
@@ -158,7 +150,10 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     if (draft == null) return;
 
     setState(() => _repeating = true);
-    await context.push('/app/entrenamientos', extra: draft);
+    await context.push(
+      workoutTrackerRoute,
+      extra: TrackerSessionArgs(draft: draft),
+    );
     if (mounted) setState(() => _repeating = false);
   }
 
@@ -286,33 +281,26 @@ class _DetailContent extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           PrimaryButton(
-            key: shareKey,
-            label: sharing ? 'Compartiendo...' : 'Compartir',
-            onPressed: sharing ? null : onShare,
+            label: 'Repetir entrenamiento',
+            onPressed: repeating || deleting ? null : onRepeat,
           ),
           const SizedBox(height: AppSpacing.xs),
-          OutlinedButton(
-            onPressed: repeating ? null : onRepeat,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.glassBorderStrong),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              minimumSize: const Size.fromHeight(48),
-            ),
-            child: const Text('Repetir como borrador'),
-          ),
           Row(
             children: [
               Expanded(
-                child: TextButton(
+                child: TrackerGlassButton(
+                  label: 'Editar',
+                  icon: Icons.edit_outlined,
                   onPressed: deleting ? null : onEdit,
-                  child: const Text('Editar'),
                 ),
               ),
+              const SizedBox(width: AppSpacing.xs),
               Expanded(
-                child: TextButton(
-                  onPressed: deleting ? null : onDelete,
-                  child: Text(deleting ? 'Eliminando...' : 'Eliminar'),
+                child: TrackerGlassButton(
+                  key: shareKey,
+                  label: sharing ? 'Compartiendo...' : 'Compartir',
+                  icon: Icons.ios_share_rounded,
+                  onPressed: sharing ? null : onShare,
                 ),
               ),
             ],
@@ -373,6 +361,13 @@ class _DetailContent extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           _ComparisonSection(state: comparison),
+          const SizedBox(height: AppSpacing.lg),
+          TrackerGlassButton(
+            label: deleting ? 'Eliminando...' : 'Eliminar sesión',
+            icon: Icons.delete_outline_rounded,
+            destructive: true,
+            onPressed: deleting ? null : onDelete,
+          ),
         ],
       ),
     );

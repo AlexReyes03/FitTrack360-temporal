@@ -5,6 +5,8 @@ import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/workouts/data/workout_session.dart';
 import 'package:fit_track_360/features/workouts/data/workouts_api.dart';
 import 'package:fit_track_360/features/workouts/domain/workout_session_draft.dart';
+import 'package:fit_track_360/features/workouts/presentation/tracker_session_page.dart';
+import 'package:fit_track_360/features/workouts/presentation/workout_form_page.dart';
 import 'package:fit_track_360/features/workouts/presentation/workouts_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -144,17 +146,55 @@ const _createdJson = {
 http.Response _json(Object body, int status) =>
     http.Response.bytes(utf8.encode(jsonEncode(body)), status);
 
+/// Abre [form] encima de una pantalla base y guarda lo que devuelve al cerrar.
+Future<List<bool?>> _openForm(WidgetTester tester, Widget form) async {
+  final results = <bool?>[];
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () async {
+              results.add(
+                await Navigator.of(context)
+                    .push<bool>(MaterialPageRoute(builder: (_) => form)),
+              );
+            },
+            child: const Text('Abrir formulario'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Abrir formulario'));
+  await tester.pumpAndSettle();
+  return results;
+}
+
+Finder _formScrollable() => find
+    .descendant(
+      of: find.byKey(const Key('workout-form-scroll')),
+      matching: find.byType(Scrollable),
+    )
+    .first;
+
+Future<void> _tapSave(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.text('Registrar entrenamiento'),
+    300,
+    scrollable: _formScrollable(),
+  );
+  await tester.ensureVisible(find.text('Registrar entrenamiento'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Registrar entrenamiento'));
+  await tester.pumpAndSettle();
+}
+
 void main() {
-  testWidgets('la pantalla de sesión muestra el borrador de la rutina', (
-    tester,
-  ) async {
+  testWidgets('el formulario muestra el borrador de la rutina', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(
-          api: _FakeWorkoutsApi(),
-          draft: _draft,
-          connectivityService: FakeConnectivityService(),
-        ),
+        home: WorkoutFormPage(api: _FakeWorkoutsApi(), draft: _draft),
       ),
     );
     await tester.pumpAndSettle();
@@ -183,11 +223,7 @@ void main() {
     );
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(
-          api: _FakeWorkoutsApi(),
-          draft: draft,
-          connectivityService: FakeConnectivityService(),
-        ),
+        home: WorkoutFormPage(api: _FakeWorkoutsApi(), draft: draft),
       ),
     );
     await tester.pumpAndSettle();
@@ -195,7 +231,7 @@ void main() {
     expect(find.text('Ejercicio 0001'), findsOneWidget);
   });
 
-  testWidgets('sin borrador la pantalla conserva su uso actual', (
+  testWidgets('sin borrador la pestaña ofrece entrenar y registrar pasado', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -209,181 +245,79 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Rutina:'), findsNothing);
-    expect(find.text('Registrar entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar ahora'), findsOneWidget);
+    expect(find.text('Nuevo'), findsOneWidget);
+    expect(find.text('Registrar entrenamiento'), findsNothing);
   });
 
-  testWidgets('tras crear, el borrador desaparece y no se reenvía', (
+  testWidgets('al registrar cierra el formulario una sola vez con true', (
     tester,
   ) async {
     final api = _FakeWorkoutsApi();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WorkoutsPage(
-          api: api,
-          draft: _draft,
-          connectivityService: FakeConnectivityService(),
-        ),
-      ),
+    final results = await _openForm(
+      tester,
+      WorkoutFormPage(api: api, draft: _draft),
     );
-    await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(
-      find.text('Registrar entrenamiento'),
-      300,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('workout-form-scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.ensureVisible(find.text('Registrar entrenamiento'));
-    await tester.drag(
-      find.byKey(const Key('workout-form-scroll')),
-      const Offset(0, -120),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Registrar entrenamiento'));
-    await tester.pumpAndSettle();
+    await _tapSave(tester);
 
     expect(api.created.single.routineId, 'rutina-1');
+    expect(results, [true]);
     expect(find.text('Rutina: Pierna'), findsNothing);
-    expect(find.text('Sentadilla'), findsNothing);
-    expect(find.text('Sesión guardada'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Registrar entrenamiento'),
-      300,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('workout-form-scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.ensureVisible(find.text('Registrar entrenamiento'));
-    await tester.drag(
-      find.byKey(const Key('workout-form-scroll')),
-      const Offset(0, -120),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Registrar entrenamiento'));
-    await tester.pumpAndSettle();
-
-    expect(api.created, hasLength(2));
-    expect(api.created.last.routineId, isNull);
-    expect(api.created.last.exercises, isEmpty);
+    expect(find.text('Abrir formulario'), findsOneWidget);
   });
 
-  testWidgets('el POST lleva routineId y series del borrador al API', (
+  testWidgets('el POST lleva routineId, series y endedAt del registro', (
     tester,
   ) async {
     final posted = <Map<String, dynamic>>[];
-    var created = false;
     final client = MockClient((request) async {
       if (request.method == 'POST') {
         posted.add(jsonDecode(request.body) as Map<String, dynamic>);
-        created = true;
         return _json(_createdJson, 201);
       }
-      return _json(created ? [_createdJson] : <Object>[], 200);
+      return _json(<Object>[], 200);
     });
     final api = WorkoutsApi(ApiClient(storage: _Storage(), httpClient: client));
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WorkoutsPage(
-          api: api,
-          draft: _draft,
-          connectivityService: FakeConnectivityService(),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+    await _openForm(tester, WorkoutFormPage(api: api, draft: _draft));
     await tester.scrollUntilVisible(
       find.widgetWithText(TextField, 'Opcional'),
       300,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('workout-form-scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
+      scrollable: _formScrollable(),
     );
     await tester.enterText(
       find.widgetWithText(TextField, 'Opcional'),
       'Hecha desde la rutina',
     );
-    await tester.scrollUntilVisible(
-      find.text('Registrar entrenamiento'),
-      300,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('workout-form-scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.ensureVisible(find.text('Registrar entrenamiento'));
-    await tester.drag(
-      find.byKey(const Key('workout-form-scroll')),
-      const Offset(0, -120),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Registrar entrenamiento'));
-    await tester.pumpAndSettle();
+    await _tapSave(tester);
 
     final body = posted.single;
     expect(body['routineId'], 'rutina-1');
     expect(body['startedAt'], '2026-11-10T18:00:00.000Z');
+    expect(body['endedAt'], '2026-11-10T19:00:00.000Z');
     expect(body['notes'], 'Hecha desde la rutina');
     expect(body['sets'], [
       for (var order = 1; order <= 4; order++)
         {'exerciseId': 'ej-a', 'order': order, 'weight': 0, 'reps': 8},
     ]);
-    expect(find.text('Rutina: Pierna'), findsNothing);
-    expect(find.text('Hecha desde la rutina'), findsOneWidget);
   });
 
   testWidgets('un borrador repetido envía sus series exactas sin routineId', (
     tester,
   ) async {
     final posted = <Map<String, dynamic>>[];
-    var created = false;
     final client = MockClient((request) async {
       if (request.method == 'POST') {
         posted.add(jsonDecode(request.body) as Map<String, dynamic>);
-        created = true;
         return _json(_createdJson, 201);
       }
-      return _json(created ? [_createdJson] : <Object>[], 200);
+      return _json(<Object>[], 200);
     });
     final api = WorkoutsApi(ApiClient(storage: _Storage(), httpClient: client));
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: WorkoutsPage(api: api, draft: _repeatedDraft),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Registrar entrenamiento'),
-      300,
-      scrollable: find
-          .descendant(
-            of: find.byKey(const Key('workout-form-scroll')),
-            matching: find.byType(Scrollable),
-          )
-          .first,
-    );
-    await tester.ensureVisible(find.text('Registrar entrenamiento'));
-    await tester.drag(
-      find.byKey(const Key('workout-form-scroll')),
-      const Offset(0, -120),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Registrar entrenamiento'));
-    await tester.pumpAndSettle();
+    await _openForm(tester, WorkoutFormPage(api: api, draft: _repeatedDraft));
+    await _tapSave(tester);
 
     final body = posted.single;
     expect(body.containsKey('routineId'), isFalse);
@@ -395,7 +329,43 @@ void main() {
     ]);
   });
 
-  testWidgets('abierta con push muestra «Volver» y regresa', (tester) async {
+  testWidgets('tras registrar, el historial muestra la sesión nueva', (
+    tester,
+  ) async {
+    var created = false;
+    final client = MockClient((request) async {
+      if (request.method == 'POST') {
+        created = true;
+        return _json(_createdJson, 201);
+      }
+      return _json(created ? [_createdJson] : <Object>[], 200);
+    });
+    final api = WorkoutsApi(ApiClient(storage: _Storage(), httpClient: client));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WorkoutsPage(
+          api: api,
+          connectivityService: FakeConnectivityService(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Aún no tienes sesiones'), findsOneWidget);
+
+    await tester.tap(find.text('Nuevo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Registrar entrenamiento pasado'), findsOneWidget);
+    await _tapSave(tester);
+
+    expect(find.text('Hecha desde la rutina'), findsOneWidget);
+    expect(find.byType(WorkoutHistoryCard), findsOneWidget);
+    expect(find.text('Entrenamiento registrado'), findsOneWidget);
+  });
+
+  testWidgets('un borrador recibido por la ruta abre el tracker', (
+    tester,
+  ) async {
+    TrackerSessionArgs? received;
     final router = GoRouter(
       initialLocation: '/rutina',
       routes: [
@@ -417,19 +387,34 @@ void main() {
             draft: state.extra as WorkoutSessionDraft?,
           ),
         ),
+        GoRoute(
+          path: workoutTrackerRoute,
+          builder: (context, state) {
+            received = state.extra as TrackerSessionArgs?;
+            return const Scaffold(body: Text('Tracker'));
+          },
+        ),
       ],
     );
     await tester.pumpWidget(MaterialApp.router(routerConfig: router));
     await tester.tap(find.text('Abrir sesión'));
     await tester.pumpAndSettle();
 
+    expect(find.text('Tracker'), findsOneWidget);
+    expect(received?.draft?.routineId, 'rutina-1');
+  });
+
+  testWidgets('el formulario abierto con push muestra «Volver» y regresa', (
+    tester,
+  ) async {
+    await _openForm(tester, WorkoutFormPage(api: _FakeWorkoutsApi()));
+
     expect(find.byTooltip('Volver'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Volver'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Abrir sesión'), findsOneWidget);
-    expect(find.text('Rutina: Pierna'), findsNothing);
+    expect(find.text('Abrir formulario'), findsOneWidget);
   });
 
   testWidgets('como pantalla raíz no muestra «Volver»', (tester) async {

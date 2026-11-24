@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:fit_track_360/core/network/api_client.dart';
+import 'package:fit_track_360/design_system/components/primary_button.dart';
 import 'package:fit_track_360/design_system/tokens/app_colors.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
 import 'package:fit_track_360/features/workouts/data/workout_session.dart';
@@ -12,7 +13,9 @@ import 'package:fit_track_360/features/workouts/domain/workout_set.dart';
 import 'package:fit_track_360/features/workouts/domain/workout_summary_sharer.dart';
 import 'package:fit_track_360/features/workouts/presentation/workout_detail_page.dart';
 import 'package:fit_track_360/features/workouts/presentation/workout_detail_view_model.dart';
-import 'package:fit_track_360/features/workouts/presentation/workouts_page.dart';
+import 'package:fit_track_360/features/workouts/presentation/tracker_session_page.dart';
+import 'package:fit_track_360/features/workouts/presentation/widgets/tracker_controls.dart';
+import 'package:fit_track_360/features/workouts/presentation/workout_form_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -47,7 +50,7 @@ void main() {
     final api = _RecordingWorkoutsApi();
     await tester.pumpWidget(
       MaterialApp(
-        home: WorkoutsPage(api: api, editingSession: repeatableSession()),
+        home: WorkoutFormPage(api: api, editingSession: repeatableSession()),
       ),
     );
     await tester.pumpAndSettle();
@@ -102,10 +105,12 @@ void main() {
     );
     await tester.tap(find.text('Abrir'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Eliminar'));
+    await _scrollTo(tester, find.text('Eliminar sesión'));
+    await tester.tap(find.text('Eliminar sesión'));
     await tester.pumpAndSettle();
     expect(api.deleted, isEmpty);
-    await tester.tap(find.text('Eliminar').last);
+    expect(find.text('¿Eliminar esta sesión?'), findsOneWidget);
+    await tester.tap(find.text('Eliminar'));
     await tester.pumpAndSettle();
     expect(api.deleted, ['actual']);
   });
@@ -183,7 +188,7 @@ void main() {
     );
   });
 
-  testWidgets('sesión en curso y sin series muestra estados claros', (
+  testWidgets('sesión sin fin ni series muestra estados claros', (
     tester,
   ) async {
     await _pump(
@@ -194,7 +199,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('En curso'), findsOneWidget);
+    expect(find.text('Sin registrar'), findsOneWidget);
     expect(find.text('0 kg'), findsOneWidget);
     expect(find.text('Sin ejercicios registrados'), findsOneWidget);
     expect(find.text('Sin notas'), findsOneWidget);
@@ -325,23 +330,15 @@ void main() {
     );
   });
 
-  group('repetir como borrador', () {
-    testWidgets('navega con el borrador y no crea la sesión al pulsar', (
+  group('repetir entrenamiento', () {
+    testWidgets('abre el tracker con el borrador y no crea la sesión', (
       tester,
     ) async {
       final api = _RecordingWorkoutsApi();
+      TrackerSessionArgs? received;
       final router = GoRouter(
         initialLocation: '/app/entrenamientos/actual',
         routes: [
-          GoRoute(
-            path: '/app/entrenamientos',
-            builder: (context, state) => WorkoutsPage(
-              api: api,
-              draft: state.extra is WorkoutSessionDraft
-                  ? state.extra as WorkoutSessionDraft
-                  : null,
-            ),
-          ),
           GoRoute(
             path: '/app/entrenamientos/:id',
             builder: (context, state) => WorkoutDetailPage(
@@ -349,44 +346,57 @@ void main() {
               repository: FakeWorkoutsRepository(
                 sessions: [repeatableSession()],
               ),
+              api: api,
             ),
+          ),
+          GoRoute(
+            path: workoutTrackerRoute,
+            builder: (context, state) {
+              received = state.extra as TrackerSessionArgs?;
+              return const Scaffold(body: Text('Tracker'));
+            },
           ),
         ],
       );
       await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Repetir como borrador'));
+      await tester.tap(find.text('Repetir entrenamiento'));
       await tester.pumpAndSettle();
 
+      expect(find.text('Tracker'), findsOneWidget);
       expect(api.created, isEmpty);
-      expect(find.text('Sentadilla'), findsOneWidget);
-      expect(find.text('Press banca'), findsOneWidget);
-
-      await tester.scrollUntilVisible(
-        find.text('Registrar entrenamiento'),
-        300,
-        scrollable: find
-            .descendant(
-              of: find.byKey(const Key('workout-form-scroll')),
-              matching: find.byType(Scrollable),
-            )
-            .first,
-      );
-      await tester.ensureVisible(find.text('Registrar entrenamiento'));
-      await tester.drag(
-        find.byKey(const Key('workout-form-scroll')),
-        const Offset(0, -120),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Registrar entrenamiento'));
-      await tester.pumpAndSettle();
-
-      final draft = api.created.single;
+      final draft = received!.draft!;
       expect(draft.routineId, isNull);
-      expect(draft.sets!.map((set) => set.order), [1, 2, 3]);
+      expect(draft.exercises.map((e) => e.exerciseName), [
+        'Sentadilla',
+        'Press banca',
+      ]);
       expect(draft.sets!.map((set) => set.weightKg), [100, 110, 60]);
       expect(draft.sets!.map((set) => set.reps), [5, 3, 10]);
+    });
+
+    testWidgets('las acciones siguen la jerarquía Repetir > Editar/Compartir', (
+      tester,
+    ) async {
+      await _pump(tester, FakeWorkoutsRepository(sessions: [fakeSession()]));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.widgetWithText(PrimaryButton, 'Repetir entrenamiento'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(PrimaryButton, 'Compartir'), findsNothing);
+      expect(find.widgetWithText(TrackerGlassButton, 'Editar'), findsOneWidget);
+      expect(
+        find.widgetWithText(TrackerGlassButton, 'Compartir'),
+        findsOneWidget,
+      );
+      await _scrollTo(tester, find.text('Eliminar sesión'));
+      final delete = tester.widget<TrackerGlassButton>(
+        find.widgetWithText(TrackerGlassButton, 'Eliminar sesión'),
+      );
+      expect(delete.destructive, isTrue);
     });
 
     testWidgets('sin series identificables muestra el aviso y no navega', (
@@ -395,7 +405,7 @@ void main() {
       await _pump(tester, FakeWorkoutsRepository(sessions: [fakeSession()]));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Repetir como borrador'));
+      await tester.tap(find.text('Repetir entrenamiento'));
       await tester.pumpAndSettle();
 
       expect(find.text(workoutRepeatUnavailableMessage), findsOneWidget);

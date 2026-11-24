@@ -67,7 +67,7 @@ void main() {
 
     final text = buildWorkoutShareText(summary);
 
-    expect(text, contains('Duración: En curso'));
+    expect(text, contains('Duración: Sin registrar'));
     expect(text, isNot(contains('Ejercicios:')));
   });
 }

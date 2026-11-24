@@ -8,37 +8,51 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/connectivity_service.dart';
 import '../../../core/widgets/offline_banner.dart';
 import '../../../core/widgets/remote_state_views.dart';
+import '../../../design_system/components/glass_surface.dart';
 import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/templates/app_scaffold_template.dart';
 import '../../../design_system/tokens/app_colors.dart';
+import '../../../design_system/tokens/app_radii.dart';
+import '../../../design_system/tokens/app_spacing.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
 import '../../home/presentation/widgets/home_navigation_shell.dart';
-import '../../settings/data/profile_api_repository.dart';
-import 'session_exercise_editor.dart';
 import '../data/workout_session.dart';
 import '../data/workouts_api.dart';
 import '../domain/workout_session_draft.dart';
+import 'tracker_session_page.dart';
+import 'workout_detail_format.dart';
+import 'workout_form_page.dart';
+import 'widgets/tracker_controls.dart';
 
+/// Ruta del listado de rutinas (plantillas para «Entrenar ahora»).
+const routinesRoute = '/app/rutinas';
+
+/// Ruta de esta pestaña; al volver a ella se recarga el historial.
+const workoutsRoute = '/app/entrenamientos';
+
+/// Pestaña Entrenamientos: acciones para entrenar e historial en tarjetas.
+///
+/// Flujo único: rutina o borrador → tracker («Entrenar ahora»). El formulario
+/// ([WorkoutFormPage]) es solo para «Registrar entrenamiento pasado».
 class WorkoutsPage extends StatefulWidget {
   const WorkoutsPage({
     super.key,
     this.api,
     this.draft,
-    this.editingSession,
     this.profileClient,
     this.apiClientFactory = ApiClient.new,
     this.connectivityService,
   });
 
   final WorkoutsApi? api;
-  final WorkoutSession? editingSession;
   final ApiClient? profileClient;
 
   /// Crea el cliente HTTP propio solo cuando no se inyecta [api].
   final ApiClient Function() apiClientFactory;
 
-  /// Borrador precargado al iniciar desde una rutina; opcional.
+  /// Borrador recibido por la ruta (enlaces anteriores a #228): se abre en el
+  /// tracker, que es el único flujo para entrenar.
   final WorkoutSessionDraft? draft;
   final ConnectivityService? connectivityService;
 
@@ -53,75 +67,9 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
   late final ConnectivityService _connectivity =
       widget.connectivityService ?? ConnectivityService();
   StreamSubscription<bool>? _connectivitySubscription;
-  late final TextEditingController _notesController = TextEditingController(
-    text: widget.editingSession?.notes ?? widget.draft?.notes,
-  );
-
-  /// Borrador pendiente de guardar; se descarta al crear la sesión.
-  late WorkoutSessionDraft? _draft =
-      widget.draft ?? _draftFromSession(widget.editingSession);
-  List<PlannedExercise>? _editedExercises;
-  List<PlannedSet>? _editedSets;
-  final _restController = TextEditingController(text: '90');
-  int _editorKey = 0;
-
-  WorkoutSessionDraft? _draftFromSession(WorkoutSession? session) {
-    if (session == null) return null;
-    final groups = <String, List<dynamic>>{};
-    for (final set in session.sets) {
-      if (set.exerciseId != null) {
-        groups.putIfAbsent(set.exerciseId!, () => []).add(set);
-      }
-    }
-    return WorkoutSessionDraft(
-      startedAt: session.startedAt,
-      notes: session.notes,
-      exercises: [
-        for (final e in groups.entries)
-          PlannedExercise(
-            exerciseId: e.key,
-            exerciseName: e.value.first.exerciseName as String,
-            position: groups.keys.toList().indexOf(e.key),
-            targetSets: e.value.length,
-            targetReps: e.value.first.reps as int,
-          ),
-      ],
-      sets: [
-        for (final set in session.sets)
-          if (set.exerciseId != null)
-            PlannedSet(
-              exerciseId: set.exerciseId!,
-              order: set.order ?? 1,
-              weightKg: set.weightKg ?? 0,
-              reps: set.reps,
-            ),
-      ],
-    );
-  }
-
-  Future<void> _loadRest() async {
-    final client = _ownClient ?? widget.profileClient;
-    if (client == null) return;
-    try {
-      final profile = await ProfileApiRepository(client).fetchProfile();
-      if (mounted && profile != null) {
-        setState(
-          () => _restController.text = '${profile.preferences.restSeconds}',
-        );
-      }
-    } catch (_) {
-      /* El valor por defecto funciona sin perfil disponible. */
-    }
-  }
-
   AsyncState<List<WorkoutSession>> _state = const AsyncLoading();
-  late DateTime _startedAt =
-      widget.editingSession?.startedAt.toLocal() ??
-      widget.draft?.startedAt.toLocal() ??
-      DateTime.now();
-  bool _creating = false;
-  bool _saved = false;
-  String? _formError;
+  GoRouter? _router;
+  String? _lastPath;
 
   @override
   void initState() {
@@ -131,16 +79,48 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
       onError: (_) {}, // Un fallo del plugin no debe tumbar la pantalla.
     );
     _load();
-    if (widget.api == null || widget.profileClient != null) _loadRest();
+    if (widget.draft case final draft?) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _startTracker(TrackerSessionArgs(draft: draft));
+      });
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final router = GoRouter.maybeOf(context);
+    if (router == _router) return;
+    _router?.routerDelegate.removeListener(_onRouteChanged);
+    _router = router;
+    _lastPath = _currentPath();
+    router?.routerDelegate.addListener(_onRouteChanged);
   }
 
   @override
   void dispose() {
+    _router?.routerDelegate.removeListener(_onRouteChanged);
     _connectivitySubscription?.cancel();
-    _notesController.dispose();
-    _restController.dispose();
     _ownClient?.dispose();
     super.dispose();
+  }
+
+  /// Ruta visible en primer plano, incluidas las abiertas con `push`.
+  String? _currentPath() {
+    final delegate = _router?.routerDelegate;
+    if (delegate == null || delegate.currentConfiguration.isEmpty) return null;
+    return delegate.state.uri.path;
+  }
+
+  /// Al volver a esta pestaña (p. ej. tras finalizar en el tracker o borrar
+  /// una sesión en su detalle) recarga el historial.
+  void _onRouteChanged() {
+    final path = _currentPath();
+    final previous = _lastPath;
+    _lastPath = path;
+    if (path == workoutsRoute && previous != workoutsRoute && mounted) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -162,107 +142,36 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
     if (online && mounted && _state is AsyncError) _load();
   }
 
-  Future<void> _pickStartedAt() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _startedAt,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 1)),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_startedAt),
-    );
-    if (time == null || !mounted) return;
-    setState(() {
-      _startedAt = DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
-    });
+  /// Al volver, [_onRouteChanged] recarga el historial.
+  void _startTracker([TrackerSessionArgs? args]) {
+    context.push(workoutTrackerRoute, extra: args);
   }
 
-  Future<void> _create() async {
-    final rest = int.tryParse(_restController.text);
-    if (rest == null ||
-        rest < 0 ||
-        (_editedSets?.any(
-              (s) => s.reps < 1 || s.weightKg < 0 || !s.weightKg.isFinite,
-            ) ??
-            false)) {
-      setState(
-        () => _formError = 'Revisa las repeticiones, el peso y el descanso.',
-      );
-      return;
-    }
-    setState(() {
-      _creating = true;
-      _saved = false;
-      _formError = null;
-    });
-    final base =
-        _draft ?? WorkoutSessionDraft(startedAt: _startedAt, exercises: []);
-    try {
-      final draft = base.edited(
-        startedAt: _startedAt,
-        notes: _notesController.text,
-        exercises: _editedExercises,
-        sets: _editedSets,
-      );
-      if (widget.editingSession case final session?) {
-        final payload = draft.toCreateWorkoutPayload()..remove('routineId');
-        payload['notes'] = _notesController.text.trim();
-        payload['sets'] ??= <Object>[];
-        await _api.update(session.id, payload);
-        if (mounted) Navigator.of(context).pop(true);
-        return;
-      }
-      await _api.create(draft);
-      if (!mounted) return;
-      _notesController.clear();
-      setState(() {
-        _draft = null;
-        _editedExercises = null;
-        _editedSets = null;
-        _editorKey++;
-        _saved = true;
-        _startedAt = DateTime.now();
-      });
-      await _load();
-    } on SessionExpiredException {
-      if (mounted) context.go('/login');
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _formError = error is AuthApiException
-            ? error.message
-            : 'No se pudo conectar';
-      });
-    } finally {
-      if (mounted) setState(() => _creating = false);
-    }
+  Future<void> _registerPast() async {
+    final saved = await Navigator.of(context, rootNavigator: true).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => WorkoutFormPage(
+          api: _api,
+          profileClient: _ownClient ?? widget.profileClient,
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('Entrenamiento registrado')));
+    await _load();
   }
 
-  String _format(DateTime value) {
-    final local = value.toLocal();
-    final day = local.day.toString().padLeft(2, '0');
-    final month = local.month.toString().padLeft(2, '0');
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$day/$month/${local.year} $hour:$minute';
+  void _openSession(WorkoutSession session) {
+    context.push('$workoutsRoute/${session.id}');
   }
 
   @override
   Widget build(BuildContext context) {
-    final embedded =
-        widget.editingSession == null &&
-        HomeNavigationShell.isEmbedded(context);
+    final embedded = HomeNavigationShell.isEmbedded(context);
     final list = ListView(
-      key: const Key('workout-form-scroll'),
+      key: const Key('workouts-scroll'),
       padding: EdgeInsets.fromLTRB(24, embedded ? 12 : 24, 24, 28),
       children: [
         OfflineBanner(service: _connectivity, onRetry: _load),
@@ -277,138 +186,173 @@ class _WorkoutsPageState extends State<WorkoutsPage> {
                   color: AppColors.textSecondary,
                 ),
               ),
-            Text(
-              widget.editingSession == null
-                  ? 'Entrenamientos'
-                  : 'Editar sesión',
-              style: AppTypography.pageTitle,
+            const Expanded(
+              child: Text('Entrenamientos', style: AppTypography.pageTitle),
+            ),
+            TrackerGlassButton(
+              label: 'Rutinas',
+              icon: Icons.list_alt_rounded,
+              compact: true,
+              onPressed: () => context.push(routinesRoute),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        if (_draft?.routineName case final name?)
-          Text('Rutina: $name', style: AppTypography.body),
-        SessionExerciseEditor(
-          key: ValueKey(_editorKey),
-          initial: _draft,
-          onChanged: (exercises, sets) {
-            _editedExercises = exercises;
-            _editedSets = sets;
-          },
+        const SizedBox(height: AppSpacing.md),
+        PrimaryButton(label: 'Entrenar ahora', onPressed: _startTracker),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Elige un ejercicio o una de tus rutinas y registra tus series en '
+          'vivo.',
+          style: AppTypography.caption,
         ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _restController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Descanso entre series (segundos)',
-            helperText:
-                'Referencia para esta sesión; no se guarda en el historial.',
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text('Notas', style: AppTypography.body),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _notesController,
-          enabled: !_creating,
-          style: const TextStyle(color: AppColors.textPrimary),
-          decoration: const InputDecoration(
-            hintText: 'Opcional',
-            hintStyle: TextStyle(color: AppColors.textMuted),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text('Inicio', style: AppTypography.body),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _creating ? null : _pickStartedAt,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Fecha y hora: ${_format(_startedAt)}',
-              style: const TextStyle(color: AppColors.textPrimary),
+        const SizedBox(height: AppSpacing.lg),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Historial',
+                style: AppTypography.cta.copyWith(color: AppColors.textPrimary),
+              ),
             ),
-          ),
+            Semantics(
+              label: 'Registrar entrenamiento pasado',
+              button: true,
+              excludeSemantics: true,
+              child: TrackerGlassButton(
+                label: 'Nuevo',
+                icon: Icons.add_rounded,
+                compact: true,
+                onPressed: _registerPast,
+              ),
+            ),
+          ],
         ),
-        if (_saved) ...[
-          const SizedBox(height: 8),
-          Text(
-            'Sesión guardada',
-            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
-        if (_formError != null) ...[
-          const SizedBox(height: 8),
-          Text(
-            _formError!,
-            style: AppTypography.body.copyWith(color: AppColors.dangerText),
-          ),
-        ],
-        const SizedBox(height: 16),
-        PrimaryButton(
-          label: _creating
-              ? 'Guardando...'
-              : widget.editingSession == null
-              ? 'Registrar entrenamiento'
-              : 'Guardar cambios',
-          onPressed: _creating ? null : _create,
+        const SizedBox(height: 4),
+        Text(
+          '¿Entrenaste sin la app? Usa «Nuevo» para registrarlo.',
+          style: AppTypography.caption,
         ),
-        if (widget.editingSession == null) ...[
-          const SizedBox(height: 32),
-          AsyncStateView<List<WorkoutSession>>(
-            state: _state,
+        const SizedBox(height: AppSpacing.sm),
+        AsyncStateView<List<WorkoutSession>>(
+          state: _state,
+          onRetry: _load,
+          loadingMessage: 'Cargando sesiones...',
+          emptyTitle: 'Aún no tienes sesiones',
+          emptyMessage:
+              'Entrena ahora o registra un entrenamiento pasado para empezar '
+              'tu historial.',
+          errorBuilder: (error, _) => RemoteErrorView(
+            title: 'No se pudo cargar',
+            message: error is AuthApiException
+                ? error.message
+                : 'No se pudo conectar',
             onRetry: _load,
-            loadingMessage: 'Cargando sesiones...',
-            emptyTitle: 'Aún no tienes sesiones',
-            emptyMessage: 'Crea una sesión para empezar el historial.',
-            errorBuilder: (error, _) => RemoteErrorView(
-              title: 'No se pudo cargar',
-              message: error is AuthApiException
-                  ? error.message
-                  : 'No se pudo conectar',
-              onRetry: _load,
-            ),
-            dataBuilder: (sessions) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final session in sessions)
-                  InkWell(
-                    onTap: () async {
-                      await context.push('/app/entrenamientos/${session.id}');
-                      if (mounted) await _load();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _format(session.startedAt),
-                            style: AppTypography.body,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            session.notes == null || session.notes!.isEmpty
-                                ? 'Sin notas'
-                                : session.notes!,
-                            style: AppTypography.body.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
-        ],
+          dataBuilder: (sessions) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final session in sessions)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: WorkoutHistoryCard(
+                    session: session,
+                    onTap: () => _openSession(session),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ],
     );
     if (embedded) {
       return Scaffold(backgroundColor: Colors.transparent, body: list);
     }
     return AppScaffoldTemplate(body: SafeArea(child: list));
+  }
+}
+
+/// Tarjeta glass de una sesión del historial.
+class WorkoutHistoryCard extends StatelessWidget {
+  const WorkoutHistoryCard({
+    super.key,
+    required this.session,
+    required this.onTap,
+  });
+
+  final WorkoutSession session;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ended = session.endedAt;
+    final duration = ended == null
+        ? null
+        : formatDuration(ended.difference(session.startedAt));
+    final exercises = {
+      for (final set in session.sets) set.exerciseId ?? set.exerciseName,
+    }.length;
+    final summary = [
+      if (exercises > 0)
+        exercises == 1 ? '1 ejercicio' : '$exercises ejercicios',
+      formatSetCount(session.sets.length),
+    ].join(' · ');
+    final notes = session.notes?.trim();
+
+    return GlassSurface(
+      padding: EdgeInsets.zero,
+      radius: AppRadii.inner,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadii.inner),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              formatDateTime(session.startedAt),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 15.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          if (duration != null) TrackerTagChip(label: duration),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(summary, style: AppTypography.caption),
+                      const SizedBox(height: 4),
+                      Text(
+                        notes == null || notes.isEmpty ? 'Sin notas' : notes,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

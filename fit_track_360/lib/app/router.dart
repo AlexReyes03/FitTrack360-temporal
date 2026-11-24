@@ -23,6 +23,7 @@ import '../features/progress/presentation/progress_photo_page.dart';
 import '../features/progress/presentation/progress_shell_page.dart';
 import '../features/routines/presentation/routine_detail_page.dart';
 import '../features/routines/presentation/routines_page.dart';
+import '../features/settings/presentation/privacy_notice_page.dart';
 import '../features/settings/presentation/profile_page.dart';
 import '../features/workouts/domain/workout_session_draft.dart';
 import '../features/workouts/presentation/tracker_session_page.dart';
@@ -36,6 +37,10 @@ const appTrackerPath = '/app/tracker';
 
 /// Path de busqueda USDA registrado en GoRouter (antes era Navigator.push).
 const appFoodSearchPath = '/app/comidas/buscar';
+
+/// Aviso de privacidad. Ruta pública: se consulta desde el registro antes de
+/// aceptar el consentimiento y también con sesión iniciada.
+const appPrivacyNoticePath = '/aviso-privacidad';
 
 /// Path del centro de notificaciones.
 const appNotificationsPath = '/app/notificaciones';
@@ -68,7 +73,13 @@ List<RouteBase> buildAppRoutes() {
     ),
     GoRoute(
       path: '/forgot-password',
-      builder: (context, state) => const ForgotPasswordPage(),
+      builder: (context, state) => ForgotPasswordPage(
+        initialEmail: state.extra is String ? state.extra as String : null,
+      ),
+    ),
+    GoRoute(
+      path: appPrivacyNoticePath,
+      builder: (context, state) => const PrivacyNoticePage(),
     ),
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) =>

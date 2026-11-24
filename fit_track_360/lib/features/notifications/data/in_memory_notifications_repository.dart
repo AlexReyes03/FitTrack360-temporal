@@ -50,20 +50,86 @@ List<AppNotification> demoNotifications({DateTime? now}) {
   ];
 }
 
-/// Repositorio en memoria con datos de prueba. Sirve como contrato para una
-/// futura implementación remota.
+/// Repositorio en memoria con datos de prueba. Implementa el contrato
+/// asíncrono para poder usarse como doble en pruebas sin red.
 class InMemoryNotificationsRepository implements NotificationsRepository {
   InMemoryNotificationsRepository({List<AppNotification>? seed})
     : _notifications = List<AppNotification>.of(seed ?? demoNotifications());
 
   List<AppNotification> _notifications;
 
-  @override
+  /// Lectura síncrona usada por el ViewModel al arrancar con un seed y por
+  /// pruebas heredadas que verifican el estado persistido.
   List<AppNotification> read() =>
       List<AppNotification>.unmodifiable(_notifications);
 
-  @override
+  /// Escritura síncrona de compatibilidad.
   void write(List<AppNotification> notifications) {
     _notifications = List<AppNotification>.of(notifications);
+  }
+
+  @override
+  Future<List<AppNotification>> fetchNotifications({
+    bool? isRead,
+    AppNotificationType? type,
+  }) async {
+    final filtered =
+        _notifications
+            .where(
+              (notification) =>
+                  (isRead == null || notification.isRead == isRead) &&
+                  (type == null || notification.type == type),
+            )
+            .toList(growable: false)
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return List<AppNotification>.unmodifiable(filtered);
+  }
+
+  @override
+  Future<int> fetchUnreadCount() async =>
+      _notifications.where((notification) => !notification.isRead).length;
+
+  @override
+  Future<AppNotification?> updateRead(String id, {required bool isRead}) async {
+    AppNotification? updated;
+    _notifications = _notifications
+        .map((notification) {
+          if (notification.id != id) return notification;
+          updated = notification.copyWith(
+            isRead: isRead,
+            readAt: isRead ? (notification.readAt ?? DateTime.now()) : null,
+            clearReadAt: !isRead,
+          );
+          return updated!;
+        })
+        .toList(growable: false);
+    return updated;
+  }
+
+  @override
+  Future<void> markAllAsRead() async {
+    final now = DateTime.now();
+    _notifications = _notifications
+        .map(
+          (notification) => notification.isRead
+              ? notification
+              : notification.copyWith(
+                  isRead: true,
+                  readAt: notification.readAt ?? now,
+                ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> deleteNotification(String id) async {
+    _notifications = _notifications
+        .where((notification) => notification.id != id)
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> deleteAll() async {
+    _notifications = const <AppNotification>[];
   }
 }

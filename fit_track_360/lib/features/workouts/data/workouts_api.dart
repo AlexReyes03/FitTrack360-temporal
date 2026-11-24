@@ -54,4 +54,28 @@ class WorkoutsApi {
       jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
     );
   }
+
+  Future<WorkoutSession> update(String id, Map<String, dynamic> payload) async {
+    final response = await _client.patch(
+      '/api/v1/workouts/${Uri.encodeComponent(id)}',
+      body: payload,
+    );
+    if (response.statusCode == 404) throw const WorkoutNotFoundException();
+    if (response.statusCode != 200) {
+      throw AuthApiException(apiErrorMessage(response));
+    }
+    return WorkoutSession.fromJson(
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> delete(String id) async {
+    final response = await _client.delete(
+      '/api/v1/workouts/${Uri.encodeComponent(id)}',
+    );
+    if (response.statusCode == 404) throw const WorkoutNotFoundException();
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw AuthApiException(apiErrorMessage(response));
+    }
+  }
 }

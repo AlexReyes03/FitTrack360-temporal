@@ -1,6 +1,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { DistanceUnit, MealType, Prisma, WeightUnit } from '@prisma/client';
+import {
+  DevicePlatform,
+  DistanceUnit,
+  MealType,
+  NotificationType,
+  Prisma,
+  WeightUnit,
+} from '@prisma/client';
 
 describe('Prisma Schema, Migrations & Cascade Rules (Tasks W11-01 & W12-01)', () => {
   const getModel = (name: string) => {
@@ -598,6 +605,272 @@ describe('Prisma Schema, Migrations & Cascade Rules (Tasks W11-01 & W12-01)', ()
       ).not.toThrow();
 
       expect(rows).toHaveLength(3);
+    });
+  });
+
+  describe('W13-1 / NOTIF-BE-00 · Modelos Notification y DeviceToken, índices y cascada ARCO (#195)', () => {
+    it('declara los enums NotificationType y DevicePlatform y todos los campos de Notification y DeviceToken sin alterar AUTH-01 en User', () => {
+      expect(Object.values(NotificationType)).toEqual([
+        'NEW_LOGIN',
+        'PASSWORD_CHANGED',
+        'REMINDER',
+        'SYSTEM',
+      ]);
+      expect(Object.values(DevicePlatform)).toEqual(['android', 'ios']);
+
+      // User conserva AUTH-01 y agrega relaciones notifications y deviceTokens
+      expect(getField('User', 'firebaseUid').isUnique).toBe(true);
+      expect(getField('User', 'passwordHash').isRequired).toBe(false);
+      expect(getField('User', 'notifications').type).toBe('Notification');
+      expect(getField('User', 'notifications').isList).toBe(true);
+      expect(getField('User', 'deviceTokens').type).toBe('DeviceToken');
+      expect(getField('User', 'deviceTokens').isList).toBe(true);
+
+      // Modelo Notification
+      expect(getField('Notification', 'id').isId).toBe(true);
+      expect(getField('Notification', 'userId').isRequired).toBe(true);
+      expect(getField('Notification', 'user').relationOnDelete).toBe('Cascade');
+      expect(getField('Notification', 'type').type).toBe('NotificationType');
+      expect(getField('Notification', 'type').isRequired).toBe(true);
+      expect(getField('Notification', 'title').type).toBe('String');
+      expect(getField('Notification', 'title').isRequired).toBe(true);
+      expect(getField('Notification', 'body').type).toBe('String');
+      expect(getField('Notification', 'body').isRequired).toBe(true);
+      expect(getField('Notification', 'isRead').type).toBe('Boolean');
+      expect(getField('Notification', 'isRead').default).toBe(false);
+      expect(getField('Notification', 'readAt').type).toBe('DateTime');
+      expect(getField('Notification', 'readAt').isRequired).toBe(false);
+      expect(getField('Notification', 'targetRoute').type).toBe('String');
+      expect(getField('Notification', 'targetRoute').isRequired).toBe(false);
+      expect(getField('Notification', 'metadata').type).toBe('Json');
+      expect(getField('Notification', 'metadata').isRequired).toBe(false);
+      expect(getField('Notification', 'createdAt').type).toBe('DateTime');
+
+      // Modelo DeviceToken
+      expect(getField('DeviceToken', 'id').isId).toBe(true);
+      expect(getField('DeviceToken', 'userId').isRequired).toBe(true);
+      expect(getField('DeviceToken', 'user').relationOnDelete).toBe('Cascade');
+      expect(getField('DeviceToken', 'token').type).toBe('String');
+      expect(getField('DeviceToken', 'token').isRequired).toBe(true);
+      expect(getField('DeviceToken', 'token').isUnique).toBe(true);
+      expect(getField('DeviceToken', 'platform').type).toBe('DevicePlatform');
+      expect(getField('DeviceToken', 'platform').isRequired).toBe(true);
+      expect(getField('DeviceToken', 'deviceLabel').type).toBe('String');
+      expect(getField('DeviceToken', 'deviceLabel').isRequired).toBe(false);
+      expect(getField('DeviceToken', 'lastSeenAt').type).toBe('DateTime');
+      expect(getField('DeviceToken', 'createdAt').type).toBe('DateTime');
+      expect(getField('DeviceToken', 'updatedAt').type).toBe('DateTime');
+    });
+
+    it('incluye una migración única posterior a W12 con enums, tablas, índices compuestos, unicidad de token y ON DELETE CASCADE sin alterar tablas previas', () => {
+      const migrationsDir = path.resolve(process.cwd(), 'prisma/migrations');
+      const migrationName =
+        '20261123220000_add_notifications_and_device_tokens';
+      const migrationPath = path.join(
+        migrationsDir,
+        migrationName,
+        'migration.sql',
+      );
+
+      expect(migrationName > '20261122120000_index_workout_routine').toBe(true);
+      expect(fs.existsSync(migrationPath)).toBe(true);
+
+      const sql = fs.readFileSync(migrationPath, 'utf-8');
+      expect(sql).toContain(
+        `CREATE TYPE "NotificationType" AS ENUM ('NEW_LOGIN', 'PASSWORD_CHANGED', 'REMINDER', 'SYSTEM');`,
+      );
+      expect(sql).toContain(
+        `CREATE TYPE "DevicePlatform" AS ENUM ('android', 'ios');`,
+      );
+      expect(sql).toContain('CREATE TABLE "Notification"');
+      expect(sql).toContain('CREATE TABLE "DeviceToken"');
+      expect(sql).toContain(
+        'CREATE INDEX "Notification_userId_isRead_createdAt_idx" ON "Notification"("userId", "isRead", "createdAt");',
+      );
+      expect(sql).toContain(
+        'CREATE INDEX "Notification_userId_type_createdAt_idx" ON "Notification"("userId", "type", "createdAt");',
+      );
+      expect(sql).toContain(
+        'CREATE UNIQUE INDEX "DeviceToken_token_key" ON "DeviceToken"("token");',
+      );
+      expect(sql).toContain(
+        'CREATE INDEX "DeviceToken_userId_idx" ON "DeviceToken"("userId");',
+      );
+      expect(sql).toContain(
+        'ALTER TABLE "Notification" ADD CONSTRAINT "Notification_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;',
+      );
+      expect(sql).toContain(
+        'ALTER TABLE "DeviceToken" ADD CONSTRAINT "DeviceToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;',
+      );
+
+      // No debe modificar tablas históricas
+      expect(sql).not.toContain('ALTER TABLE "User"');
+      expect(sql).not.toContain('ALTER TABLE "Routine"');
+      expect(sql).not.toContain('ALTER TABLE "Photo"');
+      expect(sql).not.toContain('ALTER TABLE "BodyMetric"');
+    });
+
+    it('rechaza registrar un DeviceToken duplicado con error P2002 usando tokens sintéticos', () => {
+      interface DeviceTokenRow {
+        id: string;
+        userId: string;
+        token: string;
+        platform: DevicePlatform;
+        deviceLabel: string | null;
+      }
+
+      const tokenField = getField('DeviceToken', 'token');
+      const rows: DeviceTokenRow[] = [];
+
+      const insertDeviceToken = (candidate: DeviceTokenRow): DeviceTokenRow => {
+        if (
+          tokenField.isUnique &&
+          rows.some((existing) => existing.token === candidate.token)
+        ) {
+          throw new Prisma.PrismaClientKnownRequestError(
+            'Unique constraint failed on the fields: (token)',
+            {
+              code: 'P2002',
+              clientVersion: Prisma.prismaVersion.client,
+              meta: { target: ['token'] },
+            },
+          );
+        }
+        rows.push(candidate);
+        return candidate;
+      };
+
+      insertDeviceToken({
+        id: 'dt-1',
+        userId: 'user-1',
+        token: 'synthetic-token-user1-android-001',
+        platform: DevicePlatform.android,
+        deviceLabel: 'Pixel 9 Test',
+      });
+
+      let caughtError: unknown;
+      try {
+        insertDeviceToken({
+          id: 'dt-dup',
+          userId: 'user-2',
+          token: 'synthetic-token-user1-android-001',
+          platform: DevicePlatform.ios,
+          deviceLabel: 'iPhone Test',
+        });
+      } catch (error) {
+        caughtError = error;
+      }
+
+      expect(caughtError).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+      expect((caughtError as Prisma.PrismaClientKnownRequestError).code).toBe(
+        'P2002',
+      );
+      expect(
+        (caughtError as Prisma.PrismaClientKnownRequestError).meta,
+      ).toEqual({
+        target: ['token'],
+      });
+      expect(rows).toHaveLength(1);
+    });
+
+    it('elimina en cascada ARCO las Notification y DeviceToken del User eliminado sin afectar a otros usuarios', () => {
+      const users = [
+        { id: 'user-1', firebaseUid: 'firebase-user-1' },
+        { id: 'user-2', firebaseUid: 'firebase-user-2' },
+      ];
+      const notifications = [
+        {
+          id: 'notif-1',
+          userId: 'user-1',
+          type: NotificationType.NEW_LOGIN,
+          title: 'Nuevo inicio de sesión',
+          body: 'Se inició sesión en un dispositivo Android.',
+          isRead: false,
+          readAt: null as Date | null,
+          targetRoute: '/notifications',
+          metadata: { source: 'test' },
+          createdAt: new Date('2026-11-23T18:00:00.000Z'),
+        },
+        {
+          id: 'notif-2',
+          userId: 'user-1',
+          type: NotificationType.REMINDER,
+          title: 'Hora de entrenar',
+          body: 'Tienes una sesión programada hoy.',
+          isRead: true,
+          readAt: new Date('2026-11-23T19:00:00.000Z'),
+          targetRoute: '/workouts',
+          metadata: null,
+          createdAt: new Date('2026-11-23T18:30:00.000Z'),
+        },
+        {
+          id: 'notif-3',
+          userId: 'user-2',
+          type: NotificationType.SYSTEM,
+          title: 'Aviso del sistema',
+          body: 'Mantenimiento completado.',
+          isRead: false,
+          readAt: null as Date | null,
+          targetRoute: null,
+          metadata: null,
+          createdAt: new Date('2026-11-23T19:30:00.000Z'),
+        },
+      ];
+      const deviceTokens = [
+        {
+          id: 'dt-1',
+          userId: 'user-1',
+          token: 'synthetic-test-token-u1-android',
+          platform: DevicePlatform.android,
+          deviceLabel: 'Emulator Android',
+        },
+        {
+          id: 'dt-2',
+          userId: 'user-1',
+          token: 'synthetic-test-token-u1-ios',
+          platform: DevicePlatform.ios,
+          deviceLabel: 'Simulator iOS',
+        },
+        {
+          id: 'dt-3',
+          userId: 'user-2',
+          token: 'synthetic-test-token-u2-android',
+          platform: DevicePlatform.android,
+          deviceLabel: 'Pixel Test',
+        },
+      ];
+
+      const deleteUserWithCascade = (userId: string) => {
+        const idx = users.findIndex((u) => u.id === userId);
+        if (idx !== -1) users.splice(idx, 1);
+
+        if (getField('Notification', 'user').relationOnDelete === 'Cascade') {
+          for (let i = notifications.length - 1; i >= 0; i--) {
+            if (notifications[i].userId === userId) {
+              notifications.splice(i, 1);
+            }
+          }
+        }
+
+        if (getField('DeviceToken', 'user').relationOnDelete === 'Cascade') {
+          for (let i = deviceTokens.length - 1; i >= 0; i--) {
+            if (deviceTokens[i].userId === userId) {
+              deviceTokens.splice(i, 1);
+            }
+          }
+        }
+      };
+
+      deleteUserWithCascade('user-1');
+
+      expect(users.map((u) => u.id)).toEqual(['user-2']);
+      expect(notifications.filter((n) => n.userId === 'user-1')).toHaveLength(
+        0,
+      );
+      expect(deviceTokens.filter((d) => d.userId === 'user-1')).toHaveLength(0);
+      // Los registros de user-2 se preservan intactos
+      expect(notifications.map((n) => n.id)).toEqual(['notif-3']);
+      expect(deviceTokens.map((d) => d.id)).toEqual(['dt-3']);
     });
   });
 });

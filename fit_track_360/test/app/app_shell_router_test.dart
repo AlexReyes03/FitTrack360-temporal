@@ -1,9 +1,13 @@
 import 'package:fit_track_360/app/router.dart';
 import 'package:fit_track_360/core/session_storage.dart';
+import 'package:fit_track_360/features/home/presentation/app_shell_page.dart';
+import 'package:fit_track_360/features/notifications/data/push_device_lifecycle_service.dart';
 import 'package:fit_track_360/features/notifications/domain/app_notification.dart';
+import 'package:fit_track_360/features/notifications/domain/notifications_repository.dart';
 import 'package:fit_track_360/features/notifications/presentation/notifications_page.dart';
 import 'package:fit_track_360/features/notifications/presentation/notifications_scope.dart';
 import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
+import 'package:fit_track_360/features/notifications/presentation/push_device_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -146,4 +150,237 @@ void main() {
     expect(find.text('Notificaciones'), findsOneWidget);
     expect(find.text('Nuevo inicio de sesión'), findsOneWidget);
   });
+
+  testWidgets(
+    'AppShellPage refresca unreadCount una sola vez al montar y muestra el badge',
+    (tester) async {
+      final repository = _UnreadCountRepository(unread: 4);
+      final notifications = NotificationsViewModel(repository: repository);
+      addTearDown(notifications.dispose);
+
+      final router = GoRouter(
+        initialLocation: '/app',
+        routes: [
+          StatefulShellRoute.indexedStack(
+            builder: (context, state, navigationShell) =>
+                AppShellPage(navigationShell: navigationShell),
+            branches: [
+              for (final path in const [
+                '/app',
+                '/app/entrenamientos',
+                '/app/comidas',
+                '/app/ejercicios',
+                '/app/progreso',
+                '/app/perfil',
+              ])
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: path,
+                      builder: (context, state) => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      );
+
+      await tester.pumpWidget(
+        NotificationsScope(
+          notifier: notifications,
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(repository.unreadCalls, 1);
+      expect(notifications.unreadCount, 4);
+      expect(find.text('4'), findsOneWidget);
+
+      await tester.tap(find.text('Entrenos'));
+      await tester.pumpAndSettle();
+
+      expect(repository.unreadCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'AppShellPage hereda PushDeviceScope sin duplicarlo ni disponerlo y crea uno propio solo si falta',
+    (tester) async {
+      final ambientPush = _FakePushDeviceLifecycle();
+      PushDeviceLifecycle? resolvedInBranch;
+      final ambientRouter = GoRouter(
+        initialLocation: '/app',
+        routes: [
+          StatefulShellRoute.indexedStack(
+            builder: (context, state, navigationShell) =>
+                AppShellPage(navigationShell: navigationShell),
+            branches: [
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/app',
+                    builder: (context, state) {
+                      resolvedInBranch = PushDeviceScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+              for (final path in const [
+                '/app/entrenamientos',
+                '/app/comidas',
+                '/app/ejercicios',
+                '/app/progreso',
+                '/app/perfil',
+              ])
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: path,
+                      builder: (context, state) => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      );
+      addTearDown(ambientRouter.dispose);
+
+      await tester.pumpWidget(
+        PushDeviceScope(
+          service: ambientPush,
+          child: MaterialApp.router(routerConfig: ambientRouter),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(resolvedInBranch, same(ambientPush));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(ambientPush.disposeCalls, 0);
+
+      // Sin PushDeviceScope externo, AppShellPage expone una única instancia propia y la libera al desmontar.
+      PushDeviceLifecycle? firstBranchService;
+      PushDeviceLifecycle? profileBranchService;
+      final standaloneRouter = GoRouter(
+        initialLocation: '/app',
+        routes: [
+          StatefulShellRoute.indexedStack(
+            builder: (context, state, navigationShell) =>
+                AppShellPage(navigationShell: navigationShell),
+            branches: [
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/app',
+                    builder: (context, state) {
+                      firstBranchService = PushDeviceScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+              for (final path in const [
+                '/app/entrenamientos',
+                '/app/comidas',
+                '/app/ejercicios',
+                '/app/progreso',
+              ])
+                StatefulShellBranch(
+                  routes: [
+                    GoRoute(
+                      path: path,
+                      builder: (context, state) => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(
+                    path: '/app/perfil',
+                    builder: (context, state) {
+                      profileBranchService = PushDeviceScope.maybeOf(context);
+                      return const SizedBox.shrink();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      addTearDown(standaloneRouter.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp.router(routerConfig: standaloneRouter),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Perfil'));
+      await tester.pumpAndSettle();
+
+      expect(firstBranchService, isNotNull);
+      expect(profileBranchService, same(firstBranchService));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+}
+
+class _FakePushDeviceLifecycle implements PushDeviceLifecycle {
+  int disposeCalls = 0;
+
+  @override
+  Future<void> syncForActiveSession({
+    required bool notificationsEnabled,
+    bool requestPermissionIfNeeded = false,
+  }) async {}
+
+  @override
+  Future<void> deactivateAndRevoke() async {}
+
+  @override
+  Future<void> dispose() async {
+    disposeCalls++;
+  }
+}
+
+class _UnreadCountRepository implements NotificationsRepository {
+  _UnreadCountRepository({required this.unread});
+
+  final int unread;
+  int unreadCalls = 0;
+
+  @override
+  Future<List<AppNotification>> fetchNotifications({
+    bool? isRead,
+    AppNotificationType? type,
+  }) async => const [];
+
+  @override
+  Future<int> fetchUnreadCount() async {
+    unreadCalls++;
+    return unread;
+  }
+
+  @override
+  Future<AppNotification?> updateRead(
+    String id, {
+    required bool isRead,
+  }) async => null;
+
+  @override
+  Future<void> markAllAsRead() async {}
+
+  @override
+  Future<void> deleteNotification(String id) async {}
+
+  @override
+  Future<void> deleteAll() async {}
 }

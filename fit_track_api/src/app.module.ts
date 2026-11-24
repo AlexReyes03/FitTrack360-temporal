@@ -7,6 +7,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { FoodsModule } from './foods/foods.module';
 import { HealthModule } from './health/health.module';
 import { MealsModule } from './meals/meals.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { PrivacyModule } from './privacy/privacy.module';
 import { PhotosModule } from './photos/photos.module';
@@ -32,6 +33,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
     RoutinesModule,
     FoodsModule,
     MealsModule,
+    NotificationsModule,
     ExercisesModule,
     DashboardModule,
     ProgressModule,

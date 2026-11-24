@@ -125,6 +125,64 @@ void main() {
     });
   });
 
+  group('ProfileApiRepository sesión y eliminación (UX-11)', () {
+    ProfileApiRepository repoWith(MockClient client) => ProfileApiRepository(
+      ApiClient(storage: FakeSessionStorage(), httpClient: client),
+    );
+
+    test('exportData con 401 persistente lanza SessionExpired', () async {
+      final repo = repoWith(MockClient((_) async => http.Response('', 401)));
+      await expectLater(
+        repo.exportData(),
+        throwsA(isA<SessionExpiredException>()),
+      );
+    });
+
+    test('fetchProfile con 401 persistente lanza SessionExpired', () async {
+      final repo = repoWith(MockClient((_) async => http.Response('', 401)));
+      await expectLater(
+        repo.fetchProfile(),
+        throwsA(isA<SessionExpiredException>()),
+      );
+    });
+
+    test('deleteAccount envía DELETE /api/v1/users/me y acepta 204', () async {
+      final requests = <http.Request>[];
+      final repo = repoWith(
+        MockClient((request) async {
+          requests.add(request);
+          return http.Response('', 204);
+        }),
+      );
+
+      await repo.deleteAccount();
+
+      expect(requests.single.method, 'DELETE');
+      expect(requests.single.url.path, '/api/v1/users/me');
+      expect(requests.single.headers['Authorization'], 'Bearer access');
+    });
+
+    test('deleteAccount con error o sin red lanza AccountDeletion', () async {
+      for (final client in [
+        MockClient((_) async => http.Response('', 503)),
+        MockClient((_) async => throw http.ClientException('sin red')),
+      ]) {
+        await expectLater(
+          repoWith(client).deleteAccount(),
+          throwsA(isA<AccountDeletionException>()),
+        );
+      }
+    });
+
+    test('deleteAccount con 401 persistente lanza SessionExpired', () async {
+      final repo = repoWith(MockClient((_) async => http.Response('', 401)));
+      await expectLater(
+        repo.deleteAccount(),
+        throwsA(isA<SessionExpiredException>()),
+      );
+    });
+  });
+
   group('LogoutService', () {
     test('revoca el ID token y limpia la sesión', () async {
       final storage = FakeSessionStorage();

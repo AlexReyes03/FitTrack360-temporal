@@ -43,6 +43,22 @@ enum WeightUnit { kg, lb }
 
 enum DistanceUnit { km, mi }
 
+/// Nombre legible de la unidad de peso para la UI.
+extension WeightUnitLabel on WeightUnit {
+  String get label => switch (this) {
+    WeightUnit.kg => 'Kilogramos',
+    WeightUnit.lb => 'Libras',
+  };
+}
+
+/// Nombre legible de la unidad de distancia («mi» es ambiguo en español).
+extension DistanceUnitLabel on DistanceUnit {
+  String get label => switch (this) {
+    DistanceUnit.km => 'Kilómetros',
+    DistanceUnit.mi => 'Millas',
+  };
+}
+
 /// Unidades, descanso entre series y opciones de P3 y O1.
 class UserPreferences {
   const UserPreferences({

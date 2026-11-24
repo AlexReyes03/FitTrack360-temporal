@@ -48,6 +48,20 @@ class ProfileApiRepository implements ProfileRepository {
     }
   }
 
+  @override
+  Future<void> deleteAccount() async {
+    try {
+      final response = await _client.delete(_mePath);
+      if (response.statusCode != 204 && response.statusCode != 200) {
+        throw const AccountDeletionException();
+      }
+    } on SessionExpiredException {
+      rethrow;
+    } catch (_) {
+      throw const AccountDeletionException();
+    }
+  }
+
   Map<String, dynamic> _decode(List<int> bytes) =>
       jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
 }

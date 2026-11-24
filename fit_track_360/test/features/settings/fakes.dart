@@ -63,9 +63,19 @@ class FakeProfileRepository implements ProfileRepository {
   int? workouts;
   Object? fetchError;
   Object? updateError;
+  Object? exportError;
+  Object? deleteError;
   String? exportJson;
   final updates = <ProfileUpdate>[];
   int fetchCalls = 0;
+  int exportCalls = 0;
+  int deleteCalls = 0;
+
+  /// Si no es null, el PATCH / la exportación / la eliminación esperan a que
+  /// se complete, para observar los estados intermedios.
+  Completer<void>? updateGate;
+  Completer<void>? exportGate;
+  Completer<void>? deleteGate;
 
   @override
   Future<UserProfile?> fetchProfile() async {
@@ -87,6 +97,7 @@ class FakeProfileRepository implements ProfileRepository {
   @override
   Future<UserProfile> updateProfile(ProfileUpdate update) async {
     updates.add(update);
+    if (updateGate != null) await updateGate!.future;
     if (updateError != null) throw updateError!;
     final current = profile!;
     profile = UserProfile(
@@ -102,8 +113,19 @@ class FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<String> exportData() async {
+    exportCalls++;
+    if (exportGate != null) await exportGate!.future;
+    if (exportError != null) throw exportError!;
     if (exportJson == null) throw const ExportUnavailableException();
     return exportJson!;
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    deleteCalls++;
+    if (deleteGate != null) await deleteGate!.future;
+    if (deleteError != null) throw deleteError!;
+    profile = null;
   }
 }
 

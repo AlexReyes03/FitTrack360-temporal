@@ -457,7 +457,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Puedes activarlo después desde Ajustes'),
+      find.textContaining(
+        'Puedes activarlo después desde los ajustes del teléfono',
+      ),
       findsOneWidget,
     );
     await tester.ensureVisible(find.text('Abrir ajustes'));

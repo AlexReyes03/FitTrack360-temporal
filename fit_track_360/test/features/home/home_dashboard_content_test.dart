@@ -1,4 +1,6 @@
+import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/dashboard_block_shell.dart';
+import 'package:fit_track_360/features/home/presentation/widgets/dashboard_steps_card.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/home_dashboard_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -154,5 +156,16 @@ void main() {
     expect(find.text('Entrenar'), findsOneWidget);
     expect(find.text('Comida'), findsOneWidget);
     expect(find.text('Foto progreso'), findsOneWidget);
+  });
+
+  test('el aviso de pasos remite a los ajustes del teléfono', () {
+    for (final reason in [
+      StepsUnavailableReason.denied,
+      StepsUnavailableReason.blocked,
+    ]) {
+      final message = DashboardStepsCard.unavailableMessageFor(reason);
+      expect(message, contains('ajustes del teléfono'), reason: '$reason');
+      expect(message, isNot(contains('desde Ajustes')), reason: '$reason');
+    }
   });
 }

@@ -157,11 +157,25 @@ Primary paragraph under intro badge → secondary paragraph: **8 dp**.
 
 ### PageHeader
 
-**Anatomy:** BrandPill → page title → metadata line in `text.secondary`.
+**Survey anatomy:** BrandPill → page title → metadata line in `text.secondary`.
 
 **Metadata line:** plain text segments separated by `|`, plus an inline **16×16 dp** icon (e.g. stopwatch) baseline-aligned with the trailing duration text (e.g. `3 min`).
 
 **Metrics:** block bottom margin ~28 dp; pill → title gap ~14 dp.
+
+**App screens (`lib/design_system/components/page_header.dart`):** every secondary screen uses `PageHeader` in the `header` slot of `AppScaffoldTemplate` or `FormPageTemplate`.
+
+| Part | Spec |
+| --- | --- |
+| Back (`GlassBackButton`) | 48×48 dp, `radius.option`, gradient `glassFillStrong` → `glassFillSoft`, border `glassBorderStrong`; Pressed: `glassFillPressed*` + `glassBorderPressed` + 1 dp lift. Icon `arrow_back_rounded` 22 dp. Tooltip and semantics label **«Volver»** |
+| Title | `AppTypography.pageTitle`, max 2 lines, `Semantics(header: true)` |
+| Subtitle | optional, `AppTypography.body` in `text.secondary` |
+| Trailing | optional widget (e.g. compact `SecondaryButton`) |
+| Gaps | back → title `space.sm`; title → trailing `space.sm` |
+
+**Back behavior:** `onBack` if given → otherwise `Navigator.maybePop` when the route can pop → otherwise `onBackFallback` (e.g. `context.go('/app')`), so the button is never inert after a deep link. `showBack: false` on root tabs.
+
+**Template slot:** `AppScaffoldTemplate(header:)` pins the header under the top safe area, centered in `content.maxWidth`, padding `space.sm` top / `space.md` sides / `space.xs` bottom; the body scrolls underneath and receives the top inset already consumed. `FormPageTemplate(header:)` places it above the fields inside the scroll column.
 
 ### IntroCard
 
@@ -290,27 +304,95 @@ Scale labels under the grid (“not at all likely” / “very likely”) in `te
 
 **Top light:** 1 dp highlight near the top edge (paint or nested gradient), not an inset `BoxShadow`.
 
+**Variants:** `primary` (white/silver) and `destructive` (red gradient, white label).
+
 **States:**
 
 | State | Visual |
 | --- | --- |
 | Default | Metrics above |
 | Pressed | **1 dp lift** while down; slightly lighter gradient; on release return to Y 0 |
-| Disabled | Opacity 0.55 |
+| Disabled (`onPressed: null`) | Opacity 0.55 |
+| Loading (`isLoading: true`) | 18 dp spinner (stroke 2) left of the label in the label color (`text.onAccent`; white on destructive); optional `loadingLabel` (e.g. «Creando cuenta…»); taps ignored (no double submit); **opacity stays 1**: the action is in progress, not forbidden |
+
+**Accessibility:** `Semantics(container: true, button: true, enabled:, label:, excludeSemantics: true)`; while loading `enabled` is false and the label is the loading label.
 
 No separate hover state required on touch devices.
 
+### SecondaryButton
+
+Glass pill for every non-primary action (`lib/design_system/components/secondary_button.dart`).
+
+| Size | Visual height | Tap target | Padding | Label | Icon |
+| --- | --- | --- | --- | --- | --- |
+| `normal` | 48 dp | 48 dp | 12×24 dp | `secondaryCta` (15.5, w700) | 18 dp |
+| `compact` | 36 dp | 48 dp (transparent band) | 8×14 dp | `secondaryCta` at 13 dp | 15 dp |
+
+| Variant / state | Fill | Border | Label |
+| --- | --- | --- | --- |
+| Neutral | gradient `glassFillStrong` → `glassFillSoft` | `glassBorderStrong` | `text.primary` |
+| Neutral pressed | gradient `glassFillPressedStrong` → `glassFillPressedSoft`, 1 dp lift | `glassBorderPressed` | `text.primary` |
+| Selected (`selected: true`) | `accent.white` | `accent.silver` | `text.onAccent` |
+| Destructive | `dangerFill` | `dangerBorder` (pressed `dangerSolidRim`) | `dangerText` |
+| Disabled | opacity 0.55 | — | — |
+| Loading | spinner replaces the icon; taps ignored | — | — |
+
+`expand: true` stretches to the available width (stacked under a PrimaryButton or in dialogs). `semanticLabel` overrides the announced label (e.g. «Reintentar conexión»). Same semantics contract as PrimaryButton, plus `selected`.
+
+### TextLink
+
+Tertiary text action with a 48 dp tap target (`TextButton` underneath). Default: `text.primary`, weight 700, underline in `text.secondary`. `subtle: true`: `text.secondary`, weight 600, no underline. Disabled: `text.muted`.
+
 ### StatusBanner
 
-**Anatomy:** message under the CTA or beside submit feedback.
+**Anatomy:** icon (20 dp) → optional title (15, w700) → message (13.5, line height 1.45) → optional `action` full width below the text, or optional compact `trailing` to the right (e.g. «Reintentar» in the offline banner). Placed under the CTA or beside submit feedback.
 
-| Variant | Background | Border | Text |
-| --- | --- | --- | --- |
-| Warning | `#f59e0b` @ 14% | `#fbbf24` @ 40% | `#fde68a` |
-| Neutral | white @ 8% | white @ 20% | `#f4f4f5` |
-| Danger | `#ef4444` @ 16% | `#f87171` @ 45% | `#fecaca` |
+| Variant | Background | Border | Text | Default icon |
+| --- | --- | --- | --- | --- |
+| Warning | `#f59e0b` @ 14% (`warningFill`) | `#fbbf24` @ 40% (`warningBorder`) | `#fde68a` (`warningText`) | `info_outline_rounded` |
+| Neutral | white @ 8% (*) | white @ 20% (*) | `#f4f4f5` (`zinc100`) | `info_outline_rounded` |
+| Success | same as Neutral | same as Neutral | same as Neutral | `check_circle_outline_rounded` |
+| Danger | `#ef4444` @ 16% (`dangerFill`) | `#f87171` @ 45% (`dangerBorder`) | `#fecaca` (`dangerText`) | `error_outline_rounded` |
 
-Radius 14 dp; padding ~15×18 dp; optional light blur (sigma ~8–12).
+(*) Implemented with the closest existing tokens, `glassFillStrong` (10%) and `glassBorderStrong` (28%), until #221 adds neutral banner tokens.
+
+**Success is not green:** the accent is monochrome, so confirmations («Cambios guardados») use the Neutral palette with a check mark.
+
+Radius 14 dp (`radius.banner`); padding 15×18 dp; light blur sigma 10. `icon` overrides the default glyph (e.g. `wifi_off_rounded`, `location_off_rounded`).
+
+**Accessibility:** `Semantics(container: true, liveRegion: true)` by default so screen readers announce it when it appears or changes; `liveRegion: false` for persistent notices. The icon is excluded from semantics.
+
+### GlassDialog
+
+`showGlassDialog(context:, builder:)` opens a `Dialog` whose content is a `GlassSurface` (max width 520 dp, inset `space.md`) over the DS scrim. `GlassDialog(title:, message:, content:, actions:)`: title 20 dp w800 (`Semantics(header: true)`), message `body` in `text.secondary`, actions stacked full width with `space.xs` gaps, primary first.
+
+`showGlassConfirmDialog(context:, title:, message:, confirmLabel:, cancelLabel: 'Cancelar', destructive:)` returns `Future<bool>`: `true` only on confirm; cancel, scrim tap or system back return `false`. With `destructive: true` the confirm button is `PrimaryButton` destructive (red).
+
+**Scrim:** `bgDeep` @ 80% (`glassBarrierColor`). Temporary value: switch to the `scrim` token from #221.
+
+### GlassBottomSheet
+
+`showGlassBottomSheet(context:, builder:, title:)`: modal sheet on `bgMid`, top radius `radius.card`, 1 dp `glassBorder` outline, drag handle in `glassBorderStrong`, DS scrim, bottom safe area. Options use `GlassSheetAction(icon:, label:, onTap:, destructive:)`: 56 dp rows, icon 22 dp, label 15 dp w600 (`dangerText` when destructive). Example: the progress «Cámara / Galería» picker.
+
+### AppSnackBar
+
+`showAppSnackBar(context, message:, variant:, actionLabel:, onAction:)` hides the current snackbar and shows a floating one (no queue of stale messages). Surface from `snackBarTheme`: `bgMid`, radius 14 dp, `glassBorderStrong` outline, no elevation, action in `accent.white`. `variant` reuses the StatusBanner palette for the icon and text color (Danger → `dangerText`).
+
+### Material theme (`fitTrackDarkTheme`)
+
+Material widgets that still appear (pickers, raw dialogs, chips, switches) inherit the monochrome palette from `lib/app/app.dart`:
+
+| Theme | Values |
+| --- | --- |
+| `colorScheme` | every role in white/silver/zinc (no Material teal) |
+| `dialogTheme` | `bgMid`, no surface tint, card radius with `glassBorder`, DS scrim, title 20 w800, content `text.secondary` |
+| `snackBarTheme` | floating, `bgMid`, banner radius, `glassBorderStrong`, action `accent.white` |
+| `chipTheme` | selected `accent.white` + `text.onAccent` label + check `text.onAccent`; idle `glassFillSoft` + `zinc200` label + `glassBorderStrong`; stadium shape. Fixes the teal selected meal-type chip («Desayuno») |
+| `bottomSheetTheme` | `bgMid`, drag handle, top card radius, DS scrim |
+| `progressIndicatorTheme` | `accent.white`, linear track `glassFillStrong` |
+| `textButtonTheme` | `accent.white` (disabled `text.muted`), min 48×48 dp, w700 |
+| `switchTheme` | on: track `accent.white`, thumb `text.onAccent`; off: track `controlFillIdle`, thumb `accent.silver`; outline `glassBorderStrong` |
+| `datePickerTheme` / `timePickerTheme` | `bgMid`, selection `accent.white` with `text.onAccent` |
 
 ### EndState
 

@@ -27,7 +27,7 @@ class RoutineCard extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: GlassSurface(
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
         radius: AppRadii.inner,
         child: Row(
           children: [
@@ -37,34 +37,27 @@ class RoutineCard extends StatelessWidget {
                 children: [
                   Text(
                     routine.name.isEmpty ? 'Rutina sin nombre' : routine.name,
-                    style: AppTypography.body.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
+                    style: AppTypography.sectionTitle,
                   ),
                   if (routine.notes != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: AppSpacing.xxs),
                     Text(
                       routine.notes!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.body.copyWith(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                      ),
+                      style: AppTypography.caption,
                     ),
                   ],
                   if (metrics.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Wrap(
                       spacing: AppSpacing.sm,
-                      runSpacing: 4,
+                      runSpacing: AppSpacing.xxs,
                       children: [
                         for (final metric in metrics)
                           Text(
                             metric,
-                            style: AppTypography.body.copyWith(
-                              fontSize: 12,
+                            style: AppTypography.meta.copyWith(
                               color: AppColors.textMuted,
                             ),
                           ),

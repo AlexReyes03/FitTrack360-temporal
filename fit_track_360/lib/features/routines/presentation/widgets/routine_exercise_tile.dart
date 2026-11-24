@@ -23,10 +23,7 @@ class RoutineExerciseTile extends StatelessWidget {
     final target = exercise.targetLabel;
 
     return GlassSurface(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.all(AppSpacing.sm),
       radius: AppRadii.inner,
       child: Row(
         children: [
@@ -41,11 +38,7 @@ class RoutineExerciseTile extends StatelessWidget {
             ),
             child: Text(
               '$ordinal',
-              style: const TextStyle(
-                color: AppColors.textMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.meta.copyWith(color: AppColors.textMuted),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
@@ -60,14 +53,8 @@ class RoutineExerciseTile extends StatelessWidget {
                   ),
                 ),
                 if (target != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    target,
-                    style: AppTypography.body.copyWith(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
+                  const SizedBox(height: AppSpacing.hairline),
+                  Text(target, style: AppTypography.caption),
                 ],
               ],
             ),

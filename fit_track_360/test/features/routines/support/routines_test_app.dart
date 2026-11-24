@@ -8,6 +8,7 @@ import 'fake_routines_reader.dart';
 Widget routinesTestApp(
   FakeRoutinesReader reader, {
   String initialLocation = '/app/rutinas',
+  void Function(Object? extra)? onTracker,
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
@@ -19,6 +20,13 @@ Widget routinesTestApp(
       GoRoute(
         path: '/app',
         builder: (context, state) => const Scaffold(body: Text('inicio')),
+      ),
+      GoRoute(
+        path: '/app/tracker',
+        builder: (context, state) {
+          onTracker?.call(state.extra);
+          return const Scaffold(body: Text('tracker'));
+        },
       ),
       GoRoute(
         path: '/app/rutinas',

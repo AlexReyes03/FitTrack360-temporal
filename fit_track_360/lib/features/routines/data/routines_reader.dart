@@ -1,3 +1,5 @@
+import '../domain/routine.dart';
+
 /// Resumen de rutina para el listado. Es un modelo de lectura: no sustituye
 /// al `Routine` de dominio compartido con las demás subtareas.
 class RoutineSummary {
@@ -58,6 +60,30 @@ class RoutineDetail {
       exercises: List.unmodifiable(ordered),
     );
   }
+
+  /// Rutina de dominio para «Entrenar ahora». Omite los ejercicios sin id
+  /// (no se pueden registrar) y completa objetivos ausentes con 1 serie de
+  /// [defaultTargetReps] repeticiones.
+  Routine toRoutine() {
+    final items = <RoutineExercise>[];
+    for (var index = 0; index < exercises.length; index++) {
+      final exercise = exercises[index];
+      final id = exercise.exerciseId;
+      if (id == null) continue;
+      items.add(
+        RoutineExercise(
+          exerciseId: id,
+          exerciseName: exercise.exerciseName ?? '',
+          position: exercise.position ?? index,
+          targetSets: (exercise.targetSets ?? 1).clamp(1, 50),
+          targetReps: (exercise.targetReps ?? defaultTargetReps).clamp(1, 1000),
+        ),
+      );
+    }
+    return Routine(id: id, name: name, notes: notes, exercises: items);
+  }
+
+  static const int defaultTargetReps = 10;
 
   /// Copia el detalle con los nombres resueltos desde el catálogo.
   RoutineDetail withExerciseNames(Map<String, String> names) {

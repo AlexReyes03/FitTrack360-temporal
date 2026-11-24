@@ -1,6 +1,7 @@
 import 'package:fit_track_360/features/routines/domain/routine.dart';
 import 'package:fit_track_360/features/routines/presentation/start_session_button.dart';
 import 'package:fit_track_360/features/workouts/domain/workout_session_draft.dart';
+import 'package:fit_track_360/features/workouts/presentation/tracker_session_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -45,22 +46,22 @@ Future<WorkoutSessionDraft?> _tapWithRouter(
             Scaffold(body: StartSessionButton(routine: routine)),
       ),
       GoRoute(
-        path: '/app/entrenamientos',
+        path: '/app/tracker',
         builder: (context, state) {
-          received = state.extra as WorkoutSessionDraft?;
+          received = (state.extra as TrackerSessionArgs?)?.draft;
           return const Scaffold(body: Text('Pantalla de sesión'));
         },
       ),
     ],
   );
   await tester.pumpWidget(MaterialApp.router(routerConfig: router));
-  await tester.tap(find.text('Iniciar sesión'));
+  await tester.tap(find.text('Entrenar ahora'));
   await tester.pumpAndSettle();
   return received;
 }
 
 void main() {
-  testWidgets('navega a la sesión con el borrador precargado', (tester) async {
+  testWidgets('abre el tracker con el borrador de la rutina', (tester) async {
     final draft = await _tapWithRouter(tester, _fullRoutine);
 
     expect(find.text('Pantalla de sesión'), findsOneWidget);
@@ -92,7 +93,7 @@ void main() {
         ),
       ),
     );
-    await tester.tap(find.text('Iniciar sesión'));
+    await tester.tap(find.text('Entrenar ahora'));
     await tester.pump();
 
     expect(received?.exercises.first.targetSets, 4);
@@ -109,7 +110,7 @@ void main() {
     );
 
     await tester.pumpWidget(host(_emptyRoutine));
-    await tester.tap(find.text('Iniciar sesión'));
+    await tester.tap(find.text('Entrenar ahora'));
     await tester.pump();
     expect(find.text(_emptyMessage), findsOneWidget);
 
@@ -129,7 +130,7 @@ void main() {
     );
 
     await tester.pumpWidget(host(_emptyRoutine));
-    await tester.tap(find.text('Iniciar sesión'));
+    await tester.tap(find.text('Entrenar ahora'));
     await tester.pump();
 
     await tester.pumpWidget(

@@ -4,7 +4,7 @@ import '../../workouts/domain/workout_session_draft.dart';
 import '../domain/routine.dart';
 import '../domain/start_session_from_routine.dart';
 
-/// ViewModel de la acción «Iniciar sesión» desde una rutina.
+/// ViewModel de la acción «Entrenar ahora» desde una rutina.
 class StartSessionViewModel extends ChangeNotifier {
   final StartSessionFromRoutine _useCase;
 

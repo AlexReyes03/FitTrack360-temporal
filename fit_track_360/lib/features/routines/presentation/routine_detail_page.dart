@@ -10,6 +10,7 @@ import '../../../design_system/tokens/app_typography.dart';
 import '../../auth/data/auth_api.dart';
 import '../data/routines_api.dart';
 import '../data/routines_reader.dart';
+import 'start_session_button.dart';
 import 'widgets/routine_exercise_tile.dart';
 
 class RoutineDetailPage extends StatefulWidget {
@@ -146,6 +147,8 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
             style: AppTypography.body.copyWith(color: AppColors.textSecondary),
           ),
         ],
+        const SizedBox(height: AppSpacing.md),
+        StartSessionButton(routine: routine.toRoutine()),
         const SizedBox(height: AppSpacing.md),
         Text(
           'Ejercicios (${routine.exercises.length})',

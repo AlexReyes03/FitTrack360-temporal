@@ -8,6 +8,14 @@ class ExportUnavailableException implements Exception {
   String toString() => 'Exportación no disponible';
 }
 
+/// La eliminación de la cuenta (`DELETE /api/v1/users/me`) falló.
+class AccountDeletionException implements Exception {
+  const AccountDeletionException();
+
+  @override
+  String toString() => 'No se pudo eliminar la cuenta';
+}
+
 /// Acceso al perfil del usuario autenticado.
 abstract class ProfileRepository {
   /// Devuelve null si el API no tiene perfil que mostrar. El resumen
@@ -16,6 +24,11 @@ abstract class ProfileRepository {
 
   Future<UserProfile> updateProfile(ProfileUpdate update);
 
-  /// JSON con los datos del usuario. Lanza [ExportUnavailableException].
+  /// JSON con los datos del usuario. Lanza [ExportUnavailableException] o
+  /// `SessionExpiredException`.
   Future<String> exportData();
+
+  /// Elimina la cuenta y todos sus registros. Lanza
+  /// [AccountDeletionException] o `SessionExpiredException`.
+  Future<void> deleteAccount();
 }

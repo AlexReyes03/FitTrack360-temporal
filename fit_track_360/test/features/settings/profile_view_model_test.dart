@@ -1,6 +1,13 @@
+import 'dart:async';
+
+import 'package:fit_track_360/core/async_state.dart';
+import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
 import 'package:fit_track_360/features/settings/domain/export_sharer.dart';
+import 'package:fit_track_360/features/settings/domain/profile_repository.dart';
+import 'package:fit_track_360/features/settings/domain/profile_validation.dart';
+import 'package:fit_track_360/features/settings/domain/user_profile.dart';
 import 'package:fit_track_360/features/settings/presentation/profile_view_model.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -229,4 +236,302 @@ void main() {
       expect(storage.accessToken, isNull);
     });
   });
+
+  group('sesión expirada (UX-11)', () {
+    test(
+      'load marca sessionExpired si el API ya no acepta la sesión',
+      () async {
+        final repo = FakeProfileRepository()
+          ..fetchError = const SessionExpiredException();
+        final vm = _vm(repo, FakeExportSharer());
+
+        await vm.load();
+
+        expect(vm.sessionExpired, isTrue);
+        expect(vm.state, isA<AsyncError<UserProfile>>());
+      },
+    );
+
+    test(
+      'un error genérico en load no se confunde con sesión expirada',
+      () async {
+        final repo = FakeProfileRepository()..fetchError = Exception('500');
+        final vm = _vm(repo, FakeExportSharer());
+
+        await vm.load();
+
+        expect(vm.sessionExpired, isFalse);
+      },
+    );
+
+    test(
+      'exportar con sesión expirada no la reporta como no disponible',
+      () async {
+        final repo = FakeProfileRepository()
+          ..exportError = const SessionExpiredException();
+        final sharer = FakeExportSharer();
+        final vm = _vm(repo, sharer);
+        await vm.load();
+
+        expect(await vm.exportData(), isNull);
+
+        expect(vm.sessionExpired, isTrue);
+        expect(vm.message, isNot(exportUnavailableMessage));
+        expect(sharer.shared, isEmpty);
+        expect(vm.exporting, isFalse);
+      },
+    );
+
+    test('guardar con sesión expirada marca sessionExpired', () async {
+      final repo = FakeProfileRepository();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+      repo.updateError = const SessionExpiredException();
+
+      final saved = await vm.save(_validForm());
+
+      expect(saved, isFalse);
+      expect(vm.sessionExpired, isTrue);
+      expect(vm.formFeedback, isNull);
+    });
+  });
+
+  group('regla de guardado (UX-11)', () {
+    test(
+      'save envía nombre, metas y descanso sin tocar las unidades',
+      () async {
+        final repo = FakeProfileRepository(
+          profile: UserProfile(
+            id: sampleProfile.id,
+            email: sampleProfile.email,
+            username: sampleProfile.username,
+            displayName: sampleProfile.displayName,
+            goals: sampleGoals,
+            preferences: samplePreferences.copyWith(weightUnit: WeightUnit.lb),
+          ),
+        );
+        final vm = _vm(repo, FakeExportSharer());
+        await vm.load();
+
+        expect(await vm.save(_validForm(rest: '120')), isTrue);
+
+        final prefs = repo.updates.single.preferences!;
+        expect(prefs.restSeconds, 120);
+        expect(prefs.weightUnit, WeightUnit.lb);
+        expect(vm.formFeedback?.text, formSavedMessage);
+        expect(vm.formFeedback?.kind, ProfileFeedbackKind.success);
+        expect(vm.preferencesFeedback, isNull);
+      },
+    );
+
+    test('un fallo al guardar el formulario se reporta como error', () async {
+      final repo = FakeProfileRepository();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+      repo.updateError = Exception('500');
+
+      expect(await vm.save(_validForm()), isFalse);
+
+      expect(vm.formFeedback?.text, saveFailedMessage);
+      expect(vm.formFeedback?.kind, ProfileFeedbackKind.error);
+    });
+
+    test('cambiar la unidad de peso se guarda al instante', () async {
+      final repo = FakeProfileRepository();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+
+      await vm.setWeightUnit(WeightUnit.lb);
+
+      expect(repo.updates.single.preferences!.weightUnit, WeightUnit.lb);
+      expect(repo.updates.single.displayName, isNull);
+      expect(vm.profile!.preferences.weightUnit, WeightUnit.lb);
+      expect(vm.preferencesFeedback?.text, preferenceSavedMessage);
+      expect(vm.preferencesFeedback?.kind, ProfileFeedbackKind.success);
+    });
+
+    test('cambiar la unidad de distancia se guarda al instante', () async {
+      final repo = FakeProfileRepository();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+
+      await vm.setDistanceUnit(DistanceUnit.mi);
+
+      expect(repo.updates.single.preferences!.distanceUnit, DistanceUnit.mi);
+    });
+
+    test('elegir la unidad que ya está activa no llama al API', () async {
+      final repo = FakeProfileRepository();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+
+      await vm.setWeightUnit(WeightUnit.kg);
+
+      expect(repo.updates, isEmpty);
+    });
+
+    test('un interruptor nunca pone el formulario en «guardando»', () async {
+      final repo = FakeProfileRepository()..updateGate = Completer<void>();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+      final formSavingStates = <bool>[];
+      final prefsStates = <bool>[];
+      vm.addListener(() {
+        formSavingStates.add(vm.savingForm);
+        prefsStates.add(vm.updatingPreferences);
+      });
+
+      final pending = vm.setReminder(true);
+      await pumpEventQueue();
+      expect(vm.updatingPreferences, isTrue);
+      repo.updateGate!.complete();
+      await pending;
+
+      expect(formSavingStates, everyElement(isFalse));
+      expect(prefsStates, contains(isTrue));
+      expect(vm.updatingPreferences, isFalse);
+      expect(vm.preferencesFeedback?.kind, ProfileFeedbackKind.success);
+    });
+
+    test(
+      'un fallo de preferencia se reporta como error en su sección',
+      () async {
+        final repo = FakeProfileRepository();
+        final vm = _vm(repo, FakeExportSharer());
+        await vm.load();
+        repo.updateError = Exception('500');
+
+        await vm.setDistanceUnit(DistanceUnit.mi);
+
+        expect(vm.preferencesFeedback?.text, preferenceFailedMessage);
+        expect(vm.preferencesFeedback?.kind, ProfileFeedbackKind.error);
+        expect(vm.formFeedback, isNull);
+        expect(vm.profile!.preferences.distanceUnit, DistanceUnit.km);
+      },
+    );
+
+    test('permiso denegado se muestra como aviso, no como error', () async {
+      final vm = _vm(
+        FakeProfileRepository(),
+        FakeExportSharer(),
+        reminders: FakeReminderService(permission: ReminderPermission.denied),
+      );
+      await vm.load();
+
+      await vm.setReminder(true);
+
+      expect(vm.preferencesFeedback?.kind, ProfileFeedbackKind.warning);
+    });
+  });
+
+  group('estado de exportación (UX-11)', () {
+    test(
+      'marca exporting y no permite una segunda exportación a la vez',
+      () async {
+        final repo = FakeProfileRepository()
+          ..exportJson = '{"a":1}'
+          ..exportGate = Completer<void>();
+        final sharer = FakeExportSharer();
+        final vm = _vm(repo, sharer);
+        await vm.load();
+
+        final first = vm.exportData();
+        await pumpEventQueue();
+        expect(vm.exporting, isTrue);
+        final second = await vm.exportData();
+        repo.exportGate!.complete();
+        await first;
+
+        expect(second, isNull);
+        expect(repo.exportCalls, 1);
+        expect(sharer.shared, hasLength(1));
+        expect(vm.exporting, isFalse);
+      },
+    );
+
+    test('exportación no disponible se reporta como error', () async {
+      final vm = _vm(FakeProfileRepository(), FakeExportSharer());
+      await vm.load();
+
+      await vm.exportData();
+
+      expect(vm.dataFeedback?.text, exportUnavailableMessage);
+      expect(vm.dataFeedback?.kind, ProfileFeedbackKind.error);
+    });
+  });
+
+  group('eliminar cuenta (UX-11)', () {
+    test(
+      'elimina en el API, cancela el recordatorio y limpia la sesión',
+      () async {
+        final repo = FakeProfileRepository();
+        final storage = FakeSessionStorage();
+        final reminders = FakeReminderService();
+        final vm = _vm(
+          repo,
+          FakeExportSharer(),
+          storage: storage,
+          reminders: reminders,
+        );
+        await vm.load();
+
+        expect(await vm.deleteAccount(), isTrue);
+
+        expect(repo.deleteCalls, 1);
+        expect(reminders.cancelled, 1);
+        expect(storage.accessToken, isNull);
+        expect(vm.deletingAccount, isFalse);
+      },
+    );
+
+    test('si el API falla conserva la sesión y muestra el error', () async {
+      final repo = FakeProfileRepository()
+        ..deleteError = const AccountDeletionException();
+      final storage = FakeSessionStorage();
+      final vm = _vm(repo, FakeExportSharer(), storage: storage);
+      await vm.load();
+
+      expect(await vm.deleteAccount(), isFalse);
+
+      expect(storage.accessToken, 'access');
+      expect(vm.dataFeedback?.text, accountDeletionFailedMessage);
+      expect(vm.dataFeedback?.kind, ProfileFeedbackKind.error);
+      expect(vm.deletingAccount, isFalse);
+    });
+
+    test('con sesión expirada marca sessionExpired', () async {
+      final repo = FakeProfileRepository()
+        ..deleteError = const SessionExpiredException();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+
+      expect(await vm.deleteAccount(), isFalse);
+
+      expect(vm.sessionExpired, isTrue);
+    });
+
+    test('no envía dos eliminaciones a la vez', () async {
+      final repo = FakeProfileRepository()..deleteGate = Completer<void>();
+      final vm = _vm(repo, FakeExportSharer());
+      await vm.load();
+
+      final first = vm.deleteAccount();
+      await pumpEventQueue();
+      expect(vm.deletingAccount, isTrue);
+      expect(await vm.deleteAccount(), isFalse);
+      repo.deleteGate!.complete();
+      await first;
+
+      expect(repo.deleteCalls, 1);
+    });
+  });
 }
+
+ProfileForm _validForm({String rest = '90'}) => ProfileForm(
+  displayName: 'Ana',
+  dailyCalorieGoal: '2000',
+  proteinGoalG: '150',
+  carbsGoalG: '250',
+  fatGoalG: '65',
+  restSeconds: rest,
+);

@@ -105,4 +105,16 @@ void main() {
       });
     });
   });
+
+  group('etiquetas de unidades (UX-11)', () {
+    test('las unidades de peso se leen completas en español', () {
+      expect(WeightUnit.kg.label, 'Kilogramos');
+      expect(WeightUnit.lb.label, 'Libras');
+    });
+
+    test('las unidades de distancia no usan la abreviatura ambigua «mi»', () {
+      expect(DistanceUnit.km.label, 'Kilómetros');
+      expect(DistanceUnit.mi.label, 'Millas');
+    });
+  });
 }

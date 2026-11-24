@@ -5,30 +5,32 @@ import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../../design_system/widgets/app_background.dart';
 
-/// Información sobre los datos y funciones implementadas en esta versión.
+/// Aviso en lenguaje claro y coherente con lo que la app ofrece hoy:
+/// «Exportar mis datos» y «Eliminar mi cuenta» viven en Perfil > Tus datos.
 const privacyNoticeSections = <(String, String)>[
   (
     'Datos de la cuenta',
-    'FitTrack360 registra nombre, usuario, correo y consentimiento. Firebase '
-        'Auth gestiona el acceso a la cuenta.',
+    'Guardamos tu nombre, tu nombre de usuario, tu correo y la fecha en que '
+        'aceptaste este aviso. El inicio de sesión lo resuelve un servicio de '
+        'autenticación seguro.',
   ),
   (
     'Datos que registras',
     'Puedes guardar entrenamientos, series, rutinas, comidas, medidas '
-        'corporales y fotografías. Las fotos se procesan para retirar EXIF '
-        'y se almacenan junto con sus metadatos técnicos.',
+        'corporales y fotos de progreso. Antes de guardar una foto le '
+        'quitamos la información oculta del archivo, como el lugar donde se '
+        'tomó.',
   ),
   (
-    'Uso de los datos',
-    'Los datos se usan para administrar la cuenta y mostrar los registros '
-        'personales de la cuenta.',
+    'Para qué usamos tus datos',
+    'Solo para administrar tu cuenta y mostrarte tus propios registros.',
   ),
   (
-    'Acceso y eliminación',
-    'La API permite exportar los registros de la cuenta y solicitar su '
-        'eliminación, incluidos archivos almacenados y la identidad de '
-        'Firebase. Las opciones disponibles en la aplicación dependen de '
-        'la versión instalada.',
+    'Copia y eliminación de tus datos',
+    'En Perfil, dentro de «Tus datos», puedes usar «Exportar mis datos» para '
+        'obtener una copia de todo lo que has registrado, y «Eliminar mi '
+        'cuenta» para borrar tu cuenta con todos tus registros y fotos. La '
+        'eliminación es definitiva y no se puede deshacer.',
   ),
   (
     'Salud y nutrición',
@@ -44,51 +46,76 @@ class PrivacyNoticePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor: AppColors.textPrimary,
-        elevation: 0,
-        title: const Text(
-          'Aviso de privacidad',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-      ),
-      extendBodyBehindAppBar: true,
       body: AppBackground(
         child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              GlassSurface(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Versión 2 · 16 de noviembre de 2026',
-                      style: TextStyle(color: AppColors.textMuted),
-                    ),
-                    for (final (title, body) in privacyNoticeSections) ...[
-                      const SizedBox(height: 16),
-                      if (title.isNotEmpty)
-                        Text(
-                          title,
-                          style: AppTypography.body.copyWith(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Mismo encabezado que Perfil: volver + título de página.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 24, 0),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Volver',
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: AppColors.textSecondary,
                           ),
                         ),
-                      const SizedBox(height: 6),
-                      Text(
-                        body,
-                        style: AppTypography.body.copyWith(
-                          color: AppColors.textSecondary,
+                        const Expanded(
+                          child: Text(
+                            'Aviso de privacidad',
+                            style: AppTypography.pageTitle,
+                          ),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+                      children: [
+                        GlassSurface(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Versión 2 · 16 de noviembre de 2026',
+                                style: TextStyle(color: AppColors.textMuted),
+                              ),
+                              for (final (title, body)
+                                  in privacyNoticeSections) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  title,
+                                  style: AppTypography.body.copyWith(
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  body,
+                                  style: AppTypography.body.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

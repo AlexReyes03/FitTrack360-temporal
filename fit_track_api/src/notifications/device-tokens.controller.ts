@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -12,6 +13,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -24,6 +26,7 @@ import {
 import { DeviceTokensService } from './device-tokens.service';
 import { DeviceTokenResponseDto } from './dto/device-token-response.dto';
 import { RegisterDeviceTokenDto } from './dto/register-device-token.dto';
+import { RevokeDeviceTokenDto } from './dto/revoke-device-token.dto';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
@@ -53,6 +56,23 @@ export class DeviceTokensController {
     return this.deviceTokens.register(this.requireUserId(req), dto);
   }
 
+  @Post('revoke')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary:
+      'Revoca un token FCM por valor en el cuerpo si pertenece al usuario autenticado',
+  })
+  @ApiNoContentResponse({
+    description:
+      'Operación idempotente: elimina el token si pertenece al actor sin revelar existencia.',
+  })
+  revokeByToken(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: RevokeDeviceTokenDto,
+  ): Promise<void> {
+    return this.deviceTokens.revokeByToken(this.requireUserId(req), dto.token);
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Lista los dispositivos push registrados del usuario autenticado',
@@ -75,5 +95,23 @@ export class DeviceTokensController {
     @Param('id') id: string,
   ): Promise<DeviceTokenResponseDto> {
     return this.deviceTokens.findOne(this.requireUserId(req), id);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Revoca un dispositivo por id verificando propiedad del actor',
+  })
+  @ApiNoContentResponse({
+    description: 'Dispositivo revocado correctamente.',
+  })
+  @ApiNotFoundResponse({
+    description: 'Dispositivo no encontrado o perteneciente a otro usuario',
+  })
+  removeById(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.deviceTokens.removeById(this.requireUserId(req), id);
   }
 }

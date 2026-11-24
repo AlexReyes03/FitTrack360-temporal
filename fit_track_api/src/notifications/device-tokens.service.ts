@@ -93,4 +93,19 @@ export class DeviceTokensService {
     }
     return toDeviceTokenResponse(device);
   }
+
+  async removeById(userId: string, id: string): Promise<void> {
+    const deleted = await this.prisma.deviceToken.deleteMany({
+      where: { id, userId },
+    });
+    if (deleted.count === 0) {
+      throw new NotFoundException('Dispositivo no encontrado');
+    }
+  }
+
+  async revokeByToken(userId: string, token: string): Promise<void> {
+    await this.prisma.deviceToken.deleteMany({
+      where: { token, userId },
+    });
+  }
 }

@@ -78,6 +78,111 @@ void main() {
     expect(find.textContaining('Gym visual'), findsOneWidget);
   });
 
+  testWidgets('los filtros usan nombres claros y el hint aclara el idioma', (
+    tester,
+  ) async {
+    await pumpCatalogue(
+      tester,
+      client: MockClient(
+        (request) async => jsonResponse(pageJson([exerciseJson()])),
+      ),
+    );
+    await flush(tester);
+
+    expect(find.text('Zona del cuerpo'), findsOneWidget);
+    expect(find.text('Equipo'), findsOneWidget);
+    expect(find.text('Músculo objetivo'), findsOneWidget);
+    expect(find.text('Músculo'), findsNothing);
+    expect(find.text('Objetivo'), findsNothing);
+    expect(find.textContaining('en inglés'), findsOneWidget);
+  });
+
+  testWidgets('muestra nameEs como título cuando el API lo trae', (
+    tester,
+  ) async {
+    await pumpCatalogue(
+      tester,
+      client: MockClient(
+        (request) async =>
+            jsonResponse(pageJson([exerciseJson(nameEs: 'Abdominal 3/4')])),
+      ),
+    );
+    await flush(tester);
+
+    expect(find.text('Abdominal 3/4'), findsOneWidget);
+    expect(find.text('3/4 sit-up'), findsOneWidget);
+  });
+
+  testWidgets('con resultados y filtros muestra el chip Limpiar filtros', (
+    tester,
+  ) async {
+    final urls = <Uri>[];
+    await pumpCatalogue(
+      tester,
+      client: MockClient((request) async {
+        urls.add(request.url);
+        return jsonResponse(pageJson([exerciseJson()]));
+      }),
+    );
+    await flush(tester);
+
+    expect(find.text('Limpiar filtros'), findsNothing);
+
+    await tester.tap(find.text('Todos').first);
+    await flush(tester);
+    await tester.tap(find.text('Pecho').last);
+    await flush(tester);
+
+    expect(urls.last.queryParameters['bodyPart'], 'chest');
+    expect(find.text('3/4 sit-up'), findsOneWidget);
+    expect(find.text('Limpiar filtros'), findsOneWidget);
+
+    await tester.tap(find.text('Limpiar filtros'));
+    await flush(tester);
+
+    expect(urls.last.queryParameters.containsKey('bodyPart'), isFalse);
+    expect(find.text('Limpiar filtros'), findsNothing);
+  });
+
+  testWidgets('el pie de cargar más usa el estilo del DS', (tester) async {
+    final pending = Completer<http.Response>();
+    await pumpCatalogue(
+      tester,
+      client: MockClient((request) async {
+        final page = int.parse(request.url.queryParameters['page']!);
+        if (page == 2) return pending.future;
+        return jsonResponse(
+          pageJson(
+            List.generate(20, (i) => exerciseJson(id: '$i', name: 'E $i')),
+            total: 40,
+          ),
+        );
+      }),
+    );
+    await flush(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await tester.pump();
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await tester.pump();
+
+    expect(find.text('Cargando más ejercicios…'), findsOneWidget);
+    final spinner = tester.widget<CircularProgressIndicator>(
+      find.byType(CircularProgressIndicator),
+    );
+    expect(spinner.color, isNotNull);
+
+    pending.completeError(http.ClientException('sin red'));
+    await flush(tester);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -3000));
+    await flush(tester);
+
+    expect(find.text('Reintentar carga de ejercicios'), findsOneWidget);
+    expect(
+      find.widgetWithText(TextButton, 'Reintentar carga de ejercicios'),
+      findsNothing,
+    );
+  });
+
   testWidgets('singulariza el contador con un solo resultado', (tester) async {
     await pumpCatalogue(
       tester,

@@ -19,6 +19,7 @@ import '../data/exercise.dart';
 import '../data/exercises_api.dart';
 import 'widgets/exercise_card.dart';
 import 'widgets/exercise_filters.dart';
+import 'widgets/exercise_pill_button.dart';
 
 /// Catálogo de ejercicios: búsqueda, filtros y carga incremental.
 class ExercisesPage extends StatefulWidget {
@@ -257,7 +258,9 @@ class _ExercisesPageState extends State<ExercisesPage> {
               child: DsTextField(
                 controller: _searchController,
                 label: 'Buscar',
-                hint: 'Nombre del ejercicio',
+                // El catálogo aún no trae `nameEs`: la búsqueda solo encuentra
+                // nombres en inglés hasta que el seed tenga traducciones.
+                hint: 'Nombre en inglés, p. ej. «squat»',
                 onChanged: _onSearchChanged,
               ),
             ),
@@ -272,6 +275,24 @@ class _ExercisesPageState extends State<ExercisesPage> {
                 onTargetChanged: _onTargetChanged,
               ),
             ),
+            if (_hasFilters && _state is! AsyncEmpty<ExercisePage>)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                  AppSpacing.md,
+                  0,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: ExercisePillButton(
+                    key: const Key('exercises-clear-filters'),
+                    icon: Icons.filter_alt_off_outlined,
+                    label: 'Limpiar filtros',
+                    onPressed: _clearFilters,
+                  ),
+                ),
+              ),
             const SizedBox(height: AppSpacing.sm),
             Expanded(
               child: AsyncStateView<ExercisePage>(
@@ -349,16 +370,13 @@ class _ExercisesPageState extends State<ExercisesPage> {
             ),
           );
         }
-        if (_loadingMore) {
-          return const Center(child: CircularProgressIndicator());
-        }
+        if (_loadingMore) return const _LoadMoreProgress();
         if (_moreError) {
-          return TextButton(
-            onPressed: () {
+          return _LoadMoreError(
+            onRetry: () {
               setState(() => _moreError = false);
               _loadMore();
             },
-            child: const Text('Reintentar carga de ejercicios'),
           );
         }
         return const SizedBox.shrink();
@@ -386,13 +404,11 @@ class _ExercisesPageState extends State<ExercisesPage> {
               ),
             ),
             if (_hasFilters) ...[
-              const SizedBox(height: AppSpacing.xs),
-              TextButton(
+              const SizedBox(height: AppSpacing.sm),
+              ExercisePillButton(
+                icon: Icons.filter_alt_off_outlined,
+                label: 'Limpiar filtros',
                 onPressed: _clearFilters,
-                child: const Text(
-                  'Limpiar filtros',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
               ),
             ],
           ],
@@ -423,6 +439,69 @@ class _ExercisesPageState extends State<ExercisesPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Pie de la lista mientras llega la siguiente página.
+class _LoadMoreProgress extends StatelessWidget {
+  const _LoadMoreProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      liveRegion: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox.square(
+              dimension: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                color: AppColors.accentWhite,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              'Cargando más ejercicios…',
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Pie de la lista cuando falló la carga de la siguiente página.
+class _LoadMoreError extends StatelessWidget {
+  const _LoadMoreError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        children: [
+          Text(
+            'No pudimos cargar más ejercicios.',
+            textAlign: TextAlign.center,
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ExercisePillButton(
+            icon: Icons.refresh_rounded,
+            label: 'Reintentar carga de ejercicios',
+            onPressed: onRetry,
+          ),
+        ],
       ),
     );
   }

@@ -87,9 +87,13 @@ void main() {
     );
     await flush(tester);
 
-    expect(find.text('3/4 sit-up'), findsOneWidget);
-    expect(find.text('Sentadilla 3/4'), findsOneWidget);
-    expect(find.text('Nivel: beginner'), findsOneWidget);
+    // Título en español y nombre original como subtítulo.
+    final title = tester.getTopLeft(find.text('Sentadilla 3/4'));
+    final subtitle = tester.getTopLeft(find.text('3/4 sit-up'));
+    expect(title.dy, lessThan(subtitle.dy));
+    expect(find.text('Nivel: Principiante'), findsOneWidget);
+    expect(find.text('Zona del cuerpo: Cintura'), findsOneWidget);
+    expect(find.text('Equipo: Peso corporal'), findsOneWidget);
     expect(
       find.text('Túmbate sobre tu espalda con las rodillas flexionadas.'),
       findsOneWidget,
@@ -99,12 +103,14 @@ void main() {
     expect(find.text('Túmbate sobre tu espalda.'), findsOneWidget);
     expect(find.text('2.'), findsOneWidget);
     expect(find.text('Levanta el torso.'), findsOneWidget);
-    expect(find.text('Objetivo: Abdominales'), findsOneWidget);
-    expect(find.text('Grupo: Flexores de cadera'), findsOneWidget);
+    expect(find.text('Músculo objetivo: Abdominales'), findsOneWidget);
+    // muscleGroup se integra a los secundarios sin duplicar ni usar «Grupo».
     expect(
-      find.text('Secundarios: Flexores de cadera, Espalda baja'),
+      find.text('Músculos secundarios: Flexores de cadera, Espalda baja'),
       findsOneWidget,
     );
+    expect(find.textContaining('Grupo:'), findsNothing);
+    expect(find.text('Objetivo: Abdominales'), findsNothing);
     expect(find.text('Errores comunes'), findsOneWidget);
     expect(find.text('No curvar la espalda.'), findsOneWidget);
     expect(find.text('Atribución'), findsOneWidget);
@@ -124,8 +130,8 @@ void main() {
     expect(find.text('Instrucciones'), findsNothing);
     expect(find.text('Pasos'), findsNothing);
     expect(find.text('Errores comunes'), findsNothing);
-    expect(find.text('Secundarios:'), findsNothing);
-    expect(find.text('Grupo:'), findsNothing);
+    expect(find.textContaining('Músculos secundarios:'), findsNothing);
+    expect(find.textContaining('Grupo:'), findsNothing);
     // La atribución no es opcional: siempre se muestra.
     expect(find.textContaining('Gym visual'), findsOneWidget);
   });

@@ -206,52 +206,123 @@ class _NavItemTileState extends State<_NavItemTile> {
       );
     }
 
+    final color = selected ? AppColors.accentWhite : AppColors.textSecondary;
+    final labelStyle = TextStyle(
+      color: color,
+      fontSize: _labelFontSize,
+      height: 1.2,
+      letterSpacing: -0.2,
+      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+    );
+
     return Semantics(
+      // container + excludeSemantics: un nodo por destino que se lee una sola
+      // vez ("Inicio, botón, seleccionado") sin repetir el Text visible.
+      container: true,
       button: true,
       selected: selected,
       label: widget.destination.tooltip ?? widget.destination.label,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTapDown: (_) => _setPressed(true),
-        onTapUp: (_) => _setPressed(false),
-        onTapCancel: () => _setPressed(false),
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
-          decoration: decoration,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                iconData,
-                size: 20,
-                color: selected
-                    ? AppColors.accentWhite
-                    : AppColors.textSecondary,
-              ),
-              const SizedBox(height: 3),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  widget.destination.label,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: TextStyle(
-                    color: selected
-                        ? AppColors.accentWhite
-                        : AppColors.textSecondary,
-                    fontSize: 10.5,
-                    letterSpacing: -0.2,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+      excludeSemantics: true,
+      child: Tooltip(
+        // Mantener presionado muestra el nombre completo si se recorta con
+        // tamaños de texto grandes.
+        message: widget.destination.label,
+        excludeFromSemantics: true,
+        triggerMode: TooltipTriggerMode.longPress,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _setPressed(true),
+          onTapUp: (_) => _setPressed(false),
+          onTapCancel: () => _setPressed(false),
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            constraints: const BoxConstraints(minHeight: _minTapTarget),
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 7),
+            decoration: decoration,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(iconData, size: 20, color: color),
+                const SizedBox(height: 3),
+                LayoutBuilder(
+                  builder: (context, constraints) => _NavLabel(
+                    text: widget.destination.label,
+                    style: labelStyle,
+                    maxWidth: constraints.maxWidth,
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Tamano base de las etiquetas (11-12dp segun UX-06).
+const double _labelFontSize = 11.5;
+
+/// Minimo legible: con poco ancho la etiqueta puede reducirse hasta aqui,
+/// nunca por debajo (antes `FittedBox(scaleDown)` la llevaba a ~8dp).
+const double _labelMinFontSize = 11;
+
+/// Tope del escalado de texto en la barra: con 6 destinos no cabe mas; el
+/// nombre completo sigue disponible por lector de pantalla y tooltip.
+const double _labelMaxTextScale = 1.3;
+
+const double _minTapTarget = 48;
+
+/// Etiqueta de un destino: respeta el `textScaler` del sistema (hasta
+/// [_labelMaxTextScale]); si no cabe en el ancho, reduce la letra solo hasta
+/// [_labelMinFontSize] y despues recorta con elipsis, sin desbordar.
+class _NavLabel extends StatelessWidget {
+  const _NavLabel({
+    required this.text,
+    required this.style,
+    required this.maxWidth,
+  });
+
+  final String text;
+  final TextStyle style;
+  final double maxWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final scaler = MediaQuery.textScalerOf(context)
+        .clamp(minScaleFactor: 1, maxScaleFactor: _labelMaxTextScale);
+    final preferred = scaler.scale(style.fontSize!);
+    var fontSize = preferred;
+    if (maxWidth.isFinite) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: style.copyWith(fontSize: preferred),
+        ),
+        textDirection: Directionality.of(context),
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      if (width > maxWidth && width > 0) {
+        fontSize = (preferred * maxWidth / width).clamp(
+          _labelMinFontSize,
+          preferred,
+        );
+      }
+    }
+    return Text(
+      text,
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+      // El escalado ya va incluido en fontSize.
+      textScaler: TextScaler.noScaling,
+      style: style.copyWith(fontSize: fontSize),
     );
   }
 }

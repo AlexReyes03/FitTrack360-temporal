@@ -61,7 +61,7 @@ class ProgressWeightChartCard extends StatelessWidget {
         children: [
           _SummaryRow(data: data),
           const SizedBox(height: 16),
-          _WeightChartPlaceholder(points: data.points),
+          _WeightChartPlaceholder(data: data, range: range),
         ],
       ),
     );
@@ -164,9 +164,40 @@ class _MetricPill extends StatelessWidget {
 }
 
 class _WeightChartPlaceholder extends StatelessWidget {
-  const _WeightChartPlaceholder({required this.points});
+  const _WeightChartPlaceholder({required this.data, required this.range});
 
-  final List<ProgressChartPoint> points;
+  final ProgressChartData data;
+  final ProgressRange range;
+
+  /// Ancho fijo de las etiquetas del eje Y y separación con el trazo: las
+  /// etiquetas del eje X se posicionan con la misma geometría que el painter.
+  static const double _yAxisWidth = 56;
+  static const double _yAxisGap = 10;
+  static const double _xLabelSlot = 64;
+
+  List<ProgressChartPoint> get points => data.points;
+
+  static String _kg(double value) => '${value.toStringAsFixed(1)} kg';
+
+  static String _signedKg(double delta) {
+    if (delta.abs() < 0.05) return '0.0 kg';
+    final sign = delta > 0 ? '+' : '';
+    return '$sign${delta.toStringAsFixed(1)} kg';
+  }
+
+  /// Resumen textual de la gráfica para lectores de pantalla.
+  String _semanticSummary(double minWeight, double maxWeight) {
+    final count = points.length;
+    final records = count == 1 ? '1 registro' : '$count registros';
+    final span = count == 1
+        ? 'el ${points.first.label}'
+        : 'del ${points.first.label} al ${points.last.label}';
+    return 'Gráfica de evolución de peso, ${range.description.toLowerCase()}: '
+        '$records $span. Peso actual ${_kg(data.currentWeightKg)}, '
+        'variación ${_signedKg(data.periodDeltaKg)}, '
+        'promedio ${_kg(data.averageWeightKg)}, '
+        'mínimo ${_kg(minWeight)} y máximo ${_kg(maxWeight)}.';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -175,66 +206,101 @@ class _WeightChartPlaceholder extends StatelessWidget {
     final maxWeight = weights.reduce(math.max);
     final midWeight = (minWeight + maxWeight) / 2;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 14, 14, 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadii.inner),
-        color: AppColors.controlFillIdle,
-        border: Border.all(color: AppColors.glassBorder),
-      ),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 136,
-            child: Row(
-              children: [
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    _AxisLabel('${maxWeight.toStringAsFixed(1)} kg'),
-                    _AxisLabel('${midWeight.toStringAsFixed(1)} kg'),
-                    _AxisLabel('${minWeight.toStringAsFixed(1)} kg'),
-                  ],
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: CustomPaint(
-                    painter: _WeightTrendPainter(points: points),
-                    child: const SizedBox.expand(),
+    return Semantics(
+      key: const Key('progress-weight-chart-semantics'),
+      container: true,
+      label: _semanticSummary(minWeight, maxWeight),
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 14, 14, 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadii.inner),
+          color: AppColors.controlFillIdle,
+          border: Border.all(color: AppColors.glassBorder),
+        ),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 136,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: _yAxisWidth,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _AxisLabel(_kg(maxWeight)),
+                        _AxisLabel(_kg(midWeight)),
+                        _AxisLabel(_kg(minWeight)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: _yAxisGap),
+                  Expanded(
+                    child: CustomPaint(
+                      key: const Key('progress-weight-chart-plot'),
+                      painter: _WeightTrendPainter(points: points),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.only(left: _yAxisWidth + _yAxisGap),
+              child: SizedBox(
+                height: 16,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Stack(
+                    clipBehavior: Clip.none,
+                    children: _buildXAxisLabels(constraints.maxWidth),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.only(left: 48),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: _buildXAxisLabels(),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  List<Widget> _buildXAxisLabels() {
-    if (points.length <= 4) {
-      return points.map((p) => _AxisLabel(p.label)).toList();
-    }
-    final middleIndex = points.length ~/ 2;
-    return [
-      _AxisLabel(points.first.label),
-      _AxisLabel(points[middleIndex].label),
-      _AxisLabel(points.last.label),
-    ];
+  /// Índices con etiqueta: todos si son pocos; si no, inicio, mitad y fin.
+  List<int> _labelIndexes() {
+    if (points.length <= 4) return [for (var i = 0; i < points.length; i++) i];
+    return [0, points.length ~/ 2, points.length - 1];
+  }
+
+  /// Cada etiqueta queda bajo su punto (misma `x` que `_WeightTrendPainter`).
+  /// La primera y la última se alinean al borde para no salirse del trazo.
+  List<Widget> _buildXAxisLabels(double width) => [
+    for (final index in _labelIndexes()) _positionedLabel(index, width),
+  ];
+
+  Widget _positionedLabel(int index, double width) {
+    final count = points.length;
+    final label = _AxisLabel(
+      points[index].label,
+      key: Key('progress-chart-x-label-$index'),
+    );
+    if (count == 1) return Positioned.fill(child: Center(child: label));
+    if (index == 0) return Positioned(left: 0, top: 0, child: label);
+    if (index == count - 1) return Positioned(right: 0, top: 0, child: label);
+    final x = width * index / (count - 1);
+    final slot = math.min(_xLabelSlot, width);
+    final left = (x - slot / 2).clamp(0.0, width - slot);
+    return Positioned(
+      left: left,
+      top: 0,
+      width: slot,
+      child: Center(child: label),
+    );
   }
 }
 
 class _AxisLabel extends StatelessWidget {
-  const _AxisLabel(this.text);
+  const _AxisLabel(this.text, {super.key});
 
   final String text;
 

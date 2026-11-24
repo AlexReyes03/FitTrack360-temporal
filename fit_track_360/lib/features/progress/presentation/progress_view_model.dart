@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/async_state.dart';
 import '../../../core/network/api_client.dart';
+import '../data/progress_photo_session_store.dart';
 import '../domain/body_metric.dart';
 import '../domain/progress_metric_errors.dart';
 import '../domain/progress_metrics_repository.dart';
@@ -26,12 +27,21 @@ class ProgressViewModel extends ChangeNotifier {
   ProgressViewModel({
     required this._photos,
     this._metrics,
+    ProgressPhotoSessionStore? photoSession,
     DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  }) : _clock = clock ?? DateTime.now,
+       _photoSession = photoSession ?? ProgressPhotoSessionStore() {
+    _photoSession.addListener(_onPhotoSessionChanged);
+    if (_photoSession.photos.isNotEmpty) _refreshComparisonSlots();
+  }
 
   final ProgressPhotosRepository _photos;
   final ProgressMetricsRepository? _metrics;
   final DateTime Function() _clock;
+
+  /// Fotos de la sesión compartidas con `/app/foto` (no hay GET list en el
+  /// API). Escucharlo hace que una foto subida fuera aparezca aquí.
+  final ProgressPhotoSessionStore _photoSession;
 
   bool _disposed = false;
   ProgressRange _range = ProgressRange.d30;
@@ -57,14 +67,12 @@ class ProgressViewModel extends ChangeNotifier {
   File? _pendingPhotoFile;
   bool isSubmittingCheckIn = false;
   String? checkInFeedback;
+  ProgressFeedbackTone checkInFeedbackTone = ProgressFeedbackTone.success;
 
   /// Aumenta cada vez que una métrica del check-in queda guardada. El
   /// formulario lo observa para limpiarse sin depender del texto del aviso.
   int checkInSavedCount = 0;
   bool sessionExpired = false;
-
-  /// Fotos subidas en esta sesión (no hay GET list en el API).
-  final List<ProgressPhotoMeta> _sessionPhotos = [];
 
   /// Peso de la métrica vinculada a cada foto de la sesión.
   final Map<String, String> _photoWeightsById = {};
@@ -76,24 +84,20 @@ class ProgressViewModel extends ChangeNotifier {
   ProgressPhotoPreviewSlot? currentPhotoSlot;
 
   ProgressRange get range => _range;
-  List<ProgressPhotoMeta> get sessionPhotos =>
-      List.unmodifiable(_sessionPhotos);
+  List<ProgressPhotoMeta> get sessionPhotos => _photoSession.photos;
 
-  /// Comparación con las dos fotos más antiguas/recientes de la sesión.
-  PhotoComparison? get sessionComparison {
-    if (_sessionPhotos.length < 2) return null;
-    final sorted = [..._sessionPhotos]
-      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    return PhotoComparison(
-      initial: ProgressPhotoRef(
-        id: sorted.first.id,
-        takenAt: sorted.first.createdAt,
-      ),
-      current: ProgressPhotoRef(
-        id: sorted.last.id,
-        takenAt: sorted.last.createdAt,
-      ),
-    );
+  /// Foto elegida para el próximo check-in (miniatura en el formulario).
+  File? get pendingPhotoFile => _pendingPhotoFile;
+
+  /// Comparación inicial/actual de la sesión. Con una sola foto lleva solo
+  /// la inicial (la vista invita a agregar otra); sin fotos es `null`.
+  PhotoComparison? get sessionComparison =>
+      comparisonFromPhotos(_photoSession.photos);
+
+  void _onPhotoSessionChanged() {
+    if (_disposed) return;
+    _refreshComparisonSlots();
+    _notify();
   }
 
   void setRange(ProgressRange range) {
@@ -215,29 +219,42 @@ class ProgressViewModel extends ChangeNotifier {
       await reloadMetrics();
       if (_disposed) return;
       if (sessionExpired) {
-        checkInFeedback = 'Sesión expirada.';
+        _setFeedback('Sesión expirada.', ProgressFeedbackTone.error);
       } else if (photoFailure != null) {
-        checkInFeedback =
-            'Tu peso se guardó, pero la foto no se pudo subir '
-            '($photoFailure). Puedes agregarla desde «Agregar foto».';
+        _setFeedback(
+          'Tu peso se guardó, pero la foto no se pudo subir '
+          '($photoFailure). Puedes agregarla desde «Agregar foto».',
+          ProgressFeedbackTone.warning,
+        );
       } else {
-        checkInFeedback = 'Check-in registrado correctamente.';
+        _setFeedback(
+          'Check-in registrado correctamente.',
+          ProgressFeedbackTone.success,
+        );
       }
     } on SessionExpiredException {
       sessionExpired = true;
-      checkInFeedback = 'Sesión expirada.';
+      _setFeedback('Sesión expirada.', ProgressFeedbackTone.error);
     } on ProgressMetricException catch (error) {
-      checkInFeedback = error.message;
+      _setFeedback(error.message, ProgressFeedbackTone.error);
     } on ProgressPhotoUnavailableException {
-      checkInFeedback = 'Foto no disponible.';
+      _setFeedback('Foto no disponible.', ProgressFeedbackTone.error);
     } on ProgressPhotoException catch (error) {
-      checkInFeedback = error.message;
+      _setFeedback(error.message, ProgressFeedbackTone.error);
     } catch (_) {
-      checkInFeedback = 'No se pudo completar el check-in.';
+      _setFeedback(
+        'No se pudo completar el check-in.',
+        ProgressFeedbackTone.error,
+      );
     } finally {
       isSubmittingCheckIn = false;
       _notify();
     }
+  }
+
+  void _setFeedback(String message, ProgressFeedbackTone tone) {
+    checkInFeedback = message;
+    checkInFeedbackTone = tone;
   }
 
   /// Sube la foto pendiente vinculada a [metricId]. Devuelve el motivo si
@@ -250,9 +267,8 @@ class ProgressViewModel extends ChangeNotifier {
     try {
       final meta = await _photos.upload(file, metricId: metricId);
       if (_disposed) return null;
-      _sessionPhotos.add(meta);
       _photoWeightsById[meta.id] = _weightLabel(weightKg);
-      _refreshComparisonSlots();
+      _photoSession.add(meta);
       return null;
     } on SessionExpiredException {
       rethrow;
@@ -271,13 +287,15 @@ class ProgressViewModel extends ChangeNotifier {
     if (file != null) {
       final meta = await _photos.upload(file);
       if (_disposed) return;
-      _sessionPhotos.add(meta);
       _pendingPhotoFile = null;
       selectedCheckInPhotoLabel = null;
-      _refreshComparisonSlots();
-      checkInFeedback = 'Foto guardada. $kMetricsBlockedReason';
+      _photoSession.add(meta);
+      _setFeedback(
+        'Foto guardada. $kMetricsBlockedReason',
+        ProgressFeedbackTone.warning,
+      );
     } else {
-      checkInFeedback = kMetricsBlockedReason;
+      _setFeedback(kMetricsBlockedReason, ProgressFeedbackTone.warning);
     }
   }
 
@@ -287,9 +305,7 @@ class ProgressViewModel extends ChangeNotifier {
     try {
       final meta = await _photos.upload(file);
       if (_disposed) return meta;
-      _sessionPhotos.add(meta);
-      _refreshComparisonSlots();
-      _notify();
+      _photoSession.add(meta);
       return meta;
     } on SessionExpiredException {
       sessionExpired = true;
@@ -303,8 +319,8 @@ class ProgressViewModel extends ChangeNotifier {
     try {
       await _photos.delete(photoId);
       if (_disposed) return;
-      _sessionPhotos.removeWhere((p) => p.id == photoId);
       _photoWeightsById.remove(photoId);
+      _photoSession.remove(photoId);
       _refreshComparisonSlots();
       _notify();
     } on SessionExpiredException {
@@ -313,8 +329,8 @@ class ProgressViewModel extends ChangeNotifier {
       rethrow;
     } on ProgressPhotoUnavailableException {
       // 404 ajena/inexistente: no rompe; se limpia local si estaba.
-      _sessionPhotos.removeWhere((p) => p.id == photoId);
       _photoWeightsById.remove(photoId);
+      _photoSession.remove(photoId);
       _refreshComparisonSlots();
       _notify();
       rethrow;
@@ -420,13 +436,14 @@ class ProgressViewModel extends ChangeNotifier {
   }
 
   void _refreshComparisonSlots() {
-    if (_sessionPhotos.isEmpty) {
+    final photos = _photoSession.photos;
+    if (photos.isEmpty) {
       comparisonStatus = ProgressSectionStatus.empty;
       initialPhotoSlot = null;
       currentPhotoSlot = null;
       return;
     }
-    final sorted = [..._sessionPhotos]
+    final sorted = [...photos]
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     final first = sorted.first;
     final last = sorted.last;
@@ -546,6 +563,7 @@ class ProgressViewModel extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _photoSession.removeListener(_onPhotoSessionChanged);
     super.dispose();
   }
 }

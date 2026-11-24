@@ -1,4 +1,7 @@
+import 'package:fit_track_360/features/progress/data/progress_photo_session_store.dart';
 import 'package:fit_track_360/features/progress/domain/body_metric.dart';
+import 'package:fit_track_360/features/progress/domain/progress_photo.dart';
+import 'package:fit_track_360/features/progress/domain/progress_photo_meta.dart';
 import 'package:fit_track_360/features/progress/presentation/progress_shell_page.dart';
 import 'package:fit_track_360/features/progress/presentation/progress_view_model.dart';
 import 'package:fit_track_360/features/progress/presentation/widgets/progress_history_card.dart';
@@ -8,7 +11,9 @@ import 'package:fit_track_360/features/progress/presentation/widgets/progress_we
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'support/fake_progress_metrics_repository.dart';
 import 'support/fake_progress_photos_repository.dart';
@@ -41,10 +46,17 @@ void main() {
     matching: find.byType(TextField),
   );
 
-  Future<void> tapSelectPhoto(WidgetTester tester) async {
-    await tester.ensureVisible(find.text('Agregar foto de progreso'));
+  Future<void> openPhotoSheet(WidgetTester tester) async {
+    final slot = find.byKey(const Key('checkin-photo-slot'));
+    await tester.ensureVisible(slot);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Agregar foto de progreso'));
+    await tester.tap(slot);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> tapSelectPhoto(WidgetTester tester) async {
+    await openPhotoSheet(tester);
+    await tester.tap(find.text('Galería'));
     await tester.pumpAndSettle();
   }
 
@@ -58,7 +70,7 @@ void main() {
       MaterialApp(
         home: ProgressShellPage(
           viewModel: vm,
-          pickCheckInPhoto: () async =>
+          pickCheckInPhoto: (_) async =>
               throw PlatformException(code: 'photo_access_denied'),
         ),
       ),
@@ -80,7 +92,7 @@ void main() {
       MaterialApp(
         home: ProgressShellPage(
           viewModel: vm,
-          pickCheckInPhoto: () async => XFile('/tmp/selfie.jpg'),
+          pickCheckInPhoto: (_) async => XFile('/tmp/selfie.jpg'),
         ),
       ),
     );
@@ -446,7 +458,7 @@ void main() {
         MaterialApp(
           home: ProgressShellPage(
             viewModel: vm,
-            pickCheckInPhoto: () async => picks[pickIndex++],
+            pickCheckInPhoto: (_) async => picks[pickIndex++],
           ),
         ),
       );
@@ -542,4 +554,149 @@ void main() {
       );
     },
   );
+
+  group('#229 fotos en Progreso', () {
+    testWidgets('el check-in ofrece Cámara y Galería', (tester) async {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      addTearDown(vm.dispose);
+      final sources = <ImageSource>[];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProgressShellPage(
+            viewModel: vm,
+            requestCameraPermission: () async => PermissionStatus.granted,
+            pickCheckInPhoto: (source) async {
+              sources.add(source);
+              return XFile('/tmp/selfie.jpg');
+            },
+          ),
+        ),
+      );
+      await openPhotoSheet(tester);
+
+      expect(find.text('Cámara'), findsOneWidget);
+      expect(find.text('Galería'), findsOneWidget);
+
+      await tester.tap(find.text('Cámara'));
+      await tester.pumpAndSettle();
+
+      expect(sources, [ImageSource.camera]);
+      expect(vm.selectedCheckInPhotoLabel, 'selfie.jpg');
+    });
+
+    testWidgets('sin permiso de cámara avisa y no abre el selector', (
+      tester,
+    ) async {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      addTearDown(vm.dispose);
+      var picks = 0;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProgressShellPage(
+            viewModel: vm,
+            requestCameraPermission: () async => PermissionStatus.denied,
+            pickCheckInPhoto: (_) async {
+              picks++;
+              return null;
+            },
+          ),
+        ),
+      );
+      await openPhotoSheet(tester);
+      await tester.tap(find.text('Cámara'));
+      await tester.pumpAndSettle();
+
+      expect(picks, 0);
+      expect(find.textContaining('Permiso de cámara denegado'), findsOneWidget);
+    });
+
+    testWidgets('«Quitar» descarta la foto elegida', (tester) async {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      addTearDown(vm.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ProgressShellPage(
+            viewModel: vm,
+            pickCheckInPhoto: (_) async => XFile('/tmp/selfie.jpg'),
+          ),
+        ),
+      );
+      await tapSelectPhoto(tester);
+      final remove = find.byKey(const Key('checkin-remove-photo'));
+      await tester.ensureVisible(remove);
+      await tester.pumpAndSettle();
+      await tester.tap(remove);
+      await tester.pumpAndSettle();
+
+      expect(vm.pendingPhotoFile, isNull);
+      expect(vm.selectedCheckInPhotoLabel, isNull);
+      expect(find.text('Agregar foto de progreso'), findsOneWidget);
+    });
+
+    testWidgets(
+      'una foto subida en /app/foto aparece y «Ver detalle» la abre aunque sea la única',
+      (tester) async {
+        final store = ProgressPhotoSessionStore();
+        final vm = ProgressViewModel(
+          photos: FakeProgressPhotosRepository(),
+          photoSession: store,
+        );
+        addTearDown(vm.dispose);
+        Object? openedWith;
+
+        final router = GoRouter(
+          initialLocation: '/app/progreso',
+          routes: [
+            GoRoute(
+              path: '/app/progreso',
+              builder: (context, state) => ProgressShellPage(viewModel: vm),
+              routes: [
+                GoRoute(
+                  path: 'comparar',
+                  builder: (context, state) {
+                    openedWith = state.extra;
+                    return const Scaffold(body: Text('comparación'));
+                  },
+                ),
+              ],
+            ),
+          ],
+        );
+        addTearDown(router.dispose);
+        await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+        await tester.pumpAndSettle();
+
+        // Simula la subida desde /app/foto (otra pantalla, mismo store).
+        store.add(
+          ProgressPhotoMeta(
+            id: 'ext-1',
+            mimeType: 'image/jpeg',
+            sizeBytes: 12,
+            width: 1,
+            height: 1,
+            createdAt: DateTime.utc(2026, 11, 20, 12),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.scrollUntilVisible(
+          find.text('Ver detalle'),
+          250,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(find.text('Sin fotos para comparar'), findsNothing);
+        await tester.tap(find.text('Ver detalle'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('comparación'), findsOneWidget);
+        expect(openedWith, isA<PhotoComparison>());
+        final comparison = openedWith! as PhotoComparison;
+        expect(comparison.isEmpty, isFalse);
+        expect(comparison.initial!.id, 'ext-1');
+      },
+    );
+  });
 }

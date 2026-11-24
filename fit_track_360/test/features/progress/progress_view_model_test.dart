@@ -4,7 +4,9 @@ import 'package:fit_track_360/core/async_state.dart';
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/features/progress/domain/body_metric.dart';
 import 'package:fit_track_360/features/progress/domain/progress_metric_errors.dart';
+import 'package:fit_track_360/features/progress/data/progress_photo_session_store.dart';
 import 'package:fit_track_360/features/progress/domain/progress_photo_errors.dart';
+import 'package:fit_track_360/features/progress/domain/progress_photo_meta.dart';
 import 'package:fit_track_360/features/progress/presentation/progress_view_model.dart';
 import 'package:fit_track_360/features/progress/presentation/state/progress_view_state.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -583,6 +585,147 @@ void main() {
       expect(vm.historyEntries, hasLength(1));
       expect(vm.historyEntries[0].weeklyDiffKg, closeTo(-1, 1e-9));
 
+      vm.dispose();
+    });
+  });
+
+  group('#229 fotos y feedback', () {
+    ProgressPhotoMeta meta(String id, int minute) => ProgressPhotoMeta(
+      id: id,
+      mimeType: 'image/jpeg',
+      sizeBytes: 12,
+      width: 1,
+      height: 1,
+      createdAt: DateTime.utc(2026, 11, 20, 12, minute),
+    );
+
+    test('con una sola foto la comparación lleva la foto inicial', () async {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      await vm.uploadProgressPhoto(_photo('a.jpg'));
+
+      final comparison = vm.sessionComparison;
+      expect(comparison, isNotNull);
+      expect(comparison!.isEmpty, isFalse);
+      expect(comparison.initial!.id, 'ph-1');
+      expect(comparison.current, isNull);
+
+      vm.dispose();
+    });
+
+    test('sin fotos no hay comparación', () {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      expect(vm.sessionComparison, isNull);
+      vm.dispose();
+    });
+
+    test('una foto subida fuera de Progreso aparece sin recargar', () {
+      final store = ProgressPhotoSessionStore();
+      final vm = ProgressViewModel(
+        photos: FakeProgressPhotosRepository(),
+        photoSession: store,
+      );
+      var notifications = 0;
+      vm.addListener(() => notifications++);
+
+      store.add(meta('ext-1', 1));
+
+      expect(notifications, greaterThan(0));
+      expect(vm.sessionPhotos.map((p) => p.id), ['ext-1']);
+      expect(vm.comparisonStatus, ProgressSectionStatus.data);
+      expect(vm.initialPhotoSlot, isNotNull);
+      expect(vm.sessionComparison!.initial!.id, 'ext-1');
+
+      store.add(meta('ext-2', 2));
+      expect(vm.sessionComparison!.current!.id, 'ext-2');
+      expect(vm.currentPhotoSlot, isNotNull);
+
+      vm.dispose();
+      // Tras dispose el VM ya no escucha el store.
+      store.add(meta('ext-3', 3));
+    });
+
+    test('las fotos del check-in quedan en el store compartido', () async {
+      final store = ProgressPhotoSessionStore();
+      final vm = ProgressViewModel(
+        photos: FakeProgressPhotosRepository(),
+        metrics: FakeProgressMetricsRepository(),
+        photoSession: store,
+        clock: () => _now,
+      );
+      vm.selectPendingPhoto(_photo('a.jpg'), label: 'a.jpg');
+
+      await vm.submitCheckIn(_draft);
+
+      expect(store.photos.map((p) => p.id), ['ph-1']);
+      vm.dispose();
+    });
+
+    test('borrar una foto la quita del store', () async {
+      final store = ProgressPhotoSessionStore();
+      final vm = ProgressViewModel(
+        photos: FakeProgressPhotosRepository(),
+        photoSession: store,
+      );
+      await vm.uploadProgressPhoto(_photo('a.jpg'));
+
+      await vm.deletePhoto('ph-1');
+
+      expect(store.photos, isEmpty);
+      expect(vm.comparisonStatus, ProgressSectionStatus.empty);
+      vm.dispose();
+    });
+
+    test('expone el archivo pendiente y lo quita', () {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      final file = _photo('a.jpg');
+
+      vm.selectPendingPhoto(file, label: 'a.jpg');
+      expect(vm.pendingPhotoFile, file);
+
+      vm.clearPendingPhoto();
+      expect(vm.pendingPhotoFile, isNull);
+      expect(vm.selectedCheckInPhotoLabel, isNull);
+      vm.dispose();
+    });
+
+    test('check-in correcto marca el feedback como éxito', () async {
+      final vm = _metricsVm(FakeProgressMetricsRepository());
+      await vm.submitCheckIn(_draft);
+      expect(vm.checkInFeedbackTone, ProgressFeedbackTone.success);
+      vm.dispose();
+    });
+
+    test(
+      'peso guardado con foto fallida marca el feedback como aviso',
+      () async {
+        final vm = _metricsVm(
+          FakeProgressMetricsRepository(),
+          photos: FakeProgressPhotosRepository(
+            uploadError: const ProgressPhotoValidationException('Formato raro'),
+          ),
+        );
+        vm.selectPendingPhoto(_photo('a.jpg'), label: 'a.jpg');
+        await vm.submitCheckIn(_draft);
+        expect(vm.checkInFeedbackTone, ProgressFeedbackTone.warning);
+        vm.dispose();
+      },
+    );
+
+    test('un error al crear marca el feedback como error', () async {
+      final vm = _metricsVm(
+        FakeProgressMetricsRepository(
+          createError: const ProgressMetricValidationException('Peso inválido'),
+        ),
+      );
+      await vm.submitCheckIn(_draft);
+      expect(vm.checkInFeedbackTone, ProgressFeedbackTone.error);
+      vm.dispose();
+    });
+
+    test('sin repositorio de métricas el feedback es aviso', () async {
+      final vm = ProgressViewModel(photos: FakeProgressPhotosRepository());
+      await vm.submitCheckIn(_draft);
+      expect(vm.checkInFeedbackTone, ProgressFeedbackTone.warning);
       vm.dispose();
     });
   });

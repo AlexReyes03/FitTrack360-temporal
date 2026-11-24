@@ -271,6 +271,15 @@ Future<GoRouter> _pumpShell(
         builder: (context, state) => const Text('Pantalla progreso'),
       ),
       GoRoute(
+        path: '/app/tracker',
+        builder: (context, state) =>
+            Text('Pantalla tracker ${state.extra ?? 'sin ejercicio'}'),
+      ),
+      GoRoute(
+        path: '/app/rutinas',
+        builder: (context, state) => const Text('Pantalla rutinas'),
+      ),
+      GoRoute(
         path: '/login',
         builder: (context, state) => const Text('Pantalla login'),
       ),
@@ -549,6 +558,42 @@ void main() {
       expect(find.text(page), findsOneWidget);
     });
   }
+
+  for (final (label, page) in [
+    ('Entrenar ahora', 'Pantalla tracker sin ejercicio'),
+    ('Rutinas', 'Pantalla rutinas'),
+  ]) {
+    testWidgets('la tarjeta $label abre su pantalla', (tester) async {
+      await _pumpShell(
+        tester,
+        connectivity: FakeConnectivityService(online: true),
+        storage: storage,
+        client: MockClient(_route),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text(label));
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+
+      expect(find.text(page), findsOneWidget);
+    });
+  }
+
+  testWidgets('ninguna tarjeta dice «Próximamente» ni «Tracker diario»', (
+    tester,
+  ) async {
+    await _pumpShell(
+      tester,
+      connectivity: FakeConnectivityService(online: true),
+      storage: storage,
+      client: MockClient(_route),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Próximamente'), findsNothing);
+    expect(find.text('Tracker diario'), findsNothing);
+  });
 
   testWidgets('mantiene los accesos mientras el dashboard carga', (
     tester,

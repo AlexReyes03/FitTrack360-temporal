@@ -97,6 +97,8 @@ class TrackerPage extends StatefulWidget {
     this.finishLabel = 'Finalizar sesión',
     this.onBack,
     this.onChangeExercise,
+    this.onPreviousExercise,
+    this.onNextExercise,
     this.onOpenInstructions,
     this.onToggleTimer,
     this.onResetTimer,
@@ -137,6 +139,10 @@ class TrackerPage extends StatefulWidget {
 
   final VoidCallback? onBack;
   final VoidCallback? onChangeExercise;
+
+  /// Navegación entre ejercicios de una rutina; null oculta el botón.
+  final VoidCallback? onPreviousExercise;
+  final VoidCallback? onNextExercise;
   final VoidCallback? onOpenInstructions;
   final VoidCallback? onToggleTimer;
   final VoidCallback? onResetTimer;
@@ -256,6 +262,8 @@ class _TrackerPageState extends State<TrackerPage> {
                         exercise: exercise,
                         onOpenInstructions: widget.onOpenInstructions ?? _noop,
                         onChangeExercise: widget.onChangeExercise,
+                        onPreviousExercise: widget.onPreviousExercise,
+                        onNextExercise: widget.onNextExercise,
                       ),
                       const SizedBox(height: AppSpacing.md),
                       TrackerTimerSection(
@@ -375,11 +383,15 @@ class _ExerciseHeaderCard extends StatelessWidget {
     required this.exercise,
     required this.onOpenInstructions,
     this.onChangeExercise,
+    this.onPreviousExercise,
+    this.onNextExercise,
   });
 
   final TrackerExerciseData exercise;
   final VoidCallback onOpenInstructions;
   final VoidCallback? onChangeExercise;
+  final VoidCallback? onPreviousExercise;
+  final VoidCallback? onNextExercise;
 
   @override
   Widget build(BuildContext context) {
@@ -478,6 +490,30 @@ class _ExerciseHeaderCard extends StatelessWidget {
                 ),
             ],
           ),
+          if (onPreviousExercise != null || onNextExercise != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: TrackerGlassButton(
+                    label: 'Anterior',
+                    icon: Icons.chevron_left_rounded,
+                    compact: true,
+                    onPressed: onPreviousExercise,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: TrackerGlassButton(
+                    label: 'Siguiente ejercicio',
+                    icon: Icons.chevron_right_rounded,
+                    compact: true,
+                    onPressed: onNextExercise,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

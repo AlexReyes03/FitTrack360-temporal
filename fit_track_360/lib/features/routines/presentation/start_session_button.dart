@@ -5,15 +5,16 @@ import '../../../design_system/components/primary_button.dart';
 import '../../../design_system/tokens/app_colors.dart';
 import '../../../design_system/tokens/app_typography.dart';
 import '../../workouts/domain/workout_session_draft.dart';
+import '../../workouts/presentation/tracker_session_page.dart';
 import '../domain/routine.dart';
 import 'start_session_view_model.dart';
 
-/// Ruta de la pantalla de sesión; recibe el borrador en `extra`.
-const workoutSessionRoute = '/app/entrenamientos';
+/// Ruta del tracker; recibe [TrackerSessionArgs] con el borrador en `extra`.
+const workoutSessionRoute = workoutTrackerRoute;
 
-/// Acción reutilizable «Iniciar sesión» para el detalle o editor de rutina.
+/// Acción reutilizable «Entrenar ahora» para el detalle o editor de rutina.
 ///
-/// Por omisión navega a la pantalla de sesión con el borrador precargado.
+/// Por omisión abre el tracker con los ejercicios y series de la rutina.
 class StartSessionButton extends StatefulWidget {
   const StartSessionButton({
     super.key,
@@ -55,7 +56,10 @@ class _StartSessionButtonState extends State<StartSessionButton> {
     if (onStarted != null) {
       onStarted(draft);
     } else {
-      context.push(workoutSessionRoute, extra: draft);
+      context.push(
+        workoutSessionRoute,
+        extra: TrackerSessionArgs(draft: draft),
+      );
     }
   }
 
@@ -67,7 +71,7 @@ class _StartSessionButtonState extends State<StartSessionButton> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          PrimaryButton(label: 'Iniciar sesión', onPressed: _start),
+          PrimaryButton(label: 'Entrenar ahora', onPressed: _start),
           if (_viewModel.errorMessage != null) ...[
             const SizedBox(height: 8),
             Text(

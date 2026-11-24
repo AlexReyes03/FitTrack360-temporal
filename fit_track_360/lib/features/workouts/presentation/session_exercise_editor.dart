@@ -1,68 +1,37 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/network/api_client.dart';
-import '../../exercises/data/exercise.dart';
+import '../../../design_system/components/glass_surface.dart';
+import '../../../design_system/tokens/app_colors.dart';
+import '../../../design_system/tokens/app_radii.dart';
+import '../../../design_system/tokens/app_spacing.dart';
+import '../../../design_system/tokens/app_typography.dart';
 import '../../exercises/data/exercises_api.dart';
-import '../domain/workout_session_draft.dart';
+import 'session_editor_view_model.dart';
+import 'widgets/exercise_picker_sheet.dart';
+import 'widgets/tracker_controls.dart';
+import 'widgets/workout_number_field.dart';
 
-/// Editor de series basado en identificadores reales del catálogo.
+/// Editor glass de ejercicios y series para registrar o editar una sesión.
+///
+/// Es solo vista: el estado y la validación viven en
+/// [SessionEditorViewModel]. Cada campo muestra su propio error.
 class SessionExerciseEditor extends StatefulWidget {
-  const SessionExerciseEditor({
-    super.key,
-    required this.initial,
-    required this.onChanged,
-    this.api,
-  });
-  final WorkoutSessionDraft? initial;
-  final void Function(List<PlannedExercise>, List<PlannedSet>) onChanged;
+  const SessionExerciseEditor({super.key, required this.viewModel, this.api});
+
+  final SessionEditorViewModel viewModel;
   final ExercisesApi? api;
+
   @override
   State<SessionExerciseEditor> createState() => _SessionExerciseEditorState();
-}
-
-class _Block {
-  _Block(this.id, this.name, this.sets);
-  final String id;
-  final String name;
-  final List<PlannedSet> sets;
-  int revision = 0;
 }
 
 class _SessionExerciseEditorState extends State<SessionExerciseEditor> {
   ApiClient? _client;
   late final ExercisesApi _api =
       widget.api ?? ExercisesApi(_client = ApiClient());
-  final List<_Block> _blocks = [];
-  @override
-  void initState() {
-    super.initState();
-    final draft = widget.initial;
-    if (draft == null) return;
-    for (final exercise in draft.exercises) {
-      final exact = draft.sets
-          ?.where((s) => s.exerciseId == exercise.exerciseId)
-          .toList();
-      _blocks.add(
-        _Block(
-          exercise.exerciseId,
-          exercise.exerciseName.isEmpty
-              ? 'Ejercicio ${exercise.exerciseId}'
-              : exercise.exerciseName,
-          exact != null && exact.isNotEmpty
-              ? exact
-              : List.generate(
-                  exercise.targetSets,
-                  (i) => PlannedSet(
-                    exerciseId: exercise.exerciseId,
-                    order: i + 1,
-                    weightKg: 0,
-                    reps: exercise.targetReps,
-                  ),
-                ),
-        ),
-      );
-    }
-  }
+
+  SessionEditorViewModel get _vm => widget.viewModel;
 
   @override
   void dispose() {
@@ -70,286 +39,265 @@ class _SessionExerciseEditorState extends State<SessionExerciseEditor> {
     super.dispose();
   }
 
-  void _changed() {
-    var order = 0;
-    widget.onChanged(
-      [
-        for (var i = 0; i < _blocks.length; i++)
-          PlannedExercise(
-            exerciseId: _blocks[i].id,
-            exerciseName: _blocks[i].name,
-            position: i,
-            targetSets: _blocks[i].sets.length,
-            targetReps: _blocks[i].sets.first.reps,
-          ),
-      ],
-      [
-        for (final block in _blocks)
-          for (final set in block.sets)
-            PlannedSet(
-              exerciseId: set.exerciseId,
-              order: ++order,
-              weightKg: set.weightKg,
-              reps: set.reps,
-            ),
-      ],
+  Future<void> _addExercise() async {
+    final exercise = await showExercisePickerSheet(context, api: _api);
+    if (!mounted || exercise == null) return;
+    _vm.addExercise(
+      exerciseId: exercise.id,
+      name: exercise.nameEs ?? exercise.name,
     );
   }
 
-  Future<void> _add() async {
-    final exercise = await showDialog<Exercise>(
-      context: context,
-      builder: (_) => _ExercisePicker(api: _api),
-    );
-    if (!mounted || exercise == null) return;
-    setState(() {
-      _blocks.add(
-        _Block(exercise.id, exercise.nameEs ?? exercise.name, [
-          PlannedSet(exerciseId: exercise.id, order: 1, weightKg: 0, reps: 10),
-        ]),
+  void _removeExercise(int index) {
+    final removed = _vm.removeExercise(index);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Quitaste ${removed.block.name}'),
+          action: SnackBarAction(
+            label: 'Deshacer',
+            onPressed: () => _vm.restoreExercise(removed),
+          ),
+        ),
       );
-      _changed();
-    });
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      for (final block in _blocks)
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              children: [
-                Row(
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _vm,
+      builder: (context, _) {
+        final blocks = _vm.blocks;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (blocks.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Text(
+                  'Agrega los ejercicios que hiciste.',
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            for (var b = 0; b < blocks.length; b++) ...[
+              _BlockCard(
+                key: ObjectKey(blocks[b]),
+                viewModel: _vm,
+                blockIndex: b,
+                onRemove: () => _removeExercise(b),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
+            TrackerGlassButton(
+              label: 'Agregar ejercicio',
+              icon: Icons.add_rounded,
+              onPressed: _addExercise,
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _BlockCard extends StatelessWidget {
+  const _BlockCard({
+    super.key,
+    required this.viewModel,
+    required this.blockIndex,
+    required this.onRemove,
+  });
+
+  final SessionEditorViewModel viewModel;
+  final int blockIndex;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final block = viewModel.blocks[blockIndex];
+    final reps = block.sets.first.repsText;
+    return GlassSurface(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      radius: AppRadii.inner,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: Text(block.name)),
-                    IconButton(
-                      tooltip: 'Quitar ejercicio',
-                      onPressed: () => setState(() {
-                        _blocks.remove(block);
-                        _changed();
-                      }),
-                      icon: const Icon(Icons.delete_outline),
+                    Text(
+                      block.name,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${block.sets.length} series × $reps reps',
+                      style: AppTypography.caption,
                     ),
                   ],
                 ),
-                Text(
-                  '${block.sets.length} series × ${block.sets.first.reps} reps',
-                ),
-                for (var i = 0; i < block.sets.length; i++)
-                  Row(
-                    children: [
-                      Text('Serie ${i + 1}'),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          key: ValueKey(
-                            '${identityHashCode(block)}-${block.revision}-$i-reps',
-                          ),
-                          initialValue: '${block.sets[i].reps}',
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: 'Reps'),
-                          onChanged: (v) {
-                            final n = int.tryParse(v) ?? 0;
-                            final old = block.sets[i];
-                            block.sets[i] = PlannedSet(
-                              exerciseId: old.exerciseId,
-                              order: old.order,
-                              weightKg: old.weightKg,
-                              reps: n,
-                            );
-                            _changed();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextFormField(
-                          key: ValueKey(
-                            '${identityHashCode(block)}-${block.revision}-$i-weight',
-                          ),
-                          initialValue: '${block.sets[i].weightKg}',
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: const InputDecoration(
-                            labelText: 'Peso kg',
-                          ),
-                          onChanged: (v) {
-                            final n = double.tryParse(v) ?? -1;
-                            final old = block.sets[i];
-                            block.sets[i] = PlannedSet(
-                              exerciseId: old.exerciseId,
-                              order: old.order,
-                              weightKg: n,
-                              reps: old.reps,
-                            );
-                            _changed();
-                          },
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Quitar serie',
-                        onPressed: block.sets.length == 1
-                            ? null
-                            : () => setState(() {
-                                block.sets.removeAt(i);
-                                block.revision++;
-                                _changed();
-                              }),
-                        icon: const Icon(Icons.remove_circle_outline),
-                      ),
-                    ],
-                  ),
-                TextButton(
-                  onPressed: () => setState(() {
-                    final last = block.sets.last;
-                    block.sets.add(
-                      PlannedSet(
-                        exerciseId: block.id,
-                        order: block.sets.length + 1,
-                        weightKg: last.weightKg,
-                        reps: last.reps,
-                      ),
-                    );
-                    _changed();
-                  }),
-                  child: const Text('Añadir serie'),
-                ),
-              ],
-            ),
+              ),
+              TrackerIconControl(
+                icon: Icons.delete_outline_rounded,
+                tooltip: 'Quitar ejercicio',
+                destructive: true,
+                onPressed: onRemove,
+              ),
+            ],
           ),
-        ),
-      OutlinedButton.icon(
-        onPressed: _add,
-        icon: const Icon(Icons.add),
-        label: const Text('Añadir ejercicio'),
+          const SizedBox(height: AppSpacing.sm),
+          for (var s = 0; s < block.sets.length; s++) ...[
+            _SetRow(
+              key: ValueKey(block.sets[s].id),
+              viewModel: viewModel,
+              blockIndex: blockIndex,
+              setIndex: s,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+          ],
+          TrackerGlassButton(
+            label: 'Agregar serie',
+            icon: Icons.add_rounded,
+            compact: true,
+            onPressed: () => viewModel.addSet(blockIndex),
+          ),
+        ],
       ),
-    ],
-  );
+    );
+  }
 }
 
-class _ExercisePicker extends StatefulWidget {
-  const _ExercisePicker({required this.api});
-  final ExercisesApi api;
+class _SetRow extends StatefulWidget {
+  const _SetRow({
+    super.key,
+    required this.viewModel,
+    required this.blockIndex,
+    required this.setIndex,
+  });
+
+  final SessionEditorViewModel viewModel;
+  final int blockIndex;
+  final int setIndex;
+
   @override
-  State<_ExercisePicker> createState() => _ExercisePickerState();
+  State<_SetRow> createState() => _SetRowState();
 }
 
-class _ExercisePickerState extends State<_ExercisePicker> {
-  late Future<ExercisePage> _page;
-  final _search = TextEditingController();
-  int _number = 1;
+class _SetRowState extends State<_SetRow> {
+  late final TextEditingController _reps;
+  late final TextEditingController _weight;
+
+  EditableSessionSet get _set =>
+      widget.viewModel.blocks[widget.blockIndex].sets[widget.setIndex];
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _reps = TextEditingController(text: _set.repsText);
+    _weight = TextEditingController(text: _set.weightText);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SetRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync(_reps, _set.repsText);
+    _sync(_weight, _set.weightText);
+  }
+
+  static void _sync(TextEditingController controller, String text) {
+    if (controller.text == text) return;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 
   @override
   void dispose() {
-    _search.dispose();
+    _reps.dispose();
+    _weight.dispose();
     super.dispose();
   }
 
-  void _load() {
-    _page = widget.api.fetchPage(query: _search.text, page: _number);
-  }
-
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Elegir ejercicio'),
-    content: SizedBox(
-      width: 400,
-      height: 420,
+  Widget build(BuildContext context) {
+    final vm = widget.viewModel;
+    final b = widget.blockIndex;
+    final s = widget.setIndex;
+    final canRemove = vm.blocks[b].sets.length > 1;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadii.option),
+        color: Colors.white.withValues(alpha: 0.03),
+        border: Border.all(color: AppColors.glassBorder),
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(
-            controller: _search,
-            decoration: InputDecoration(
-              labelText: 'Buscar',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () => setState(() {
-                  _number = 1;
-                  _load();
-                }),
+          Row(
+            children: [
+              TrackerTagChip(label: 'Serie ${s + 1}'),
+              const Spacer(),
+              TrackerIconControl(
+                icon: Icons.remove_circle_outline_rounded,
+                tooltip: 'Quitar serie',
+                size: 32,
+                onPressed: canRemove ? () => vm.removeSet(b, s) : null,
               ),
-            ),
-            onSubmitted: (_) => setState(() {
-              _number = 1;
-              _load();
-            }),
+            ],
           ),
-          Expanded(
-            child: FutureBuilder<ExercisePage>(
-              future: _page,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return TextButton(
-                    onPressed: () => setState(_load),
-                    child: const Text('No se pudo cargar. Reintentar'),
-                  );
-                }
-                final page = snapshot.data!;
-                if (page.items.isEmpty) {
-                  return const Center(child: Text('Sin resultados'));
-                }
-                return Column(
-                  children: [
-                    Expanded(
-                      child: ListView(
-                        children: [
-                          for (final e in page.items)
-                            ListTile(
-                              title: Text(e.nameEs ?? e.name),
-                              onTap: () => Navigator.pop(context, e),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton(
-                          onPressed: page.hasPrevious
-                              ? () => setState(() {
-                                  _number--;
-                                  _load();
-                                })
-                              : null,
-                          child: const Text('Anterior'),
-                        ),
-                        Text('${page.page} / ${page.totalPages}'),
-                        TextButton(
-                          onPressed: page.hasNext
-                              ? () => setState(() {
-                                  _number++;
-                                  _load();
-                                })
-                              : null,
-                          child: const Text('Siguiente'),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: WorkoutStepperField(
+                  label: 'Repeticiones',
+                  fieldKey: Key('reps-$b-$s'),
+                  controller: _reps,
+                  inputFormatters: WorkoutInputFormatters.integer,
+                  errorText: vm.repsError(b, s),
+                  decrementTooltip: 'Disminuir repeticiones',
+                  incrementTooltip: 'Aumentar repeticiones',
+                  onChanged: (value) => vm.setReps(b, s, value),
+                  onDecrement: () => vm.decrementReps(b, s),
+                  onIncrement: () => vm.incrementReps(b, s),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: WorkoutStepperField(
+                  label: 'Peso (kg)',
+                  fieldKey: Key('weight-$b-$s'),
+                  controller: _weight,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: WorkoutInputFormatters.decimal,
+                  errorText: vm.weightError(b, s),
+                  decrementTooltip: 'Disminuir peso',
+                  incrementTooltip: 'Aumentar peso',
+                  onChanged: (value) => vm.setWeight(b, s, value),
+                  onDecrement: () => vm.decrementWeight(b, s),
+                  onIncrement: () => vm.incrementWeight(b, s),
+                ),
+              ),
+            ],
           ),
         ],
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancelar'),
-      ),
-    ],
-  );
+    );
+  }
 }

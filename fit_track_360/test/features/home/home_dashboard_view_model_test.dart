@@ -354,6 +354,50 @@ void main() {
 
     vm.dispose();
   });
+  test('una sesión sin fin no ofrece «Continuar entrenamiento»', () async {
+    final vm = HomeDashboardViewModel(
+      repository: FakeDashboardRepository(
+        todayResult: sampleDashboard(
+          session: DaySession(
+            id: 's-legacy',
+            startedAt: DateTime.parse('2026-11-19T13:30:00.000Z'),
+            endedAt: null,
+            notes: null,
+            isToday: true,
+          ),
+        ),
+      ),
+      stepsSensor: FakeStepsSensor(
+        snapshots: [StepsSnapshot.unavailableDevice],
+      ),
+      now: () => fixedNow,
+    );
+    addTearDown(vm.dispose);
+
+    await vm.load();
+
+    final session = vm.session.dataOrNull!;
+    expect(session.summary, 'Sesión registrada');
+    expect(session.ctaLabel, 'Abrir entrenamiento');
+  });
+
+  test('una sesión finalizada muestra su duración', () async {
+    final vm = HomeDashboardViewModel(
+      repository: FakeDashboardRepository(
+        todayResult: sampleDashboard(session: sampleSession()),
+      ),
+      stepsSensor: FakeStepsSensor(
+        snapshots: [StepsSnapshot.unavailableDevice],
+      ),
+      now: () => fixedNow,
+    );
+    addTearDown(vm.dispose);
+
+    await vm.load();
+
+    expect(vm.session.dataOrNull!.summary, 'Duración aproximada: 45 min');
+    expect(vm.session.dataOrNull!.ctaLabel, 'Abrir entrenamiento');
+  });
 }
 
 class _ScriptedRepository implements DashboardRepository {

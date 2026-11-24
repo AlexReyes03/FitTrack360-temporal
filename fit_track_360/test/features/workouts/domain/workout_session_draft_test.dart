@@ -86,4 +86,22 @@ void main() {
       expect(payload['sets'], hasLength(5));
     });
   });
+
+  group('registro pasado', () {
+    test('envía endedAt para que la sesión quede finalizada', () {
+      final draft = _draft().edited(
+        startedAt: _startedAt,
+        notes: '',
+        endedAt: _startedAt.add(const Duration(minutes: 45)),
+      );
+
+      final payload = draft.toCreateWorkoutPayload();
+
+      expect(payload['endedAt'], '2026-11-10T18:45:00.000Z');
+    });
+
+    test('sin endedAt no lo envía', () {
+      expect(_draft().toCreateWorkoutPayload().containsKey('endedAt'), isFalse);
+    });
+  });
 }

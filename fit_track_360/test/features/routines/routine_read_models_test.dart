@@ -139,4 +139,35 @@ void main() {
       expect(const RoutineExerciseSummary().targetLabel, isNull);
     });
   });
+
+  group('RoutineDetail.toRoutine', () {
+    test('omite ejercicios sin id y completa objetivos ausentes', () {
+      final routine = RoutineDetail.fromJson({
+        'id': 'r1',
+        'name': 'Pierna',
+        'notes': 'Calentar',
+        'exercises': [
+          {'exerciseId': 'e1', 'position': 0, 'exerciseName': 'Sentadilla'},
+          {'position': 1, 'exerciseName': 'Sin id'},
+          {
+            'exerciseId': 'e2',
+            'position': 2,
+            'exerciseName': 'Zancada',
+            'targetSets': 3,
+            'targetReps': 12,
+          },
+        ],
+      }).toRoutine();
+
+      expect(routine.id, 'r1');
+      expect(routine.notes, 'Calentar');
+      expect(routine.exercises.map((e) => e.exerciseId), ['e1', 'e2']);
+      expect(routine.exercises.first.targetSets, 1);
+      expect(
+        routine.exercises.first.targetReps,
+        RoutineDetail.defaultTargetReps,
+      );
+      expect(routine.exercises.last.targetReps, 12);
+    });
+  });
 }

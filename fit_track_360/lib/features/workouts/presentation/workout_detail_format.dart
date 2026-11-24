@@ -2,7 +2,7 @@
 library;
 
 String formatDuration(Duration? duration) {
-  if (duration == null) return 'En curso';
+  if (duration == null) return 'Sin registrar';
   final minutes = duration.inMinutes;
   if (minutes < 60) return '$minutes min';
   return '${minutes ~/ 60} h ${minutes % 60} min';

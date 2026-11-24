@@ -5,6 +5,7 @@ import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
 import 'package:fit_track_360/features/routines/data/routines_reader.dart';
 import 'package:fit_track_360/features/routines/presentation/routine_detail_page.dart';
+import 'package:fit_track_360/features/workouts/presentation/tracker_session_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -278,5 +279,75 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('«Entrenar ahora» abre el tracker con los ejercicios', (
+    tester,
+  ) async {
+    Object? extra;
+    final reader = FakeRoutinesReader(
+      detail: _detail(
+        exercises: [
+          {
+            'exerciseId': 'e2',
+            'position': 2,
+            'exerciseName': 'Press banca',
+            'targetSets': 3,
+            'targetReps': 10,
+          },
+          {
+            'exerciseId': 'e1',
+            'position': 1,
+            'exerciseName': 'Sentadilla',
+            'targetSets': 4,
+            'targetReps': 8,
+          },
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      routinesTestApp(
+        reader,
+        initialLocation: '/app/rutinas/r1',
+        onTracker: (value) => extra = value,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Entrenar ahora'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('tracker'), findsOneWidget);
+    final draft = (extra as TrackerSessionArgs).draft!;
+    expect(draft.routineId, 'r1');
+    expect(draft.exercises.map((e) => e.exerciseName), [
+      'Sentadilla',
+      'Press banca',
+    ]);
+    expect(draft.exercises.first.targetSets, 4);
+  });
+
+  testWidgets('una rutina vacía no inicia el tracker', (tester) async {
+    Object? extra;
+    final reader = FakeRoutinesReader(detail: _detail());
+
+    await tester.pumpWidget(
+      routinesTestApp(
+        reader,
+        initialLocation: '/app/rutinas/r1',
+        onTracker: (value) => extra = value,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Entrenar ahora'));
+    await tester.pumpAndSettle();
+
+    expect(extra, isNull);
+    expect(
+      find.text(
+        'La rutina no tiene ejercicios. Agrega al menos uno para iniciar.',
+      ),
+      findsOneWidget,
+    );
   });
 }

@@ -4,10 +4,12 @@ import 'package:fit_track_360/core/async_state.dart';
 import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
+import 'package:fit_track_360/features/exercises/data/exercise.dart';
 import 'package:fit_track_360/features/workouts/data/workouts_api.dart';
 import 'package:fit_track_360/features/workouts/data/workouts_repository_impl.dart';
 import 'package:fit_track_360/features/workouts/domain/exercise_reference.dart';
 import 'package:fit_track_360/features/workouts/domain/tracker_location_provider.dart';
+import 'package:fit_track_360/features/workouts/domain/workout_session_draft.dart';
 import 'package:fit_track_360/features/workouts/domain/workout_set.dart';
 import 'package:fit_track_360/features/workouts/presentation/tracker_view_model.dart';
 import 'package:fit_track_360/features/workouts/presentation/widgets/tracker_location_section.dart';
@@ -458,6 +460,161 @@ void main() {
     expect(refs[1]?.weightKg, 82.5);
     expect(refs[1]?.reps, 6);
     expect(refs[2], isNull);
+  });
+  group('varios ejercicios (rutina o repetir)', () {
+    final draft = WorkoutSessionDraft(
+      routineId: 'rutina-1',
+      startedAt: DateTime.utc(2026, 11, 12, 10),
+      exercises: const [
+        PlannedExercise(
+          exerciseId: '0002',
+          exerciseName: 'Zancada',
+          position: 1,
+          targetSets: 1,
+          targetReps: 12,
+        ),
+        PlannedExercise(
+          exerciseId: '0001',
+          exerciseName: 'Sentadilla',
+          position: 0,
+          targetSets: 2,
+          targetReps: 8,
+        ),
+      ],
+    );
+
+    TrackerViewModel planVm(FakeWorkoutsRepository repo) {
+      final vm = TrackerViewModel.plan(
+        repository: repo,
+        locationProvider: _FakeLocation(),
+        exercises: TrackerExercisePlan.listFromDraft(draft),
+        routineId: draft.routineId,
+        autoStartSessionTimer: false,
+        now: () => DateTime.utc(2026, 11, 12, 12),
+      );
+      addTearDown(vm.dispose);
+      return vm;
+    }
+
+    test('precarga series objetivo en el orden de la rutina', () {
+      final vm = planVm(FakeWorkoutsRepository(sessions: const []));
+
+      expect(vm.exerciseName, 'Sentadilla');
+      expect(vm.exerciseData.progressLabel, 'Ejercicio 1 de 2');
+      expect(vm.setItems.map((s) => s.repsText), ['8', '8']);
+      expect(vm.hasPreviousExercise, isFalse);
+
+      vm.nextExercise();
+      expect(vm.exerciseName, 'Zancada');
+      expect(vm.setItems.map((s) => s.repsText), ['12']);
+      expect(vm.hasNextExercise, isFalse);
+    });
+
+    test('una sesión repetida precarga peso y repeticiones exactos', () {
+      final repeated = WorkoutSessionDraft(
+        startedAt: DateTime.utc(2026, 11, 12),
+        exercises: const [
+          PlannedExercise(
+            exerciseId: '0001',
+            exerciseName: 'Sentadilla',
+            position: 0,
+            targetSets: 2,
+            targetReps: 5,
+          ),
+        ],
+        sets: const [
+          PlannedSet(exerciseId: '0001', order: 1, weightKg: 100, reps: 5),
+          PlannedSet(exerciseId: '0001', order: 2, weightKg: 102.5, reps: 3),
+        ],
+      );
+
+      final plans = TrackerExercisePlan.listFromDraft(repeated);
+
+      expect(plans.single.sets.map((s) => [s.weightText, s.repsText]), [
+        ['100', '5'],
+        ['102.5', '3'],
+      ]);
+    });
+
+    test(
+      'finalizar envía las series de todos los ejercicios y la rutina',
+      () async {
+        final repo = FakeWorkoutsRepository(sessions: const []);
+        final vm = planVm(repo);
+        vm.setWeightText(0, '60');
+        vm.toggleSetCompleted(0);
+        vm.nextExercise();
+        vm.toggleSetCompleted(0);
+
+        final id = await vm.finishSession();
+
+        expect(id, isNotNull);
+        final payload = repo.createdPayloads.single;
+        expect(payload['routineId'], 'rutina-1');
+        expect(payload['sets'], [
+          {'exerciseId': '0001', 'order': 1, 'weight': 60.0, 'reps': 8},
+          {'exerciseId': '0002', 'order': 2, 'weight': 0.0, 'reps': 12},
+        ]);
+      },
+    );
+
+    test('un error en otro ejercicio lleva a ese ejercicio', () async {
+      final vm = planVm(FakeWorkoutsRepository(sessions: const []));
+      vm.toggleSetCompleted(0);
+      vm.setRepsText(0, '');
+      vm.nextExercise();
+      vm.toggleSetCompleted(0);
+
+      expect(await vm.finishSession(), isNull);
+      expect(vm.currentExerciseIndex, 0);
+      expect(vm.setItems.first.hasRepsError, isTrue);
+    });
+
+    test('cambiar de ejercicio reinicia sus series', () {
+      final vm = planVm(FakeWorkoutsRepository(sessions: const []));
+      vm.replaceCurrentExercise(
+        const TrackerExercisePlan(exerciseId: '0009', name: 'Plancha'),
+      );
+
+      expect(vm.exerciseId, '0009');
+      expect(vm.setItems, hasLength(vm.initialSetCount));
+      expect(vm.setItems.every((s) => s.repsText.isEmpty), isTrue);
+    });
+
+    test('los datos del catálogo traen etiquetas en español', () {
+      final vm = planVm(FakeWorkoutsRepository(sessions: const []));
+      expect(vm.exerciseIdsWithoutDetails, {'0001', '0002'});
+
+      vm.attachExerciseDetails(
+        '0001',
+        const Exercise(
+          id: '0001',
+          name: 'squat',
+          bodyPart: 'upper legs',
+          equipment: 'body weight',
+          target: 'quads',
+          attribution: 'Gym Visual',
+        ),
+      );
+
+      expect(vm.exerciseName, 'Sentadilla');
+      expect(vm.exerciseTags, ['Muslos', 'Cuádriceps', 'Peso corporal']);
+      expect(vm.currentExercise?.id, '0001');
+      expect(vm.exerciseIdsWithoutDetails, {'0002'});
+    });
+  });
+
+  test('los mensajes de ubicación llevan acentos', () async {
+    final vm = _fakeVm();
+    addTearDown(vm.dispose);
+    expect(vm.gpsStatusLabel, 'Sin ubicación capturada todavía');
+    expect(vm.exerciseData.progressLabel, 'Sesión en curso');
+
+    await vm.requestGpsLocation();
+    expect(
+      vm.gpsStatusLabel,
+      'No se pudo obtener GPS. Usa zona manual o continúa sin ubicación.',
+    );
   });
 }
 

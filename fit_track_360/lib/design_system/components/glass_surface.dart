@@ -25,7 +25,7 @@ class GlassSurface extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         boxShadow: const [
           BoxShadow(
-            color: Color(0xC7000000),
+            color: AppColors.glassShadow,
             blurRadius: 54,
             offset: Offset(0, 24),
             spreadRadius: -14,
@@ -47,8 +47,11 @@ class GlassSurface extends StatelessWidget {
                       end: Alignment.bottomRight,
                       stops: [0.0, 0.5, 1.0],
                       colors: [
+                        // ds-exception: falta token glassSurfaceTop (pedido en #241, T4)
                         Color(0x16FFFFFF),
+                        // ds-exception: falta token glassSurfaceMid (pedido en #241, T4)
                         Color(0x07FFFFFF),
+                        // ds-exception: falta token glassSurfaceBottom (pedido en #241, T4)
                         Color(0x0DFFFFFF),
                       ],
                     ),
@@ -72,13 +75,13 @@ class GlassSurface extends StatelessWidget {
                 height: 1,
                 child: FractionallySizedBox(
                   widthFactor: 0.84,
-                  child: DecoratedBox(
+                  child: const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.white.withValues(alpha: 0),
-                          Colors.white.withValues(alpha: 0.55),
-                          Colors.white.withValues(alpha: 0),
+                          Colors.transparent,
+                          AppColors.glassSpecular,
+                          Colors.transparent,
                         ],
                       ),
                     ),

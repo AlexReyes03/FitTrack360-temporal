@@ -1,3 +1,4 @@
+import 'package:fit_track_360/design_system/tokens/app_typography.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/glass_bottom_nav_bar.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/home_navigation_shell.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/nav_placeholder_page.dart';
@@ -83,6 +84,73 @@ void main() {
     await tester.pump();
     expect(tapped, isTrue);
   });
+
+  testWidgets(
+    'QuickActionsRow conserva su API, su Key y los roles tipográficos',
+    (tester) async {
+      const rowKey = ValueKey('quick-actions-row');
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: QuickActionsRow(
+              key: rowKey,
+              title: 'ATAJOS',
+              actions: [
+                QuickActionItem(
+                  label: 'Nuevo entreno',
+                  subtitle: 'Registrar sesión',
+                  icon: Icons.fitness_center_rounded,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byKey(rowKey), findsOneWidget);
+      expect(
+        tester.widget<QuickActionsRow>(find.byKey(rowKey)).title,
+        'ATAJOS',
+      );
+      expect(
+        tester.widget<Text>(find.text('ATAJOS')).style!.fontSize,
+        AppTypography.meta.fontSize,
+      );
+      expect(
+        tester.widget<Text>(find.text('Nuevo entreno')).style!.fontSize,
+        AppTypography.body.fontSize,
+      );
+      expect(
+        tester.widget<Text>(find.text('Registrar sesión')).style!.fontSize,
+        AppTypography.micro.fontSize,
+      );
+      expect(QuickActionsRow(actions: const []).title, 'ACCESOS RÁPIDOS');
+    },
+  );
+
+  testWidgets(
+    'QuickActionsRow sin título no lo renderiza y sin onTap no actúa',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: QuickActionsRow(
+              title: null,
+              actions: [
+                QuickActionItem(label: 'Próximamente', icon: Icons.insights),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('ACCESOS RÁPIDOS'), findsNothing);
+      expect(find.text('Próximamente'), findsOneWidget);
+      await tester.tap(find.text('Próximamente'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('NavPlaceholderPage muestra titulo y ejecuta onBack', (
     tester,

@@ -59,18 +59,7 @@ class TrackerTimerSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Center(
-            child: Text(
-              elapsedLabel,
-              style: const TextStyle(
-                fontSize: 42,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.2,
-                color: AppColors.textPrimary,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
-            ),
-          ),
+          Center(child: Text(elapsedLabel, style: AppTypography.timer)),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -97,7 +86,7 @@ class TrackerTimerSection extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadii.inner),
-              color: Colors.white.withValues(alpha: 0.04),
+              color: AppColors.glassTileFill,
               border: Border.all(color: AppColors.glassBorder),
             ),
             child: Column(
@@ -110,7 +99,7 @@ class TrackerTimerSection extends StatelessWidget {
                       size: 18,
                       color: AppColors.textSecondary,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: AppSpacing.xxs),
                     Expanded(
                       child: Text(
                         'Descanso entre series',
@@ -122,11 +111,8 @@ class TrackerTimerSection extends StatelessWidget {
                     ),
                     Text(
                       restRemainingLabel,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        fontFeatures: [FontFeature.tabularFigures()],
+                      style: AppTypography.headline.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
                   ],

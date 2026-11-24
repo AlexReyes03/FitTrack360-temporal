@@ -23,7 +23,7 @@ class PreviousSetReferenceView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.xs,
-        vertical: 3,
+        vertical: AppSpacing.hairline,
       ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadii.badge),
@@ -32,8 +32,7 @@ class PreviousSetReferenceView extends StatelessWidget {
       ),
       child: Text(
         reference == null ? emptyLabel : 'Anterior: ${_format(reference)}',
-        style: AppTypography.body.copyWith(
-          fontSize: 12,
+        style: AppTypography.meta.copyWith(
           color: reference == null
               ? AppColors.textMuted
               : AppColors.textSecondary,

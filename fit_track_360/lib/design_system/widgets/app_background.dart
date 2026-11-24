@@ -34,6 +34,7 @@ class AppBackground extends StatelessWidget {
             child: _RadialVignette(
               center: Alignment(-0.76, -0.84),
               radius: shortSide * 0.38,
+              // ds-exception: receta del fondo
               color: Colors.white.withValues(alpha: 0.09),
             ),
           ),
@@ -48,6 +49,7 @@ class AppBackground extends StatelessWidget {
             child: _RadialVignette(
               center: Alignment(0, 0.7),
               radius: shortSide * 0.45,
+              // ds-exception: receta del fondo
               color: Colors.white.withValues(alpha: 0.05),
             ),
           ),

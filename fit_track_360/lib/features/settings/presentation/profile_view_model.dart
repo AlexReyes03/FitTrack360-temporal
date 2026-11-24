@@ -4,6 +4,7 @@ import 'dart:ui' show Rect;
 import 'package:flutter/foundation.dart';
 
 import '../../../core/async_state.dart';
+import '../../../core/network/api_client.dart' show SessionExpiredException;
 import '../../../core/notifications/reminder_service.dart';
 import '../../../core/security/biometric_service.dart';
 import '../../auth/data/logout_service.dart';
@@ -26,9 +27,31 @@ const biometricFailedMessage =
 const exportUnavailableMessage =
     'La exportación aún no está disponible. Intenta más tarde.';
 const exportShareFailedMessage =
-    'No se pudo abrir el menú para compartir. Copia tus datos desde aquí.';
+    'No se pudo abrir el menú para compartir. Copia tus datos desde la '
+    'ventana que abrimos.';
 const saveFailedMessage =
     'No se pudieron guardar los cambios. Intenta de nuevo.';
+const formSavedMessage = 'Cambios guardados.';
+const preferenceSavedMessage = 'Preferencia guardada.';
+const preferenceFailedMessage =
+    'No se pudo guardar la preferencia. Intenta de nuevo.';
+const accountDeletionFailedMessage =
+    'No pudimos eliminar tu cuenta. Revisa tu conexión e intenta de nuevo.';
+
+/// Tono del aviso: éxito (neutro con palomita), aviso (ámbar) o error (rojo).
+enum ProfileFeedbackKind { success, warning, error }
+
+/// Aviso no bloqueante que la vista muestra junto a la acción que lo causó.
+class ProfileFeedback {
+  const ProfileFeedback(this.text, this.kind);
+
+  const ProfileFeedback.success(this.text) : kind = ProfileFeedbackKind.success;
+  const ProfileFeedback.warning(this.text) : kind = ProfileFeedbackKind.warning;
+  const ProfileFeedback.error(this.text) : kind = ProfileFeedbackKind.error;
+
+  final String text;
+  final ProfileFeedbackKind kind;
+}
 
 /// Hora local del recordatorio diario (P3, programación inexacta).
 const reminderHour = 20;
@@ -65,11 +88,26 @@ class ProfileViewModel extends ChangeNotifier {
   int? workoutCount;
   bool reminderSupported = false;
   bool biometricAvailable = false;
-  bool saving = false;
   Map<String, String> fieldErrors = const {};
 
-  /// Aviso no bloqueante (éxito o fallo) para mostrar en la vista.
-  String? message;
+  /// Regla de guardado: el formulario (nombre, metas y descanso) se guarda
+  /// con «Guardar cambios»; unidades e interruptores, al instante.
+  bool savingForm = false;
+  bool updatingPreferences = false;
+  bool exporting = false;
+  bool deletingAccount = false;
+
+  /// El API rechazó la sesión: la vista debe volver a `/login`.
+  bool sessionExpired = false;
+
+  /// Avisos por sección, para mostrarlos junto a su acción.
+  ProfileFeedback? formFeedback;
+  ProfileFeedback? preferencesFeedback;
+  ProfileFeedback? dataFeedback;
+  ProfileFeedback? _lastFeedback;
+
+  /// Texto del aviso más reciente, de cualquier sección.
+  String? get message => _lastFeedback?.text;
 
   /// true cuando el permiso de P3 quedó denegado permanentemente.
   bool showOpenSettings = false;
@@ -88,6 +126,12 @@ class ProfileViewModel extends ChangeNotifier {
       if (result != null && result.preferences.notificationsEnabled) {
         unawaited(_syncPush(notificationsEnabled: true));
       }
+    } on SessionExpiredException catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      workoutCount = null;
+      sessionExpired = true;
+      _notify();
+      return;
     } catch (error, stackTrace) {
       state = AsyncError(error, stackTrace);
       workoutCount = null; // El resumen se omite si el API no responde.
@@ -105,66 +149,116 @@ class ProfileViewModel extends ChangeNotifier {
     }
   }
 
-  /// Valida en cliente y, si pasa, envía nombre, metas y preferencias.
-  Future<bool> save(
-    ProfileForm form, {
-    required WeightUnit weightUnit,
-    required DistanceUnit distanceUnit,
-  }) async {
+  /// Valida en cliente y, si pasa, envía nombre, metas y descanso. Las
+  /// unidades no viajan desde aquí: se guardan al tocarlas.
+  Future<bool> save(ProfileForm form) async {
     final current = profile;
-    if (current == null) return false;
+    if (current == null || savingForm) return false;
     final result = validateProfileForm(form);
     fieldErrors = result.errors;
-    message = null;
+    _setFeedback(form: null);
     if (!result.isValid) {
       _notify();
       return false;
     }
-    final saved = await _update(
+    savingForm = true;
+    _notify();
+    final error = await _patch(
       ProfileUpdate(
         displayName: result.displayName,
         goals: result.goals,
         preferences: current.preferences.copyWith(
-          weightUnit: weightUnit,
-          distanceUnit: distanceUnit,
           restSeconds: result.restSeconds,
         ),
       ),
     );
-    if (saved) message = 'Cambios guardados.';
+    savingForm = false;
+    if (error == _PatchResult.ok) {
+      _setFeedback(form: const ProfileFeedback.success(formSavedMessage));
+    } else if (error == _PatchResult.failed) {
+      _setFeedback(form: const ProfileFeedback.error(saveFailedMessage));
+    }
     _notify();
-    return saved;
+    return error == _PatchResult.ok;
   }
 
-  Future<bool> _update(ProfileUpdate update) async {
-    saving = true;
+  Future<void> setWeightUnit(WeightUnit unit) async {
+    final current = profile;
+    if (current == null || current.preferences.weightUnit == unit) return;
+    await _savePreferences(current.preferences.copyWith(weightUnit: unit));
+  }
+
+  Future<void> setDistanceUnit(DistanceUnit unit) async {
+    final current = profile;
+    if (current == null || current.preferences.distanceUnit == unit) return;
+    await _savePreferences(current.preferences.copyWith(distanceUnit: unit));
+  }
+
+  /// Guarda una preferencia al instante y avisa en su sección.
+  Future<bool> _savePreferences(UserPreferences preferences) async {
+    if (updatingPreferences) return false;
+    _setFeedback(preferences: null);
+    updatingPreferences = true;
     _notify();
+    final result = await _patch(ProfileUpdate(preferences: preferences));
+    updatingPreferences = false;
+    if (result == _PatchResult.ok) {
+      _setFeedback(
+        preferences: const ProfileFeedback.success(preferenceSavedMessage),
+      );
+    } else if (result == _PatchResult.failed) {
+      _setFeedback(
+        preferences: const ProfileFeedback.error(preferenceFailedMessage),
+      );
+    }
+    _notify();
+    return result == _PatchResult.ok;
+  }
+
+  Future<_PatchResult> _patch(ProfileUpdate update) async {
     try {
       final updated = await _repository.updateProfile(update);
       state = AsyncData(updated);
-      return true;
+      return _PatchResult.ok;
+    } on SessionExpiredException {
+      sessionExpired = true;
+      return _PatchResult.sessionExpired;
     } catch (_) {
-      message = saveFailedMessage;
-      return false;
-    } finally {
-      saving = false;
+      return _PatchResult.failed;
     }
   }
 
-  /// P3: pedir permiso al activar; revertir si se niega.
+  /// Reemplaza el aviso de cada sección indicada; el resto queda igual.
+  void _setFeedback({
+    Object? form = _keep,
+    Object? preferences = _keep,
+    Object? data = _keep,
+  }) {
+    ProfileFeedback? apply(Object? next, ProfileFeedback? previous) {
+      if (identical(next, _keep)) return previous;
+      if (next == null && identical(_lastFeedback, previous)) {
+        _lastFeedback = null;
+      }
+      if (next != null) _lastFeedback = next as ProfileFeedback;
+      return next as ProfileFeedback?;
+    }
+
+    formFeedback = apply(form, formFeedback);
+    preferencesFeedback = apply(preferences, preferencesFeedback);
+    dataFeedback = apply(data, dataFeedback);
+  }
+
+  /// P3: pedir permiso al activar; revertir si se niega. Se guarda al
+  /// instante, como el resto de preferencias.
   Future<void> setReminder(bool enabled) async {
     final current = profile;
-    if (current == null || !reminderSupported) return;
-    message = null;
+    if (current == null || !reminderSupported || updatingPreferences) return;
+    _setFeedback(preferences: null);
     showOpenSettings = false;
     if (!enabled) {
       await _reminders.cancel();
-      await _update(
-        ProfileUpdate(
-          preferences: current.preferences.copyWith(
-            notificationsEnabled: false,
-          ),
-        ),
+      await _savePreferences(
+        current.preferences.copyWith(notificationsEnabled: false),
       );
       await _revokePush();
       _notify();
@@ -177,21 +271,25 @@ class ProfileViewModel extends ChangeNotifier {
           hour: reminderHour,
           minute: reminderMinute,
         );
-        await _update(
-          ProfileUpdate(
-            preferences: current.preferences.copyWith(
-              notificationsEnabled: true,
-            ),
+        final saved = await _savePreferences(
+          current.preferences.copyWith(notificationsEnabled: true),
+        );
+        if (saved) {
+          await _syncPush(
+            notificationsEnabled: true,
+            requestPermissionIfNeeded: true,
+          );
+        }
+      case ReminderPermission.denied:
+        _setFeedback(
+          preferences: const ProfileFeedback.warning(reminderDeniedMessage),
+        );
+      case ReminderPermission.permanentlyDenied:
+        _setFeedback(
+          preferences: const ProfileFeedback.warning(
+            reminderPermanentlyDeniedMessage,
           ),
         );
-        await _syncPush(
-          notificationsEnabled: true,
-          requestPermissionIfNeeded: true,
-        );
-      case ReminderPermission.denied:
-        message = reminderDeniedMessage;
-      case ReminderPermission.permanentlyDenied:
-        message = reminderPermanentlyDeniedMessage;
         showOpenSettings = true;
     }
     _notify();
@@ -202,8 +300,8 @@ class ProfileViewModel extends ChangeNotifier {
   /// O1: exige autenticar antes de activar; desactivar no la pide.
   Future<void> setBiometric(bool enabled) async {
     final current = profile;
-    if (current == null || !biometricAvailable) return;
-    message = null;
+    if (current == null || !biometricAvailable || updatingPreferences) return;
+    _setFeedback(preferences: null);
     if (enabled) {
       var ok = false;
       try {
@@ -214,45 +312,95 @@ class ProfileViewModel extends ChangeNotifier {
         ok = false;
       }
       if (!ok) {
-        message = biometricFailedMessage;
+        _setFeedback(
+          preferences: const ProfileFeedback.warning(biometricFailedMessage),
+        );
         _notify();
         return;
       }
     }
-    await _update(
-      ProfileUpdate(
-        preferences: current.preferences.copyWith(biometricEnabled: enabled),
-      ),
+    await _savePreferences(
+      current.preferences.copyWith(biometricEnabled: enabled),
     );
-    _notify();
   }
 
   /// Exporta y comparte el JSON como archivo (O10).
   ///
   /// Devuelve el JSON solo cuando la vista debe mostrarlo en el diálogo de
-  /// respaldo (el plugin falló); null si se compartió o si no hay exportación.
+  /// respaldo (el plugin falló); null si se compartió, si no hay exportación
+  /// o si ya hay una exportación en curso.
   Future<String?> exportData({Rect? origin}) async {
-    message = null;
-    final String json;
+    if (exporting) return null;
+    exporting = true;
+    _setFeedback(data: null);
+    _notify();
     try {
-      json = await _repository.exportData();
-    } catch (_) {
-      message = exportUnavailableMessage;
+      final String json;
+      try {
+        json = await _repository.exportData();
+      } on SessionExpiredException {
+        sessionExpired = true;
+        return null;
+      } catch (_) {
+        _setFeedback(
+          data: const ProfileFeedback.error(exportUnavailableMessage),
+        );
+        return null;
+      }
+      try {
+        await _sharer.shareJson(
+          json: json,
+          fileName: exportFileName(_clock()),
+          origin: origin,
+        );
+        return null;
+      } catch (_) {
+        _setFeedback(
+          data: const ProfileFeedback.warning(exportShareFailedMessage),
+        );
+        return json;
+      }
+    } finally {
+      exporting = false;
       _notify();
-      return null;
     }
+  }
+
+  /// Elimina la cuenta en el API y, si lo logra, limpia lo local (recordatorio,
+  /// token FCM y sesión). Devuelve true si la vista debe ir a `/login`.
+  Future<bool> deleteAccount() async {
+    if (deletingAccount) return false;
+    deletingAccount = true;
+    _setFeedback(data: null);
+    _notify();
     try {
-      await _sharer.shareJson(
-        json: json,
-        fileName: exportFileName(_clock()),
-        origin: origin,
+      await _repository.deleteAccount();
+    } on SessionExpiredException {
+      sessionExpired = true;
+      deletingAccount = false;
+      _notify();
+      return false;
+    } catch (_) {
+      _setFeedback(
+        data: const ProfileFeedback.error(accountDeletionFailedMessage),
       );
-      return null;
-    } catch (_) {
-      message = exportShareFailedMessage;
+      deletingAccount = false;
       _notify();
-      return json;
+      return false;
     }
+    try {
+      await _reminders.cancel();
+    } catch (_) {
+      // Sin recordatorio programado no hay nada que cancelar.
+    }
+    try {
+      await _logout.logout();
+    } catch (_) {
+      // La cuenta ya no existe: la sesión local se descarta de todos modos.
+    }
+    deletingAccount = false;
+    _notify();
+    return true;
   }
 
   /// Sincroniza el token FCM sin romper la carga del perfil si falla.
@@ -285,6 +433,8 @@ class ProfileViewModel extends ChangeNotifier {
 
   Future<void> logout() => _logout.logout();
 
+  static const Object _keep = Object();
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -295,3 +445,5 @@ class ProfileViewModel extends ChangeNotifier {
     super.dispose();
   }
 }
+
+enum _PatchResult { ok, failed, sessionExpired }

@@ -4,6 +4,10 @@
 /// Estado visual de cada sección de la pantalla de progreso.
 enum ProgressSectionStatus { loading, data, empty, error }
 
+/// Tono del aviso del check-in: éxito, aviso parcial (p. ej. peso guardado
+/// pero foto fallida) o error. La vista lo pinta distinto.
+enum ProgressFeedbackTone { success, warning, error }
+
 /// Rangos de tiempo disponibles para la vista de progreso biométrico.
 enum ProgressRange {
   d7('7d', 'Últimos 7 días'),

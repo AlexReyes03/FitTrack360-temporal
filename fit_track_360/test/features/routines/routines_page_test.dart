@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:fit_track_360/core/network/api_client.dart';
+import 'package:fit_track_360/design_system/components/page_header.dart';
+import 'package:fit_track_360/design_system/components/secondary_button.dart';
 import 'package:fit_track_360/features/auth/data/auth_api.dart';
 import 'package:fit_track_360/features/routines/data/routines_reader.dart';
 import 'package:flutter/material.dart';
@@ -94,7 +96,8 @@ void main() {
 
     reader.listError = null;
     reader.routines = [_summary(name: 'Fuerza')];
-    await tester.tap(find.text('Reintentar'));
+    expect(find.byType(TextButton), findsNothing);
+    await tester.tap(find.widgetWithText(SecondaryButton, 'Reintentar'));
     await tester.pumpAndSettle();
 
     expect(find.text('Fuerza'), findsOneWidget);
@@ -134,6 +137,7 @@ void main() {
     await tester.pumpWidget(routinesTestApp(reader));
     await tester.pumpAndSettle();
 
+    expect(find.byType(PageHeader), findsOneWidget);
     await tester.tap(find.byTooltip('Volver'));
     await tester.pumpAndSettle();
 

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../../design_system/tokens/app_colors.dart';
 import '../../../../design_system/tokens/app_radii.dart';
+import '../../../../design_system/tokens/app_spacing.dart';
+import '../../../../design_system/tokens/app_typography.dart';
 
 /// Modelo visual para una tarjeta de acceso rapido en Home.
 class QuickActionItem {
@@ -39,19 +41,18 @@ class QuickActionsRow extends StatelessWidget {
         if (title != null && title!.isNotEmpty) ...[
           Text(
             title!,
-            style: const TextStyle(
+            style: AppTypography.meta.copyWith(
               color: AppColors.zinc200,
-              fontSize: 12.5,
               fontWeight: FontWeight.w700,
               letterSpacing: 0.6,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
         ],
         LayoutBuilder(
           builder: (context, constraints) {
             final twoColumns = constraints.maxWidth >= 280;
-            final spacing = 10.0;
+            const spacing = AppSpacing.sm;
             final itemWidth = twoColumns
                 ? (constraints.maxWidth - spacing) / 2
                 : constraints.maxWidth;
@@ -108,16 +109,14 @@ class _QuickActionCardState extends State<_QuickActionCard> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadii.option),
               color: _pressed
-                  ? Colors.white.withValues(alpha: 0.08)
-                  : Colors.white.withValues(alpha: 0.04),
+                  ? AppColors.glassFillPressedSoft
+                  : AppColors.glassTileFill,
               border: Border.all(
-                color: _pressed
-                    ? Colors.white.withValues(alpha: 0.24)
-                    : Colors.white.withValues(alpha: 0.1),
+                color: _pressed ? AppColors.glassRim : AppColors.glassDivider,
               ),
             ),
             child: Row(
@@ -127,12 +126,12 @@ class _QuickActionCardState extends State<_QuickActionCard> {
                   height: 32,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(AppRadii.badge),
-                    gradient: LinearGradient(
+                    gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        Colors.white.withValues(alpha: 0.14),
-                        Colors.white.withValues(alpha: 0.04),
+                        AppColors.glassFillSelected,
+                        AppColors.glassTileFill,
                       ],
                     ),
                     border: Border.all(color: AppColors.glassBorder),
@@ -143,7 +142,7 @@ class _QuickActionCardState extends State<_QuickActionCard> {
                     color: AppColors.accentWhite,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -153,22 +152,19 @@ class _QuickActionCardState extends State<_QuickActionCard> {
                         widget.action.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 13.5,
+                        style: AppTypography.body.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       if (widget.action.subtitle != null &&
                           widget.action.subtitle!.isNotEmpty) ...[
-                        const SizedBox(height: 2),
+                        const SizedBox(height: AppSpacing.hairline),
                         Text(
                           widget.action.subtitle!,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: AppTypography.micro.copyWith(
                             color: AppColors.textSecondary,
-                            fontSize: 11.5,
                           ),
                         ),
                       ],

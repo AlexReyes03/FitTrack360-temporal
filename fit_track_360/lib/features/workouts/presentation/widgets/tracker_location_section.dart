@@ -42,7 +42,7 @@ class TrackerLocationSection extends StatelessWidget {
                 size: 18,
                 color: AppColors.textSecondary,
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: AppSpacing.xxs),
               Expanded(
                 child: Text(
                   'Ubicación de entrenamiento',
@@ -54,13 +54,10 @@ class TrackerLocationSection extends StatelessWidget {
               const TrackerTagChip(label: 'Opcional'),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             'Elige si deseas registrar el lugar por GPS o escribir la zona manualmente.',
-            style: AppTypography.body.copyWith(
-              fontSize: 13,
-              color: AppColors.textSecondary,
-            ),
+            style: AppTypography.caption,
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
@@ -97,19 +94,13 @@ class TrackerLocationSection extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppRadii.option),
-                color: Colors.white.withValues(alpha: 0.04),
+                color: AppColors.glassTileFill,
                 border: Border.all(color: AppColors.glassBorder),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    gpsStatusLabel,
-                    style: AppTypography.body.copyWith(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
+                  Text(gpsStatusLabel, style: AppTypography.caption),
                   const SizedBox(height: AppSpacing.xs),
                   TrackerGlassButton(
                     label: 'Usar ubicación actual',
@@ -126,31 +117,23 @@ class TrackerLocationSection extends StatelessWidget {
               onChanged: onManualZoneChanged,
               // Mismo limite que `location` en CreateWorkoutDto (MaxLength 120).
               maxLength: 120,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 14.5,
-              ),
+              style: AppTypography.body,
               cursorColor: AppColors.accentWhite,
               decoration: InputDecoration(
                 hintText: 'Ej. Gimnasio Norte, Parque Central, Casa',
                 counterText: '',
                 hintStyle: const TextStyle(color: AppColors.textMuted),
                 filled: true,
-                fillColor: const Color(0xB807080C),
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 14,
-                ),
+                fillColor: AppColors.inputFill,
+                contentPadding: const EdgeInsets.all(AppSpacing.sm),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadii.input),
-                  borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.18),
-                  ),
+                  borderSide: const BorderSide(color: AppColors.inputBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppRadii.input),
-                  borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.6),
+                  borderSide: const BorderSide(
+                    color: AppColors.inputBorderFocused,
                     width: 1.5,
                   ),
                 ),

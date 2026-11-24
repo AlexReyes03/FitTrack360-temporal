@@ -33,11 +33,15 @@ class DashboardMetricCard extends StatelessWidget {
     this.status = DashboardBlockStatus.data,
     this.data = DashboardMetricData.preview,
     this.onRetry,
+    this.onRegisterMetric,
   });
 
   final DashboardBlockStatus status;
   final DashboardMetricData data;
   final VoidCallback? onRetry;
+
+  /// Lleva a Progreso para registrar la primera métrica corporal.
+  final VoidCallback? onRegisterMetric;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +52,8 @@ class DashboardMetricCard extends StatelessWidget {
       emptyMessage: 'Sin mediciones registradas todavía. Registra tu peso para seguir tu avance.',
       errorMessage: 'No pudimos cargar tu última métrica.',
       onRetry: onRetry,
+      emptyActionLabel: 'Registrar peso',
+      onEmptyAction: onRegisterMetric,
       skeletonLines: 2,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,

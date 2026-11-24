@@ -223,6 +223,7 @@ class _HomeShellPageState extends State<HomeShellPage> {
                         onOpenWorkout: () => context.go('/app/entrenamientos'),
                         onOpenMeals: () => context.go('/app/comidas'),
                         onOpenPhoto: () => context.push('/app/foto'),
+                        onOpenProgress: () => context.go('/app/progreso'),
                       ),
                       const SizedBox(height: 18),
                       // Acceso extra no cubierto por DashboardQuickActions.

@@ -258,6 +258,10 @@ Future<GoRouter> _pumpShell(
         builder: (context, state) => const Text('Pantalla ejercicios'),
       ),
       GoRoute(
+        path: '/app/progreso',
+        builder: (context, state) => const Text('Pantalla progreso'),
+      ),
+      GoRoute(
         path: '/login',
         builder: (context, state) => const Text('Pantalla login'),
       ),
@@ -493,6 +497,28 @@ void main() {
     );
     expect(find.text('No disponible'), findsOneWidget);
   });
+
+  for (final (label, path, page) in [
+    ('Registrar comida', '/app/comidas', 'Pantalla comidas'),
+    ('Iniciar entrenamiento', '/app/entrenamientos', 'Pantalla entrenamientos'),
+    ('Registrar peso', '/app/progreso', 'Pantalla progreso'),
+  ]) {
+    testWidgets('el estado vacío «$label» navega a $path', (tester) async {
+      await _pumpShell(
+        tester,
+        connectivity: FakeConnectivityService(online: true),
+        storage: storage,
+        client: MockClient(_route),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text(label));
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+
+      expect(find.text(page), findsOneWidget);
+    });
+  }
 
   for (final (label, path, page) in [
     ('Entrenar', '/app/entrenamientos', 'Pantalla entrenamientos'),

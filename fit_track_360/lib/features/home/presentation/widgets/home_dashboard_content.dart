@@ -42,6 +42,7 @@ class HomeDashboardContent extends StatelessWidget {
     this.onOpenWorkout,
     this.onOpenMeals,
     this.onOpenPhoto,
+    this.onOpenProgress,
   });
 
   final String? displayName;
@@ -71,6 +72,7 @@ class HomeDashboardContent extends StatelessWidget {
   final VoidCallback? onOpenWorkout;
   final VoidCallback? onOpenMeals;
   final VoidCallback? onOpenPhoto;
+  final VoidCallback? onOpenProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +125,7 @@ class HomeDashboardContent extends StatelessWidget {
           status: metricStatus,
           data: metricData,
           onRetry: onRetryMetric,
+          onRegisterMetric: onOpenProgress,
         ),
         const SizedBox(height: AppSpacing.sm),
         DashboardStepsCard(

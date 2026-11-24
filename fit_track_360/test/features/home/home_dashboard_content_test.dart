@@ -168,4 +168,52 @@ void main() {
       expect(message, isNot(contains('desde Ajustes')), reason: '$reason');
     }
   });
+
+  testWidgets('cada estado vacío ofrece su acción y la dispara', (
+    tester,
+  ) async {
+    final opened = <String>[];
+    await tester.pumpWidget(
+      wrap(
+        HomeDashboardContent(
+          nutritionStatus: DashboardBlockStatus.empty,
+          sessionStatus: DashboardBlockStatus.empty,
+          metricStatus: DashboardBlockStatus.empty,
+          onOpenMeals: () => opened.add('comidas'),
+          onOpenWorkout: () => opened.add('entrenos'),
+          onOpenProgress: () => opened.add('progreso'),
+        ),
+      ),
+    );
+
+    for (final label in [
+      'Registrar comida',
+      'Iniciar entrenamiento',
+      'Registrar peso',
+    ]) {
+      await tester.ensureVisible(find.text(label));
+      await tester.tap(find.text(label));
+      await tester.pump();
+    }
+
+    expect(opened, ['comidas', 'entrenos', 'progreso']);
+  });
+
+  testWidgets('sin callback el estado vacío no muestra botón', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        const DashboardBlockShell(
+          title: 'Bloque',
+          icon: Icons.inbox_outlined,
+          status: DashboardBlockStatus.empty,
+          emptyMessage: 'Sin datos.',
+          emptyActionLabel: 'Registrar',
+          child: SizedBox.shrink(),
+        ),
+      ),
+    );
+
+    expect(find.text('Sin datos.'), findsOneWidget);
+    expect(find.text('Registrar'), findsNothing);
+  });
 }

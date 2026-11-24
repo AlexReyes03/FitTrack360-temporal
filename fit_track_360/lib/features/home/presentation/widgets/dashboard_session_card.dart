@@ -51,6 +51,8 @@ class DashboardSessionCard extends StatelessWidget {
       emptyMessage: 'Aún no tienes sesiones registradas. Inicia un entrenamiento para ver tu actividad.',
       errorMessage: 'No pudimos cargar tu última sesión.',
       onRetry: onRetry,
+      emptyActionLabel: 'Iniciar entrenamiento',
+      onEmptyAction: onPrimaryAction,
       skeletonLines: 2,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

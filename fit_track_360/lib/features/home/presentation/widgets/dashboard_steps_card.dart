@@ -62,10 +62,11 @@ class DashboardStepsCard extends StatelessWidget {
     return switch (reason) {
       StepsUnavailableReason.denied =>
         'No diste permiso para leer tus pasos. Toca «Reintentar» para '
-            'volver a intentarlo. Puedes activarlo después desde Ajustes.',
+            'volver a intentarlo. Puedes activarlo después desde los ajustes '
+            'del teléfono.',
       StepsUnavailableReason.blocked =>
         'El acceso a la actividad física está desactivado. '
-            'Puedes activarlo después desde Ajustes.',
+            'Puedes activarlo después desde los ajustes del teléfono.',
       _ =>
         'Contador de pasos no disponible en este dispositivo o sin permiso '
             'activo.',

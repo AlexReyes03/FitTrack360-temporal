@@ -1,4 +1,6 @@
+import 'package:fit_track_360/features/home/domain/steps_sensor.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/dashboard_block_shell.dart';
+import 'package:fit_track_360/features/home/presentation/widgets/dashboard_steps_card.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/home_dashboard_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,7 +22,7 @@ void main() {
     expect(find.text('Contenido proximo'), findsNothing);
     expect(find.text('Hola, Alex'), findsOneWidget);
     expect(find.text('Accesos rápidos'), findsOneWidget);
-    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar'), findsOneWidget);
     expect(find.text('Comida'), findsOneWidget);
     expect(find.text('Foto progreso'), findsOneWidget);
     expect(find.text('Nutrición de hoy'), findsOneWidget);
@@ -80,7 +82,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Entrenamiento'));
+    await tester.tap(find.text('Entrenar'));
     await tester.tap(find.text('Comida'));
     await tester.tap(find.text('Foto progreso'));
 
@@ -129,7 +131,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('Entrenamiento'));
+    await tester.tap(find.text('Entrenar'));
     await tester.tap(find.text('Comida'));
     await tester.tap(find.text('Foto progreso'));
 
@@ -151,8 +153,67 @@ void main() {
     await tester.pumpWidget(wrap(const HomeDashboardContent()));
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Entrenamiento'), findsOneWidget);
+    expect(find.text('Entrenar'), findsOneWidget);
     expect(find.text('Comida'), findsOneWidget);
     expect(find.text('Foto progreso'), findsOneWidget);
+  });
+
+  test('el aviso de pasos remite a los ajustes del teléfono', () {
+    for (final reason in [
+      StepsUnavailableReason.denied,
+      StepsUnavailableReason.blocked,
+    ]) {
+      final message = DashboardStepsCard.unavailableMessageFor(reason);
+      expect(message, contains('ajustes del teléfono'), reason: '$reason');
+      expect(message, isNot(contains('desde Ajustes')), reason: '$reason');
+    }
+  });
+
+  testWidgets('cada estado vacío ofrece su acción y la dispara', (
+    tester,
+  ) async {
+    final opened = <String>[];
+    await tester.pumpWidget(
+      wrap(
+        HomeDashboardContent(
+          nutritionStatus: DashboardBlockStatus.empty,
+          sessionStatus: DashboardBlockStatus.empty,
+          metricStatus: DashboardBlockStatus.empty,
+          onOpenMeals: () => opened.add('comidas'),
+          onOpenWorkout: () => opened.add('entrenos'),
+          onOpenProgress: () => opened.add('progreso'),
+        ),
+      ),
+    );
+
+    for (final label in [
+      'Registrar comida',
+      'Iniciar entrenamiento',
+      'Registrar peso',
+    ]) {
+      await tester.ensureVisible(find.text(label));
+      await tester.tap(find.text(label));
+      await tester.pump();
+    }
+
+    expect(opened, ['comidas', 'entrenos', 'progreso']);
+  });
+
+  testWidgets('sin callback el estado vacío no muestra botón', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        const DashboardBlockShell(
+          title: 'Bloque',
+          icon: Icons.inbox_outlined,
+          status: DashboardBlockStatus.empty,
+          emptyMessage: 'Sin datos.',
+          emptyActionLabel: 'Registrar',
+          child: SizedBox.shrink(),
+        ),
+      ),
+    );
+
+    expect(find.text('Sin datos.'), findsOneWidget);
+    expect(find.text('Registrar'), findsNothing);
   });
 }

@@ -1,6 +1,5 @@
 import 'package:fit_track_360/features/home/presentation/widgets/glass_bottom_nav_bar.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/home_navigation_shell.dart';
-import 'package:fit_track_360/features/home/presentation/widgets/nav_placeholder_page.dart';
 import 'package:fit_track_360/features/home/presentation/widgets/quick_actions_row.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +13,7 @@ void main() {
       label: 'Ejercicios',
       icon: Icons.sports_gymnastics_outlined,
     ),
-    GlassNavDestination(label: 'Progreso', icon: Icons.photo_camera_outlined),
+    GlassNavDestination(label: 'Progreso', icon: Icons.trending_up_outlined),
     GlassNavDestination(label: 'Perfil', icon: Icons.person_outline_rounded),
   ];
 
@@ -82,27 +81,5 @@ void main() {
     await tester.tap(find.text('Nuevo entreno'));
     await tester.pump();
     expect(tapped, isTrue);
-  });
-
-  testWidgets('NavPlaceholderPage muestra titulo y ejecuta onBack', (
-    tester,
-  ) async {
-    var backed = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: NavPlaceholderPage(
-          title: 'Tracker diario',
-          subtitle: 'Resumen de objetivos diarios.',
-          onBack: () => backed = true,
-        ),
-      ),
-    );
-
-    expect(find.text('Tracker diario'), findsNWidgets(2));
-    expect(find.text('Resumen de objetivos diarios.'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Volver'));
-    await tester.pump();
-    expect(backed, isTrue);
   });
 }

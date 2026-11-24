@@ -219,4 +219,12 @@ void main() {
       }
     },
   );
+
+  test('la pestaña Progreso usa un ícono de tendencia, no de cámara', () {
+    final progress = appShellDestinations.singleWhere(
+      (destination) => destination.label == 'Progreso',
+    );
+    expect(progress.icon, Icons.trending_up_outlined);
+    expect(progress.selectedIcon, Icons.trending_up_rounded);
+  });
 }

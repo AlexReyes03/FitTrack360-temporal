@@ -71,6 +71,8 @@ class DashboardNutritionCard extends StatelessWidget {
       emptyMessage: 'Aún no registras comidas hoy. Agrega tu primera comida para ver tus macros.',
       errorMessage: 'No pudimos cargar tu resumen de nutrición.',
       onRetry: onRetry,
+      emptyActionLabel: 'Registrar comida',
+      onEmptyAction: onOpenMeals,
       trailing: onOpenMeals == null
           ? null
           : DashboardGlassPillButton(label: 'Ver diario', onTap: onOpenMeals),

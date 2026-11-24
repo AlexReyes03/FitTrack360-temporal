@@ -24,6 +24,8 @@ class DashboardBlockShell extends StatelessWidget {
     this.emptyMessage = 'Aún no hay datos registrados.',
     this.errorMessage = 'No pudimos cargar este bloque.',
     this.onRetry,
+    this.emptyActionLabel,
+    this.onEmptyAction,
     this.skeletonLines = 3,
   });
 
@@ -35,6 +37,11 @@ class DashboardBlockShell extends StatelessWidget {
   final String emptyMessage;
   final String errorMessage;
   final VoidCallback? onRetry;
+
+  /// Acción del estado vacío; como en `RemoteEmptyView`, el botón solo se
+  /// muestra si hay etiqueta y callback.
+  final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
   final int skeletonLines;
 
   @override
@@ -75,7 +82,11 @@ class DashboardBlockShell extends StatelessWidget {
           const SizedBox(height: 16),
           switch (status) {
             DashboardBlockStatus.loading => _SkeletonBody(lines: skeletonLines),
-            DashboardBlockStatus.empty => _EmptyBody(message: emptyMessage),
+            DashboardBlockStatus.empty => _EmptyBody(
+              message: emptyMessage,
+              actionLabel: emptyActionLabel,
+              onAction: onEmptyAction,
+            ),
             DashboardBlockStatus.error => _ErrorBody(
               message: errorMessage,
               onRetry: onRetry,
@@ -119,9 +130,11 @@ class _SkeletonBody extends StatelessWidget {
 }
 
 class _EmptyBody extends StatelessWidget {
-  const _EmptyBody({required this.message});
+  const _EmptyBody({required this.message, this.actionLabel, this.onAction});
 
   final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -132,9 +145,22 @@ class _EmptyBody extends StatelessWidget {
         color: Colors.white.withValues(alpha: 0.03),
         border: Border.all(color: AppColors.glassBorder),
       ),
-      child: Text(
-        message,
-        style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            message,
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 12),
+            DashboardGlassPillButton(
+              label: actionLabel!,
+              icon: Icons.add_rounded,
+              onTap: onAction,
+            ),
+          ],
+        ],
       ),
     );
   }

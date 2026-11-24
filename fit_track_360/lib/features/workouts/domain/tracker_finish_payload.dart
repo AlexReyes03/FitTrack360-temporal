@@ -15,7 +15,7 @@ class TrackerFinishSet {
   final int reps;
 }
 
-/// Cuerpo de finalizacion de una sesion activa del tracker.
+/// Cuerpo de finalización de una sesión activa del tracker.
 class TrackerFinishPayload {
   const TrackerFinishPayload({
     required this.startedAt,
@@ -23,7 +23,11 @@ class TrackerFinishPayload {
     required this.sets,
     this.notes,
     this.location,
+    this.routineId,
   });
+
+  /// Rutina de origen cuando la sesión se inició desde una plantilla.
+  final String? routineId;
 
   final DateTime startedAt;
   final DateTime endedAt;
@@ -35,6 +39,7 @@ class TrackerFinishPayload {
     final trimmedNotes = notes?.trim();
     final trimmedLocation = location?.trim();
     return {
+      if (routineId != null) 'routineId': routineId,
       'startedAt': startedAt.toUtc().toIso8601String(),
       'endedAt': endedAt.toUtc().toIso8601String(),
       if (trimmedNotes != null && trimmedNotes.isNotEmpty)

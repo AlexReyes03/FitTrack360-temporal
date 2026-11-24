@@ -5,6 +5,10 @@ class WorkoutSessionDraft {
   final String? routineId;
   final String? routineName;
   final DateTime startedAt;
+
+  /// Fin de la sesión. Un registro pasado lo lleva para quedar finalizado;
+  /// null solo en borradores que aún se van a entrenar.
+  final DateTime? endedAt;
   final String? notes;
   final List<PlannedExercise> exercises;
 
@@ -16,22 +20,26 @@ class WorkoutSessionDraft {
     this.routineId,
     this.routineName,
     required this.startedAt,
+    this.endedAt,
     this.notes,
     required List<PlannedExercise> exercises,
     List<PlannedSet>? sets,
   }) : exercises = List.unmodifiable(exercises),
        sets = sets == null ? null : List.unmodifiable(sets);
 
-  /// Copia con el inicio y las notas que la persona ajustó en el formulario.
+  /// Copia con el inicio, el fin y las notas que la persona ajustó en el
+  /// formulario.
   WorkoutSessionDraft edited({
     required DateTime startedAt,
     required String notes,
+    DateTime? endedAt,
     List<PlannedExercise>? exercises,
     List<PlannedSet>? sets,
   }) => WorkoutSessionDraft(
     routineId: routineId,
     routineName: routineName,
     startedAt: startedAt,
+    endedAt: endedAt ?? this.endedAt,
     notes: notes,
     exercises: exercises ?? this.exercises,
     sets: sets ?? this.sets,
@@ -74,6 +82,7 @@ class WorkoutSessionDraft {
     return {
       if (routineId != null) 'routineId': routineId,
       'startedAt': startedAt.toUtc().toIso8601String(),
+      if (endedAt case final end?) 'endedAt': end.toUtc().toIso8601String(),
       if (trimmedNotes != null && trimmedNotes.isNotEmpty)
         'notes': trimmedNotes,
       if (payloadSets.isNotEmpty) 'sets': payloadSets,

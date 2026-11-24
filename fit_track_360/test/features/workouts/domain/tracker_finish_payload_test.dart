@@ -25,4 +25,17 @@ void main() {
       ],
     });
   });
+
+  test('una sesión desde rutina incluye routineId', () {
+    final payload = TrackerFinishPayload(
+      routineId: 'rutina-1',
+      startedAt: DateTime.utc(2026, 11, 12, 10),
+      endedAt: DateTime.utc(2026, 11, 12, 11),
+      sets: const [
+        TrackerFinishSet(exerciseId: '0001', order: 1, weightKg: 60, reps: 10),
+      ],
+    );
+
+    expect(payload.toCreateWorkoutPayload()['routineId'], 'rutina-1');
+  });
 }

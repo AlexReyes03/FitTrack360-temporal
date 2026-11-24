@@ -32,9 +32,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Línea base medida al abrir #221 (fase A). Solo puede bajar.
 const Map<String, int> _baseline = {
-  'fontSize': 131,
-  'hexColor': 27,
-  'whiteAlpha': 76,
+  'fontSize': 122,
+  'hexColor': 25,
+  'whiteAlpha': 63,
   'radiusLiteral': 14,
 };
 

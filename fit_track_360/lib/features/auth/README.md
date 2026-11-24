@@ -1,6 +1,14 @@
 # auth
 
-Autenticacion: registro, login, sesion, recuperacion de contraseña y Google (AUTH-02).
+Autenticación: registro, inicio de sesión, sesión, recuperación de contraseña y Google (AUTH-02).
+
+## Flujo y UX (#230)
+
+- Copy: `domain/auth_messages.dart` (fuente: `docs/copy/auth-strings.md`).
+- Errores: `presentation/auth_error_messages.dart` (`describeAuthError`) traduce respuestas de Nest por status y códigos de Firebase (`AuthMessages.forFirebaseCode`); nunca muestra `e.message` crudo.
+- ViewModels: `presentation/auth_view_models.dart` (`LoginViewModel`, `RegisterViewModel`, `ForgotPasswordViewModel`) con `AsyncState`.
+- Navegación: `backToLogin` hace `pop` o `go('/login')`; login pasa el correo a `/forgot-password` por `extra`; `/aviso-privacidad` es pública.
+- Splash: sin sesión va directo a `/login`.
 
 ## AUTH-02 Google
 

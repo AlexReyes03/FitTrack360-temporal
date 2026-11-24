@@ -263,15 +263,22 @@ class _HomeShellPageState extends State<HomeShellPage> {
                           onOpenProgress: () => context.go('/app/progreso'),
                         ),
                         const SizedBox(height: 18),
-                        // Acceso extra no cubierto por DashboardQuickActions.
+                        // Accesos al tracker y a Rutinas, no cubiertos por
+                        // DashboardQuickActions (#228).
                         QuickActionsRow(
                           title: null,
                           actions: [
                             QuickActionItem(
-                              label: 'Tracker diario',
-                              subtitle: 'Próximamente',
-                              icon: Icons.insights_rounded,
+                              label: 'Entrenar ahora',
+                              subtitle: 'Registra tus series en vivo',
+                              icon: Icons.timer_outlined,
                               onTap: () => context.push('/app/tracker'),
+                            ),
+                            QuickActionItem(
+                              label: 'Rutinas',
+                              subtitle: 'Entrena con tus plantillas',
+                              icon: Icons.list_alt_rounded,
+                              onTap: () => context.push('/app/rutinas'),
                             ),
                           ],
                         ),

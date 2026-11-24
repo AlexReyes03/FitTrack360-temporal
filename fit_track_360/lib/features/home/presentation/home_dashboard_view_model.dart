@@ -282,24 +282,20 @@ class HomeDashboardViewModel extends ChangeNotifier {
         ? 'Hoy · ${_hhmm(started)}'
         : _formatDayMonth(started);
 
-    final String summary;
+    // El tracker solo persiste la sesión al finalizar, así que una sesión del
+    // API nunca está activa: sin `endedAt` es un registro sin duración (p. ej.
+    // los guardados por el formulario antes de #228), no algo que continuar.
     final ended = session.endedAt?.toLocal();
-    if (ended == null) {
-      summary = 'Sesión en curso';
-    } else {
-      final mins = ended.difference(started).inMinutes;
-      summary = mins > 0
-          ? 'Duración aproximada: $mins min'
-          : 'Sesión registrada';
-    }
+    final mins = ended?.difference(started).inMinutes ?? 0;
+    final summary = mins > 0
+        ? 'Duración aproximada: $mins min'
+        : 'Sesión registrada';
 
     return DashboardSessionData(
       title: title,
       relativeDate: relativeDate,
       summary: summary,
-      ctaLabel: ended == null
-          ? 'Continuar entrenamiento'
-          : 'Abrir entrenamiento',
+      ctaLabel: 'Abrir entrenamiento',
     );
   }
 

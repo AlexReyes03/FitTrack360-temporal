@@ -106,7 +106,9 @@ class _BannerBody extends StatelessWidget {
               border: Border.all(color: _warningBorder),
             ),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+              // 8 + 48 (area tactil de Reintentar) + 8 = 64dp, el mismo alto
+              // que antes con la pill de 40 y 12 de padding.
+              padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
               child: Row(
                 children: [
                   const Icon(
@@ -116,27 +118,30 @@ class _BannerBody extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Sin conexión',
-                          style: TextStyle(
-                            color: _warningText,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Sin conexión',
+                            style: TextStyle(
+                              color: _warningText,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Revisa tu red. Puedes seguir usando la app.',
-                          style: TextStyle(color: _warningText, fontSize: 13),
-                        ),
-                      ],
+                          SizedBox(height: 2),
+                          Text(
+                            'Revisa tu red. Puedes seguir usando la app.',
+                            style: TextStyle(color: _warningText, fontSize: 13),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   _RetryButton(checking: checking, onPressed: onRetry),
                 ],
               ),
@@ -149,6 +154,9 @@ class _BannerBody extends StatelessWidget {
 }
 
 /// Pill compacta con el acento blanco/plata; 1 dp de elevacion al presionar.
+///
+/// La pill visible mide 40dp de alto, pero el area tactil se extiende 4dp por
+/// lado para llegar a 48dp (guia de Android/iOS) sin cambiar el aspecto.
 class _RetryButton extends StatefulWidget {
   const _RetryButton({required this.checking, required this.onPressed});
 
@@ -170,57 +178,64 @@ class _RetryButtonState extends State<_RetryButton> {
   Widget build(BuildContext context) {
     final enabled = !widget.checking;
     return Semantics(
+      // container: evita que el boton se fusione con el nodo del banner y
+      // todo el aviso se anuncie como "boton".
+      container: true,
       button: true,
       enabled: enabled,
       label: 'Reintentar conexión',
       excludeSemantics: true,
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTapDown: enabled ? (_) => _setPressed(true) : null,
         onTapUp: enabled ? (_) => _setPressed(false) : null,
         onTapCancel: () => _setPressed(false),
         onTap: enabled ? widget.onPressed : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          transform: Matrix4.translationValues(0, _pressed ? -1 : 0, 0),
-          constraints: const BoxConstraints(minHeight: 40, minWidth: 104),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: AppColors.accentWhite.withValues(alpha: 0.85),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            transform: Matrix4.translationValues(0, _pressed ? -1 : 0, 0),
+            constraints: const BoxConstraints(minHeight: 40, minWidth: 104),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: AppColors.accentWhite.withValues(alpha: 0.85),
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: _pressed
+                    ? const [AppColors.accentWhite, Color(0xFFF4F4F5)]
+                    : const [
+                        AppColors.accentWhite,
+                        Color(0xFFE4E4E7),
+                        AppColors.accentSilver,
+                      ],
+              ),
             ),
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: _pressed
-                  ? const [AppColors.accentWhite, Color(0xFFF4F4F5)]
-                  : const [
-                      AppColors.accentWhite,
-                      Color(0xFFE4E4E7),
-                      AppColors.accentSilver,
-                    ],
+            child: Opacity(
+              opacity: enabled ? 1 : 0.55,
+              child: widget.checking
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.textOnAccent,
+                      ),
+                    )
+                  : const Text(
+                      'Reintentar',
+                      style: TextStyle(
+                        color: AppColors.textOnAccent,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
             ),
-          ),
-          child: Opacity(
-            opacity: enabled ? 1 : 0.55,
-            child: widget.checking
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textOnAccent,
-                    ),
-                  )
-                : const Text(
-                    'Reintentar',
-                    style: TextStyle(
-                      color: AppColors.textOnAccent,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
           ),
         ),
       ),

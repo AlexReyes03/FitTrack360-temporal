@@ -43,6 +43,9 @@ class AppShellHeader extends StatelessWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints.tightFor(width: 42, height: 42),
           style: IconButton.styleFrom(
+            // Visual de 42dp con area tactil de 48dp en cualquier plataforma
+            // (el tema por defecto la compacta en escritorio y web).
+            tapTargetSize: MaterialTapTargetSize.padded,
             backgroundColor: hasUnread
                 ? AppColors.glassFillStrong
                 : AppColors.glassFillSoft,

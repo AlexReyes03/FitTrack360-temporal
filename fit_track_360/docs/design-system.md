@@ -282,6 +282,12 @@ Scale labels under the grid (“not at all likely” / “very likely”) in `te
 
 **States:** focus → border ~60% white + 3 dp outer halo at 14% white. Placeholder: `text.muted`.
 
+**Keyboard and autofill (`DsTextField`):** pass `textInputAction` (`next` between fields, `done`/`send` on the last one) with `onSubmitted`, and `autofillHints` inside an `AutofillGroup` for email/password/name. Also accepts `focusNode`, `textCapitalization`, `inputFormatters` and `maxLength`.
+
+**Numeric fields:** use `DsTextField.integer` (digits only, `TextInputType.number`) or `DsTextField.decimal` (digits plus a single `,` or `.`, optional `maxDecimals`, decimal keyboard). Letters cannot be typed; parse with `DsTextField.parseDecimal` (accepts comma or point) and show validation per field through `errorText`, not only in a global banner.
+
+**Screen readers:** the visible label is excluded from semantics and exposed once as the field's label, so it is announced as "Correo, text field" without duplication.
+
 ### PrimaryButton
 
 **Anatomy:** full-width pill, centered label.
@@ -317,6 +323,13 @@ Radius 14 dp; padding ~15×18 dp; optional light blur (sigma ~8–12).
 **Anatomy:** centered GlassSurface: title with white → `text.secondary` gradient + `text.secondary` paragraph.
 
 **Metrics:** padding ~40×28 dp; title ~22 dp weight 800.
+
+### Accessibility (UX-06)
+
+- **Tap targets:** every interactive element has a hit area of at least 48×48 dp. When the visual must stay smaller (bell 42 dp, offline-banner **Reintentar** pill 40 dp), grow the hit area with transparent padding or `MaterialTapTargetSize.padded`, not the visual.
+- **Semantics:** custom buttons use `Semantics(container: true, button: true, enabled:, label:, excludeSemantics: true)`; `container` keeps them from merging into a parent `liveRegion`/container (otherwise a whole banner is announced as a button).
+- **Bottom navigation labels:** 11.5 dp base, follow the system `textScaler` up to 1.3×; when the width is short they may shrink down to 11 dp (never lower) and then ellipsize. No `FittedBox(scaleDown)`. Each destination is one semantic node (button + selected) and long-press shows the full name in a tooltip.
+- **Tests:** widget tests for DS and shell widgets run `meetsGuideline` with `androidTapTargetGuideline`, `iOSTapTargetGuideline`, `labeledTapTargetGuideline` and `textContrastGuideline` on the dark background.
 
 ## Screen layout
 

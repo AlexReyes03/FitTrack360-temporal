@@ -7,6 +7,7 @@ import '../core/network/api_client.dart';
 import '../core/session_storage.dart';
 import '../design_system/tokens/app_colors.dart';
 import '../design_system/tokens/app_radii.dart';
+import '../design_system/tokens/app_typography.dart';
 import '../features/notifications/data/notifications_api_repository.dart';
 import '../features/notifications/data/push_device_lifecycle_service.dart';
 import '../features/notifications/presentation/notifications_scope.dart';
@@ -50,6 +51,41 @@ final ButtonStyle _pickerActionStyle = TextButton.styleFrom(
 const ShapeBorder _pickerShape = RoundedRectangleBorder(
   borderRadius: BorderRadius.all(Radius.circular(AppRadii.card)),
   side: BorderSide(color: AppColors.glassBorder),
+);
+
+/// Velo de diálogos y hojas. Sin token de scrim: `bgDeep` al 80 %.
+/// Cambiar a token `scrim` de #221 (mismo valor que `glassBarrierColor`).
+final Color _scrim = AppColors.bgDeep.withValues(alpha: 0.8);
+
+/// Chips monocromos: seleccionado en accentWhite con texto textOnAccent; en
+/// reposo vidrio tenue. Evita el teal/silver de `secondaryContainer`.
+final ChipThemeData _chipTheme = ChipThemeData(
+  color: WidgetStateColor.resolveWith((states) {
+    if (states.contains(WidgetState.selected)) return AppColors.accentWhite;
+    return AppColors.glassFillSoft;
+  }),
+  selectedColor: AppColors.accentWhite,
+  disabledColor: AppColors.glassFillSoft,
+  checkmarkColor: AppColors.textOnAccent,
+  side: WidgetStateBorderSide.resolveWith(
+    (states) => BorderSide(
+      color: states.contains(WidgetState.selected)
+          ? AppColors.accentWhite
+          : AppColors.glassBorderStrong,
+    ),
+  ),
+  shape: const StadiumBorder(),
+  labelStyle: TextStyle(
+    color: _selectedText(idle: AppColors.zinc200),
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+  ),
+  secondaryLabelStyle: const TextStyle(
+    color: AppColors.textOnAccent,
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+  ),
+  iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 18),
 );
 
 final ThemeData fitTrackDarkTheme = ThemeData(
@@ -124,6 +160,85 @@ final ThemeData fitTrackDarkTheme = ThemeData(
     ),
     cancelButtonStyle: _pickerActionStyle,
     confirmButtonStyle: _pickerActionStyle,
+  ),
+  // Superficies emergentes Material que aún no usan los componentes glass
+  // del DS (`GlassDialog`, `showGlassBottomSheet`, `showAppSnackBar`) se ven
+  // igual de oscuras y monocromas.
+  dialogTheme: DialogThemeData(
+    backgroundColor: AppColors.bgMid,
+    surfaceTintColor: Colors.transparent,
+    barrierColor: _scrim,
+    shape: _pickerShape,
+    titleTextStyle: const TextStyle(
+      color: AppColors.textPrimary,
+      fontSize: 20,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -0.3,
+    ),
+    contentTextStyle: AppTypography.body.copyWith(
+      color: AppColors.textSecondary,
+    ),
+  ),
+  snackBarTheme: SnackBarThemeData(
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: AppColors.bgMid,
+    elevation: 0,
+    contentTextStyle: AppTypography.body,
+    actionTextColor: AppColors.accentWhite,
+    disabledActionTextColor: AppColors.textMuted,
+    closeIconColor: AppColors.textSecondary,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(AppRadii.banner)),
+      side: BorderSide(color: AppColors.glassBorderStrong),
+    ),
+  ),
+  chipTheme: _chipTheme,
+  bottomSheetTheme: BottomSheetThemeData(
+    backgroundColor: AppColors.bgMid,
+    modalBackgroundColor: AppColors.bgMid,
+    surfaceTintColor: Colors.transparent,
+    modalBarrierColor: _scrim,
+    elevation: 0,
+    modalElevation: 0,
+    showDragHandle: true,
+    dragHandleColor: AppColors.glassBorderStrong,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.card)),
+      side: BorderSide(color: AppColors.glassBorder),
+    ),
+  ),
+  progressIndicatorTheme: const ProgressIndicatorThemeData(
+    color: AppColors.accentWhite,
+    linearTrackColor: AppColors.glassFillStrong,
+    circularTrackColor: Colors.transparent,
+    refreshBackgroundColor: AppColors.bgMid,
+  ),
+  textButtonTheme: TextButtonThemeData(
+    style: ButtonStyle(
+      foregroundColor: _selectedText(idle: AppColors.accentWhite),
+      overlayColor: const WidgetStatePropertyAll(
+        AppColors.glassFillPressedSoft,
+      ),
+      minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+      textStyle: const WidgetStatePropertyAll(
+        TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ),
+  ),
+  switchTheme: SwitchThemeData(
+    thumbColor: WidgetStateColor.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) {
+        return AppColors.textOnAccent;
+      }
+      return AppColors.accentSilver;
+    }),
+    trackColor: WidgetStateColor.resolveWith((states) {
+      if (states.contains(WidgetState.selected)) return AppColors.accentWhite;
+      return AppColors.controlFillIdle;
+    }),
+    trackOutlineColor: const WidgetStatePropertyAll(
+      AppColors.glassBorderStrong,
+    ),
   ),
 );
 

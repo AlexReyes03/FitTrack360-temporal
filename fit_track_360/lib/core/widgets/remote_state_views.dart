@@ -1,9 +1,8 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../../design_system/components/glass_surface.dart';
 import '../../design_system/components/primary_button.dart';
+import '../../design_system/components/status_banner.dart';
 import '../../design_system/tokens/app_colors.dart';
 import '../../design_system/tokens/app_radii.dart';
 import '../../design_system/tokens/app_spacing.dart';
@@ -171,67 +170,14 @@ class RemoteErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadii.banner),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AppColors.dangerFill,
-              borderRadius: BorderRadius.circular(AppRadii.banner),
-              border: Border.all(color: AppColors.dangerBorder),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(icon, color: AppColors.dangerText, size: 22),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              title,
-                              style: const TextStyle(
-                                color: AppColors.dangerText,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              message,
-                              style: const TextStyle(
-                                color: AppColors.dangerText,
-                                fontSize: 13,
-                                height: 1.45,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (onRetry != null) ...[
-                    const SizedBox(height: 16),
-                    PrimaryButton(label: retryLabel, onPressed: onRetry),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
+    return StatusBanner(
+      variant: StatusBannerVariant.danger,
+      icon: icon,
+      title: title,
+      message: message,
+      action: onRetry != null
+          ? PrimaryButton(label: retryLabel, onPressed: onRetry)
+          : null,
     );
   }
 }

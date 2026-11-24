@@ -12,6 +12,10 @@ import '../domain/notifications_repository.dart';
 const notificationMutationErrorMessage =
     'No se pudo actualizar la notificación. Intenta de nuevo.';
 
+/// Confirmación tras marcar todas las notificaciones como leídas.
+const notificationsMarkedAllReadMessage =
+    'Listo: marcaste todas las notificaciones como leídas.';
+
 /// Filtro por estado de lectura del centro de avisos.
 enum NotificationsReadFilter { all, unread, read }
 
@@ -59,6 +63,10 @@ class NotificationsViewModel extends ChangeNotifier {
 
   /// Error no bloqueante de la última mutación; la UI lo muestra y lo limpia.
   String? mutationError;
+
+  /// Confirmación no bloqueante de la última acción masiva exitosa; la UI la
+  /// muestra y la limpia con [clearConfirmationMessage].
+  String? confirmationMessage;
 
   /// true si el API reportó que la sesión ya no se puede renovar.
   bool sessionExpired = false;
@@ -178,6 +186,16 @@ class NotificationsViewModel extends ChangeNotifier {
 
   Future<void> markAsRead(String id) => _updateRead(id, isRead: true);
 
+  /// Abre una notificación: la marca como leída (nunca la regresa a no leída)
+  /// y devuelve su ruta interna, o null si no tiene destino.
+  Future<String?> openNotification(String id) async {
+    final current = _notificationById(id);
+    if (current == null) return null;
+    final route = current.targetRoute;
+    if (!current.isRead) await _updateRead(id, isRead: true);
+    return route;
+  }
+
   Future<void> toggleRead(String id) async {
     final current = _notificationById(id);
     if (current == null) return;
@@ -203,12 +221,15 @@ class NotificationsViewModel extends ChangeNotifier {
         .toList(growable: false);
     _syncLoadedState();
     mutationError = null;
+    confirmationMessage = null;
     _notify();
 
     try {
       await _repository.markAllAsRead();
       if (_disposed || epoch != _sessionEpoch) return;
       _remoteUnreadCount = 0;
+      confirmationMessage = notificationsMarkedAllReadMessage;
+      _notify();
     } on SessionExpiredException {
       if (_disposed || epoch != _sessionEpoch) return;
       _failMutation(snapshot, remoteSnapshot, expired: true);
@@ -275,6 +296,12 @@ class NotificationsViewModel extends ChangeNotifier {
     _notify();
   }
 
+  void clearConfirmationMessage() {
+    if (confirmationMessage == null) return;
+    confirmationMessage = null;
+    _notify();
+  }
+
   /// Limpia el estado al cerrar sesión para no filtrar datos entre cuentas.
   void clearOnLogout() {
     _sessionEpoch++;
@@ -283,6 +310,7 @@ class NotificationsViewModel extends ChangeNotifier {
     _notifications = const <AppNotification>[];
     _remoteUnreadCount = 0;
     mutationError = null;
+    confirmationMessage = null;
     sessionExpired = false;
     _readFilter = NotificationsReadFilter.all;
     _typeFilter = null;

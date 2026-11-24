@@ -6,6 +6,7 @@ import 'package:fit_track_360/features/notifications/presentation/notifications_
 import 'package:fit_track_360/features/notifications/presentation/notifications_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 List<AppNotification> _seed() {
   final now = DateTime.now();
@@ -83,7 +84,7 @@ void main() {
     },
   );
 
-  testWidgets('alterna isRead al tocar la notificación y marca todas leídas', (
+  testWidgets('tocar marca como leída; el icono alterna; marca todas leídas', (
     tester,
   ) async {
     final viewModel = await _pumpPage(tester);
@@ -123,6 +124,93 @@ void main() {
     );
   });
 
+  testWidgets('tocar una notificación leída no la marca como no leída', (
+    tester,
+  ) async {
+    final viewModel = await _pumpPage(tester);
+    expect(viewModel.unreadCount, 2);
+
+    await tester.tap(find.text('Recordatorio de entrenamiento'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('notification-unread-dot-n-reminder')),
+      findsNothing,
+    );
+    expect(
+      viewModel.notifications.firstWhere((n) => n.id == 'n-reminder').isRead,
+      isTrue,
+    );
+    expect(viewModel.unreadCount, 2);
+  });
+
+  testWidgets('tocar una notificación con destino navega a su ruta', (
+    tester,
+  ) async {
+    final viewModel = NotificationsViewModel(
+      initialNotifications: [
+        AppNotification(
+          id: 'n-route',
+          title: 'Revisa tu progreso',
+          message: 'Ya tienes métricas de la semana.',
+          type: AppNotificationType.reminder,
+          createdAt: DateTime.now(),
+          targetRoute: '/destino',
+        ),
+      ],
+    );
+    addTearDown(viewModel.dispose);
+    final router = GoRouter(
+      initialLocation: '/notificaciones',
+      routes: [
+        GoRoute(
+          path: '/notificaciones',
+          builder: (_, _) => NotificationsPage(viewModel: viewModel),
+        ),
+        GoRoute(
+          path: '/destino',
+          builder: (_, _) => const Scaffold(body: Text('Pantalla destino')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Revisa tu progreso'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Pantalla destino'), findsOneWidget);
+    expect(viewModel.unreadCount, 0);
+  });
+
+  testWidgets('muestra confirmación al marcar todas como leídas', (
+    tester,
+  ) async {
+    await _pumpPage(tester);
+
+    await tester.tap(find.text('Marcar todas como leídas'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.text(notificationsMarkedAllReadMessage), findsOneWidget);
+  });
+
+  testWidgets('el estado vacío de Leídas usa copy coherente con el filtro', (
+    tester,
+  ) async {
+    final seed = _seed().where((n) => !n.isRead).toList();
+    await _pumpPage(tester, seed: seed);
+
+    await tester.tap(find.text('Leídas'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sin notificaciones leídas'), findsOneWidget);
+    expect(find.textContaining('filtros'), findsNothing);
+    expect(find.text('Ver todas'), findsOneWidget);
+  });
+
   testWidgets('elimina una notificación con gesto Dismissible', (tester) async {
     final viewModel = await _pumpPage(tester);
 
@@ -151,10 +239,13 @@ void main() {
     await tester.tap(find.text('No leídas'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Sin resultados con este filtro'), findsOneWidget);
+    expect(find.text('Estás al día'), findsOneWidget);
+    expect(find.text('No tienes notificaciones sin leer.'), findsOneWidget);
     expect(find.text('Sin notificaciones'), findsNothing);
+    // La UI solo expone el filtro por estado: el copy no menciona otros.
+    expect(find.textContaining('filtros'), findsNothing);
 
-    await tester.tap(find.text('Limpiar filtros'));
+    await tester.tap(find.text('Ver todas'));
     await tester.pumpAndSettle();
 
     expect(find.text('Nuevo inicio de sesión'), findsOneWidget);
@@ -247,7 +338,7 @@ void main() {
     );
 
     testWidgets(
-      'fallo en toggleRead revierte el estado de la tarjeta y muestra SnackBar',
+      'fallo al marcar como leída revierte el estado de la tarjeta y muestra SnackBar',
       (tester) async {
         final repository = _FakeNotificationsRepository(seed: _seed())
           ..updateError = Exception('sin red');

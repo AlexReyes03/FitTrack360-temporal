@@ -571,6 +571,107 @@ void main() {
       expect(viewModel.state, isA<AsyncEmpty<List<AppNotification>>>());
     });
   });
+
+  group('abrir notificación y confirmaciones (UX-12)', () {
+    List<AppNotification> withRoutes() => [
+      AppNotification(
+        id: 'unread-route',
+        title: 'Recordatorio',
+        message: 'Registra tu sesión.',
+        type: AppNotificationType.reminder,
+        createdAt: DateTime(2026, 11, 22, 10),
+        targetRoute: '/app/progreso',
+      ),
+      AppNotification(
+        id: 'read-route',
+        title: 'Inicio de sesión',
+        message: 'Nuevo dispositivo.',
+        type: AppNotificationType.newLogin,
+        createdAt: DateTime(2026, 11, 22, 9),
+        isRead: true,
+        targetRoute: '/app/perfil',
+      ),
+      AppNotification(
+        id: 'no-route',
+        title: 'Contraseña',
+        message: 'Se cambió tu contraseña.',
+        type: AppNotificationType.passwordChanged,
+        createdAt: DateTime(2026, 11, 22, 8),
+      ),
+    ];
+
+    test('openNotification marca como leída y devuelve el destino', () async {
+      final viewModel = NotificationsViewModel(
+        repository: InMemoryNotificationsRepository(seed: withRoutes()),
+      );
+      addTearDown(viewModel.dispose);
+
+      final route = await viewModel.openNotification('unread-route');
+
+      expect(route, '/app/progreso');
+      expect(viewModel.notifications.first.isRead, isTrue);
+      expect(viewModel.unreadCount, 1);
+    });
+
+    test('openNotification no vuelve a marcar como no leída', () async {
+      final viewModel = NotificationsViewModel(
+        repository: InMemoryNotificationsRepository(seed: withRoutes()),
+      );
+      addTearDown(viewModel.dispose);
+      var notifications = 0;
+      viewModel.addListener(() => notifications++);
+
+      final route = await viewModel.openNotification('read-route');
+
+      expect(route, '/app/perfil');
+      expect(
+        viewModel.notifications.firstWhere((n) => n.id == 'read-route').isRead,
+        isTrue,
+      );
+      expect(notifications, 0);
+    });
+
+    test('openNotification sin destino devuelve null', () async {
+      final viewModel = NotificationsViewModel(
+        repository: InMemoryNotificationsRepository(seed: withRoutes()),
+      );
+      addTearDown(viewModel.dispose);
+
+      expect(await viewModel.openNotification('no-route'), isNull);
+      expect(await viewModel.openNotification('inexistente'), isNull);
+      expect(
+        viewModel.notifications.firstWhere((n) => n.id == 'no-route').isRead,
+        isTrue,
+      );
+    });
+
+    test('markAllAsRead exitoso expone una confirmación', () async {
+      final viewModel = NotificationsViewModel(
+        repository: _FakeNotificationsRepository(seed: _seed()),
+      );
+      addTearDown(viewModel.dispose);
+      await viewModel.load();
+
+      await viewModel.markAllAsRead();
+
+      expect(viewModel.confirmationMessage, notificationsMarkedAllReadMessage);
+      viewModel.clearConfirmationMessage();
+      expect(viewModel.confirmationMessage, isNull);
+    });
+
+    test('markAllAsRead fallido no expone confirmación', () async {
+      final repository = _FakeNotificationsRepository(seed: _seed())
+        ..markAllError = Exception('sin red');
+      final viewModel = NotificationsViewModel(repository: repository);
+      addTearDown(viewModel.dispose);
+      await viewModel.load();
+
+      await viewModel.markAllAsRead();
+
+      expect(viewModel.confirmationMessage, isNull);
+      expect(viewModel.mutationError, notificationMutationErrorMessage);
+    });
+  });
 }
 
 class _FakeNotificationsRepository implements NotificationsRepository {

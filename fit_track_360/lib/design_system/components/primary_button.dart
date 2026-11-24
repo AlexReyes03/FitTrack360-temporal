@@ -99,6 +99,7 @@ class _PrimaryButtonState extends State<PrimaryButton> {
         : widget.label;
 
     return Semantics(
+      container: true,
       button: true,
       enabled: enabled,
       label: label,

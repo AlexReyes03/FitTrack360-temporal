@@ -176,6 +176,7 @@ class _SecondaryButtonState extends State<SecondaryButton> {
     );
 
     return Semantics(
+      container: true,
       button: true,
       enabled: enabled,
       selected: widget.selected ? true : null,

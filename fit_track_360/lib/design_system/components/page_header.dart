@@ -141,6 +141,7 @@ class _GlassBackButtonState extends State<GlassBackButton> {
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
     return Semantics(
+      container: true,
       button: true,
       enabled: enabled,
       label: widget.tooltip,

@@ -12,7 +12,10 @@ import {
 } from '../../src/notifications/push/push-messaging.factory';
 
 describe('push-messaging.factory', () => {
-  const config = (values: Record<string, string>) => new ConfigService(values);
+  // ConfigService.get consulta process.env antes que su config interna, lo que
+  // hace depender el spec de las variables del CI. El stub lo aisla.
+  const config = (values: Record<string, string>) =>
+    ({ get: (key: string) => values[key] }) as unknown as ConfigService;
 
   afterEach(() => {
     jest.restoreAllMocks();

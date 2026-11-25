@@ -151,6 +151,7 @@ Identidad con **Firebase Auth**; dominio en PostgreSQL. Prefijo `api/v1`:
 - `GET /users/me` y storage con el mismo Bearer.
 - Variables: `FIREBASE_AUTH_MODE`, `FIREBASE_PROJECT_ID`, credenciales de service account (ver `.env.example` y `docs/task-planning/firebase-auth-manual-checklist.md`).
 - Tests/CI: `FIREBASE_AUTH_MODE=mock` y tokens `mock:<uid>:<email>`.
+- Push FCM: `FIREBASE_MESSAGING_MODE` (`admin`, `mock` o `disabled`; vacío hereda `FIREBASE_AUTH_MODE`). `NotificationsModule` exporta `NotificationPushService` y `PUSH_MESSAGING_CLIENT`.
 
 Mailpit sigue disponible para SMTP local; el reset de contraseña lo envía Firebase.
 

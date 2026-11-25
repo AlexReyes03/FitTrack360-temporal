@@ -23,7 +23,8 @@ const config: Config = {
   moduleNameMapper: {
     ...pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
     // firebase-admin arrastra `jose` (ESM puro); ver test/support/firebase-admin/app.ts.
-    '^firebase-admin/(app|auth)$': '<rootDir>/test/support/firebase-admin/$1.ts',
+    '^firebase-admin/(app|auth|messaging)$':
+      '<rootDir>/test/support/firebase-admin/$1.ts',
   },
   collectCoverageFrom: [
     'src/**/*.(t|j)s',

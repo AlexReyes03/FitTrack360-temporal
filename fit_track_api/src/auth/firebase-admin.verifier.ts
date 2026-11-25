@@ -109,7 +109,7 @@ export class FirebaseAdminTokenVerifier implements FirebaseTokenVerifier {
  * Docker --env-file no quita comillas ni convierte \n; dotenv local sí.
  * Normaliza ambos formatos al PEM que espera firebase-admin.
  */
-function normalizeFirebasePrivateKey(
+export function normalizeFirebasePrivateKey(
   value: string | undefined,
 ): string | undefined {
   if (!value) {

@@ -147,6 +147,8 @@
 | 2026-11-22 | MiguelSP040 | Codex | #165 | Validar rutinas y acotar consultas de métricas de entrenamientos. | `fit_track_api/src/routines/`, `src/workouts/`, `prisma/`, `test/` | Se limita el historial de métricas a las 1000 sesiones previas, manteniendo el orden de la última serie dentro de esa ventana. | Rama `fix/issue-165-rutinas-historial` |
 | 2026-11-22 | MiguelSP040 | Codex | #205 | Implementar CRUD móvil de sesiones, selector de ejercicios y edición de series con pruebas. | `fit_track_360/lib/features/workouts/`, `fit_track_360/test/features/workouts/`, `fit_track_360/test/features/routines/`, `docs/specs/04-arquitectura.md` | Se usa catálogo existente; descanso como referencia temporal inicializada desde preferencias, sin persistencia por serie. Se conservaron series exactas y se ajustaron pruebas al formulario con desplazamiento. | Rama `feat/w13-10-crud-entrenamientos` |
 
+| 2026-11-25 | MiguelSP040 | Codex | #196 | Implementar CRUD autenticado de notificaciones, filtros y conteo con aislamiento S4. | `fit_track_api/src/notifications/`, `fit_track_api/test/notifications/`, `docs/specs/03-integraciones.md` | Se usa paginación y tipos snake_case compatibles con Flutter; el cliente actual aún solo solicita la primera página. | Rama `feat/issue-196-notificaciones` |
+
 ## Plantilla para entradas largas (opcional)
 
 Usa esta sección cuando una fila no alcanza (por ejemplo, una decisión de arquitectura apoyada en IA).

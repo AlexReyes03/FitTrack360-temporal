@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:fit_track_360/core/network/api_client.dart';
+import 'package:fit_track_360/features/auth/data/auth_api.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
 import 'package:fit_track_360/features/settings/data/profile_api_repository.dart';
 import 'package:fit_track_360/features/settings/domain/profile_repository.dart';
@@ -123,6 +124,62 @@ void main() {
         );
       }
     });
+
+    test('deleteAccount usa DELETE /users/me con Bearer', () async {
+      final requests = <http.Request>[];
+      final client = MockClient((request) async {
+        requests.add(request);
+        return http.Response('', 204);
+      });
+      final repo = ProfileApiRepository(
+        ApiClient(storage: FakeSessionStorage(), httpClient: client),
+      );
+
+      await repo.deleteAccount();
+
+      expect(requests.single.method, 'DELETE');
+      expect(requests.single.url.path, '/api/v1/users/me');
+      expect(requests.single.headers['Authorization'], 'Bearer access');
+    });
+
+    test(
+      'deleteAccount no confirma con una respuesta distinta de 204',
+      () async {
+        final repo = ProfileApiRepository(
+          ApiClient(
+            storage: FakeSessionStorage(),
+            httpClient: MockClient((_) async => http.Response('', 500)),
+          ),
+        );
+
+        await expectLater(
+          repo.deleteAccount(),
+          throwsA(isA<AuthApiException>()),
+        );
+      },
+    );
+
+    test('deleteAccount con 401 repetido limpia la sesión', () async {
+      final storage = FakeSessionStorage();
+      var calls = 0;
+      final repo = ProfileApiRepository(
+        ApiClient(
+          storage: storage,
+          httpClient: MockClient((_) async {
+            calls++;
+            return http.Response('', 401);
+          }),
+        ),
+      );
+
+      await expectLater(
+        repo.deleteAccount(),
+        throwsA(isA<SessionExpiredException>()),
+      );
+      expect(calls, 2);
+      expect(storage.accessToken, isNull);
+      expect(storage.refreshToken, isNull);
+    });
   });
 
   group('LogoutService', () {
@@ -146,5 +203,34 @@ void main() {
       expect(storage.accessToken, isNull);
       expect(storage.refreshToken, isNull);
     });
+
+    test('sin revocación remota limpia la sesión igual', () async {
+      final storage = FakeSessionStorage();
+      var revokes = 0;
+      await LogoutService(
+        storage: storage,
+        revoke: ({required idToken}) async => revokes++,
+      ).logout(revokeRemote: false);
+      expect(revokes, 0);
+      expect(storage.accessToken, isNull);
+      expect(storage.refreshToken, isNull);
+    });
+
+    test('limpia la sesión aunque no se pueda leer el token', () async {
+      final storage = _UnreadableSessionStorage();
+      await LogoutService(
+        storage: storage,
+        revoke: ({required idToken}) async {},
+      ).logout();
+      expect(storage.accessToken, isNull);
+      expect(storage.refreshToken, isNull);
+    });
   });
+}
+
+/// Simula un almacén seguro que falla al leer el token.
+class _UnreadableSessionStorage extends FakeSessionStorage {
+  @override
+  Future<String?> readAccessToken({bool forceRefresh = false}) =>
+      Future.error(Exception('almacén no disponible'));
 }

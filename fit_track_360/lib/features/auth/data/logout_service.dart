@@ -20,10 +20,13 @@ class LogoutService {
   final FirebaseAuthService? firebaseAuth;
   final PushDeviceLifecycle? pushDeviceService;
 
-  Future<void> logout() async {
-    // La revocación viaja autenticada con el Bearer vigente y nunca bloquea.
+  /// [revokeRemote] false cuando la cuenta ya se eliminó: no queda sesión ni
+  /// token FCM que revocar (el DeviceToken se borra en cascada) y la limpieza
+  /// local no debe esperar a la red.
+  Future<void> logout({bool revokeRemote = true}) async {
     final push = pushDeviceService;
-    if (push != null) {
+    if (revokeRemote && push != null) {
+      // La revocación viaja autenticada con el Bearer vigente y nunca bloquea.
       try {
         await push.deactivateAndRevoke().timeout(const Duration(seconds: 4));
       } catch (_) {
@@ -37,11 +40,16 @@ class LogoutService {
       return;
     }
 
-    final idToken = await _storage.readAccessToken();
+    String? idToken;
     try {
-      if (idToken != null && revoke != null) {
+      idToken = await _storage.readAccessToken();
+    } catch (_) {
+      // La limpieza local se ejecuta aunque no se pueda leer el token.
+    }
+    try {
+      if (revokeRemote && idToken != null && revoke != null) {
         await revoke!(idToken: idToken);
-      } else if (idToken != null) {
+      } else if (revokeRemote && idToken != null) {
         await auth_api.revokeRemoteSession(idToken: idToken);
       }
     } catch (_) {

@@ -7,6 +7,8 @@ import 'package:fit_track_360/core/security/biometric_service.dart';
 import 'package:fit_track_360/core/session_storage.dart';
 import 'package:fit_track_360/features/notifications/data/push_device_lifecycle_service.dart';
 import 'package:fit_track_360/features/settings/domain/export_sharer.dart';
+import 'package:fit_track_360/features/settings/domain/privacy_notice.dart';
+import 'package:fit_track_360/features/settings/domain/privacy_repository.dart';
 import 'package:fit_track_360/features/settings/domain/profile_repository.dart';
 import 'package:fit_track_360/features/settings/domain/user_profile.dart';
 
@@ -63,9 +65,13 @@ class FakeProfileRepository implements ProfileRepository {
   int? workouts;
   Object? fetchError;
   Object? updateError;
+  Object? deleteError;
+  Object? exportError;
   String? exportJson;
+  Future<void>? deleteGate;
   final updates = <ProfileUpdate>[];
   int fetchCalls = 0;
+  int deleteCalls = 0;
 
   @override
   Future<UserProfile?> fetchProfile() async {
@@ -102,8 +108,66 @@ class FakeProfileRepository implements ProfileRepository {
 
   @override
   Future<String> exportData() async {
+    if (exportError != null) throw exportError!;
     if (exportJson == null) throw const ExportUnavailableException();
     return exportJson!;
+  }
+
+  @override
+  Future<void> deleteAccount() async {
+    deleteCalls++;
+    if (deleteGate != null) await deleteGate;
+    if (deleteError != null) throw deleteError!;
+  }
+}
+
+final samplePrivacyNotice = PrivacyNotice(
+  version: supportedPrivacyNoticeVersion,
+  date: DateTime(2026, 11, 16),
+  sections: const [
+    PrivacyNoticeSection(
+      title: 'Cuenta',
+      text: 'Firebase Auth gestiona el acceso a la cuenta.',
+    ),
+    PrivacyNoticeSection(
+      title: 'Salud',
+      text: 'No sustituye la atención médica ni nutricional.',
+    ),
+  ],
+);
+
+class FakePrivacyRepository implements PrivacyRepository {
+  FakePrivacyRepository({
+    PrivacyNotice? notice,
+    this.noticeError,
+    this.consentError,
+  }) : notice = notice ?? samplePrivacyNotice;
+
+  PrivacyNotice? notice;
+  Object? noticeError;
+  Object? consentError;
+  Future<void>? noticeGate;
+  Future<void>? consentGate;
+  final consents = <({String userId, String version})>[];
+  int noticeCalls = 0;
+
+  @override
+  Future<PrivacyNotice> fetchNotice() async {
+    noticeCalls++;
+    if (noticeGate != null) await noticeGate;
+    if (noticeError != null) throw noticeError!;
+    return notice!;
+  }
+
+  @override
+  Future<ConsentReceipt> registerConsent({
+    required String userId,
+    required String version,
+  }) async {
+    consents.add((userId: userId, version: version));
+    if (consentGate != null) await consentGate;
+    if (consentError != null) throw consentError!;
+    return ConsentReceipt(version: version);
   }
 }
 

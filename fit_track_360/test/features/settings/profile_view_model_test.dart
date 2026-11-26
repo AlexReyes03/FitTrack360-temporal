@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:fit_track_360/core/network/api_client.dart';
 import 'package:fit_track_360/core/notifications/reminder_service.dart';
 import 'package:fit_track_360/features/auth/data/logout_service.dart';
 import 'package:fit_track_360/features/settings/domain/export_sharer.dart';
@@ -94,6 +97,66 @@ void main() {
       expect(await vm.exportData(), isNull);
       expect(sharer.shared, isEmpty);
       expect(vm.message, exportUnavailableMessage);
+      expect(vm.sessionExpired, isFalse);
+    });
+
+    test('sesión expirada no se degrada como exportación ausente', () async {
+      final repo = FakeProfileRepository()
+        ..exportError = const SessionExpiredException();
+      final vm = _vm(repo, FakeExportSharer());
+
+      expect(await vm.exportData(), isNull);
+      expect(vm.sessionExpired, isTrue);
+      expect(vm.message, sessionExpiredMessage);
+    });
+  });
+
+  group('eliminación de cuenta', () {
+    test('confirma solo cuando el repositorio responde', () async {
+      final repo = FakeProfileRepository();
+      final vm = _vm(repo, FakeExportSharer());
+
+      expect(await vm.deleteAccount(), isTrue);
+      expect(repo.deleteCalls, 1);
+      expect(vm.message, isNull);
+      expect(vm.deleting, isFalse);
+    });
+
+    test('un error de red no confirma la eliminación', () async {
+      final repo = FakeProfileRepository()..deleteError = Exception('500');
+      final vm = _vm(repo, FakeExportSharer());
+
+      expect(await vm.deleteAccount(), isFalse);
+      expect(vm.message, deleteAccountFailedMessage);
+      expect(vm.sessionExpired, isFalse);
+    });
+
+    test(
+      'la sesión expirada se informa para volver a iniciar sesión',
+      () async {
+        final repo = FakeProfileRepository()
+          ..deleteError = const SessionExpiredException();
+        final vm = _vm(repo, FakeExportSharer());
+
+        expect(await vm.deleteAccount(), isFalse);
+        expect(vm.message, sessionExpiredMessage);
+        expect(vm.sessionExpired, isTrue);
+      },
+    );
+
+    test('ignora una segunda solicitud mientras la primera sigue', () async {
+      final gate = Completer<void>();
+      final repo = FakeProfileRepository()..deleteGate = gate.future;
+      final vm = _vm(repo, FakeExportSharer());
+
+      final first = vm.deleteAccount();
+      expect(vm.deleting, isTrue);
+      expect(await vm.deleteAccount(), isFalse);
+      expect(repo.deleteCalls, 1);
+
+      gate.complete();
+      expect(await first, isTrue);
+      expect(vm.deleting, isFalse);
     });
   });
 

@@ -19,6 +19,8 @@ Este documento describe los servicios externos, APIs de terceros y mecanismos de
 | **I-06** | La exportación y eliminación de cuenta operan en la API autenticada; la eliminación prepara archivos, elimina la identidad Firebase y aplica cascadas en PostgreSQL. | Tratar la eliminación como una operación exclusivamente local. | La identidad y los archivos están fuera de PostgreSQL y deben gestionarse junto con los registros. | 2026-11-16 |
 | **I-07** | La cancelación prepara archivos, confirma la cascada PostgreSQL y después solicita el borrado en Firebase, fuera de la transacción. `GET /users/me/export` y `DELETE /users/me` son canónicos; las rutas `/privacy/:userId` correspondientes quedan obsoletas y conservan aislamiento 404. | Mantener una llamada de red dentro de la transacción SQL. | Evita retener locks durante I/O externo. Si Firebase falla tras el commit quedan datos e identidad desincronizados: los archivos se eliminan y la identidad residual requiere limpieza administrativa; no se restauran los datos ya borrados. Si falla SQL, se restauran los archivos y no se toca Firebase. | 2026-11-22 |
 
+| **I-08** | Las notificaciones in-app usan `/api/v1/notifications` con Bearer, filtro por propietario y paginación `page`/`pageSize` (20 por defecto, máximo 100); tipos HTTP `new_login`, `password_changed`, `reminder` y `system`. | Exponer IDs ajenos o cargar el historial completo en una sola solicitud. | Preserva el aislamiento S4 y un contrato compatible con el cliente móvil. La app actual consume solo la primera página; requiere paginación adicional para mostrar el resto. | 2026-11-25 |
+
 ---
 
 ## 3. Familias de integraciones y orden en el roadmap
@@ -99,3 +101,8 @@ Para proveer guías visuales animadas de ejecución de ejercicios sin incurrir e
 - **Comportamiento seguro (Privacidad de usuario):**
   - La API siempre responde HTTP 200 `{ message: 'Si el correo existe, se ha enviado un código' }`, independientemente de si el correo está registrado en la base de datos o si el servidor SMTP está temporalmente inaccesible. Esto mitiga ataques de enumeración de usuarios.
   - El código de verificación generado se almacena en PostgreSQL hasheado con un tiempo de expiración de 15 minutos (`PasswordResetCode.expiresAt`).
+
+
+### 4.4 Notificaciones in-app
+
+Todas las rutas requieren Bearer y usan el usuario autenticado. `GET /api/v1/notifications` acepta `isRead`, `type`, `page` y `pageSize` y devuelve `{ items, total, page, pageSize }`, ordenado por fecha descendente. `GET /unread-count` devuelve `{ count }`. `GET /:id` obtiene un aviso propio; `PATCH /:id/read` recibe `{ isRead: boolean }`; `PATCH /read-all` marca los pendientes y devuelve `{ count }`. `DELETE /:id` responde 204 y `DELETE /` devuelve `{ count }`; las operaciones masivas son idempotentes. Un ID ajeno o inexistente responde 404. La aplicación actual aún no solicita páginas adicionales y representa el tipo `system` como recordatorio hasta ampliar su enum de presentación. El parámetro `page` admite hasta 1000000.
